@@ -1,6 +1,6 @@
 use std::time::{UNIX_EPOCH, SystemTime};
 use rand::Rng;
-use crate::{Context, Error};
+use crate::{Context, Error, reply};
 
 /// I will pick a random number!
 #[poise::command(slash_command)]
@@ -13,11 +13,11 @@ pub async fn rng(
     let mut max_unwrap = max.unwrap_or(0);
     if max.is_some() || min.is_some() {
         if max_unwrap == min_unwrap {
-            ctx.send(|b| b.content("Please make sure the difference between 'min' and 'max' are larger than 0.").reply(true).ephemeral(true)).await?;
+            reply(ctx, "Please make sure the difference between 'min' and 'max' are larger than 0.", true).await?;
             return Ok(())
         }
         if max_unwrap < min_unwrap {
-            ctx.send(|b| b.content("Please make sure 'min' is less than 'max'.").reply(true).ephemeral(true)).await?;
+            reply(ctx, "Please make sure 'min' is less than 'max'.", true).await?;
             return Ok(())
         }
     } else {

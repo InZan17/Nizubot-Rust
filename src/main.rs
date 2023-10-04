@@ -9,6 +9,9 @@ pub struct Handler {} // User data, which is stored and accessible in all comman
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
 
+pub async fn reply(ctx: Context<'_>, text: impl Into<String>, ephemeral: bool) -> Result<crate::ReplyHandle<'_>, crate::serenity::SerenityError> {
+    ctx.send(|b| b.content(text).reply(true).ephemeral(ephemeral)).await
+}
 async fn event_handler(
     ctx: &serenity::Context,
     event: &Event<'_>,
