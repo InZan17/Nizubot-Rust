@@ -1,12 +1,10 @@
-use std::time::{UNIX_EPOCH, SystemTime};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{Context, Error};
 
 /// Pong!
 #[poise::command(slash_command)]
-pub async fn ping(
-    ctx: Context<'_>
-) -> Result<(), Error> {
+pub async fn ping(ctx: Context<'_>) -> Result<(), Error> {
     let current = get_current_ms_time();
     ctx.defer().await?;
     let after = get_current_ms_time();
