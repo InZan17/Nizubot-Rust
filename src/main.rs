@@ -1,6 +1,10 @@
+#![feature(type_name_of_val)]
+#![feature(downcast_unchecked)]
 mod commands;
 mod managers;
 mod read;
+
+use std::{any::Any, collections::HashMap};
 
 use managers::storage_manager::StorageManager;
 use poise::{serenity_prelude as serenity, Event, ReplyHandle};
@@ -60,3 +64,13 @@ async fn main() {
 
     framework.run().await.unwrap();
 }
+/*
+struct MyStruct<T:Any + Send + Sync + ?Sized> {
+    data: Box<T>
+}
+
+fn trait_func<T: Any + Send + Sync + 'static>(data: MyStruct<T>) {
+    let mut hashmap: HashMap<i32, MyStruct<dyn Any + Send + Sync>> = HashMap::new();
+    hashmap.insert(21, data);
+}
+ */
