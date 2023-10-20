@@ -2,14 +2,21 @@
 #![feature(get_mut_unchecked)]
 
 mod commands;
+pub mod give_up_serialize;
 mod managers;
 mod read;
-pub mod give_up_serialize;
 
-use std::{any::Any, collections::HashMap, sync::{Arc, atomic::{AtomicBool, Ordering}}};
 use poise::serenity_prelude::{RwLock, TypeMapKey};
+use std::{
+    any::Any,
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 
-use managers::storage_manager::{StorageManager, storage_manager_loop};
+use managers::storage_manager::{storage_manager_loop, StorageManager};
 use poise::{serenity_prelude as serenity, Event, ReplyHandle};
 
 pub struct Data {
@@ -70,7 +77,7 @@ async fn main() {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                 Ok(Data {
                     storage_manager: Arc::new(StorageManager::new("./data").await),
-                    started_loops: AtomicBool::new(false)
+                    started_loops: AtomicBool::new(false),
                 })
             })
         });

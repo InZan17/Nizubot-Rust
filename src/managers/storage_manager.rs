@@ -1,13 +1,25 @@
-use std::{collections::HashMap, any::{Any, TypeId}, path::Path, fs::{self, File}, io::{BufReader, Write}, sync::{Arc, atomic::AtomicBool}, borrow::Borrow, ops::Deref};
+use std::{
+    any::{Any, TypeId},
+    borrow::Borrow,
+    collections::HashMap,
+    fs::{self, File},
+    io::{BufReader, Write},
+    ops::Deref,
+    path::Path,
+    sync::{atomic::AtomicBool, Arc},
+};
 
+use poise::{
+    futures_util::lock::Mutex,
+    serenity_prelude::{Context, FutureExt, RwLock},
+};
 use serde::Serialize;
-use poise::{serenity_prelude::{RwLock, FutureExt, Context}, futures_util::lock::Mutex};
 
-use crate::{Data, give_up_serialize::GiveUpSerialize};
+use crate::{give_up_serialize::GiveUpSerialize, Data};
 
 struct DirectoryInfo {
     directories: HashMap<String, DirectoryInfo>,
-    data: Option<Box<DataHolderType<dyn GiveUpSerialize + Send + Sync>>>
+    data: Option<Box<DataHolderType<dyn GiveUpSerialize + Send + Sync>>>,
 }
 
 type DataHolderType<T> = Arc<DataHolder<T>>;
@@ -18,7 +30,7 @@ pub struct DataHolder<T: GiveUpSerialize + Send + Sync + 'static + ?Sized> {
     save_queue: Arc<RwLock<Vec<DataHolderType<dyn GiveUpSerialize + Send + Sync>>>>,
     self_arc: Option<DataHolderType<dyn GiveUpSerialize + Send + Sync>>,
     data_type_id: TypeId,
-    data: RwLock<T>
+    data: RwLock<T>,
 }
 
 impl<T: GiveUpSerialize + Send + Sync + 'static + ?Sized> DataHolder<T> {
@@ -36,7 +48,6 @@ impl<T: GiveUpSerialize + Send + Sync + 'static + ?Sized> DataHolder<T> {
             .write()
             .await
             .push(self.self_arc.clone().unwrap());
-
     }
 
     pub async fn delete(&mut self) {}
@@ -65,7 +76,7 @@ impl StorageManager {
         StorageManager {
             directories: RwLock::new(HashMap::new()),
             save_queue: Arc::new(RwLock::new(vec![])),
-            storage_path
+            storage_path,
         }
     }
 
@@ -86,24 +97,23 @@ impl StorageManager {
         if save_queue_clone.len() == 0 {
             return;
         }
-        
+
         println!("Performing save...");
 
         for data in save_queue_clone {
-
             if data.is_saved().await {
                 println!("{} is already saved", data.path.join("/"));
                 continue;
             }
-            
+
             println!("Saving {}", data.path.join("/"));
 
             let mut poping_path = data.path.clone();
 
             let joined_file_path = self.get_full_path(poping_path.join("/"));
             poping_path.pop();
-            let joined_file_directory = self.get_full_directory(poping_path.join("/"));;
-            
+            let joined_file_directory = self.get_full_directory(poping_path.join("/"));
+
             let file_path = Path::new(&joined_file_path);
             let file_directory = Path::new(&joined_file_directory);
 
@@ -115,7 +125,6 @@ impl StorageManager {
             let data = data.get_data().await;
             let json_data = data.serialize_json();
             file.write(json_data.as_bytes()).unwrap();
-            
 
             //local file = fs.open(joined_file_path, "w")
             //fs.write(file, json.stringify(data:read()))
@@ -125,7 +134,11 @@ impl StorageManager {
         }
     }
 
-    async fn create_data<T: GiveUpSerialize + Send + Sync + for<'de> serde::Deserialize<'de>>(&self, path: Vec<&str>, data: T) -> DataHolderType<T> {
+    async fn create_data<T: GiveUpSerialize + Send + Sync + for<'de> serde::Deserialize<'de>>(
+        &self,
+        path: Vec<&str>,
+        data: T,
+    ) -> DataHolderType<T> {
         let path_string: Vec<String> = path.iter().map(|&s| s.to_owned()).collect();
         let mut data_info = Arc::new(DataHolder {
             saved: Mutex::new(false),
@@ -142,18 +155,18 @@ impl StorageManager {
         self.register_data(data_info.clone()).await;
 
         data_info
-
     }
 
-    async fn register_data<T: GiveUpSerialize + Send + Sync + for<'de> serde::Deserialize<'de>>(&self, data_holder: DataHolderType<T>) {
-
+    async fn register_data<T: GiveUpSerialize + Send + Sync + for<'de> serde::Deserialize<'de>>(
+        &self,
+        data_holder: DataHolderType<T>,
+    ) {
         let mut current_directory: Option<&mut DirectoryInfo> = None;
 
         let mut self_directories = self.directories.write().await;
 
         //loop through path and populate the path.
         for key in data_holder.path.clone().into_iter() {
-
             //if current_directory is some then we check if the key exists.
             //If the key exists then we set current_directory to that key directory.
             //If not then we make a new directory info for that key and make that directory current_directory
@@ -189,7 +202,13 @@ impl StorageManager {
         current_directory.unwrap().data = Some(Box::new(data_holder));
     }
 
-    pub async fn get_data_or_default<T: GiveUpSerialize + Send + Sync + for<'de> serde::Deserialize<'de>>(&self, mut path: Vec<&str>, default_data: T) -> DataHolderType<T> {
+    pub async fn get_data_or_default<
+        T: GiveUpSerialize + Send + Sync + for<'de> serde::Deserialize<'de>,
+    >(
+        &self,
+        mut path: Vec<&str>,
+        default_data: T,
+    ) -> DataHolderType<T> {
         if path.len() == 0 {
             panic!("Give me a valid path please.");
         }
@@ -199,13 +218,16 @@ impl StorageManager {
         if data.is_some() {
             return data.unwrap();
         }
-        
+
         let data_holder = self.create_data(path, default_data).await;
 
         data_holder
     }
 
-    pub async fn get_data<T: GiveUpSerialize + Send + Sync + for<'de> serde::Deserialize<'de>>(&self, mut path: Vec<&str>) -> Option<DataHolderType<T>> {
+    pub async fn get_data<T: GiveUpSerialize + Send + Sync + for<'de> serde::Deserialize<'de>>(
+        &self,
+        mut path: Vec<&str>,
+    ) -> Option<DataHolderType<T>> {
         if path.len() == 0 {
             return None;
         }
@@ -230,11 +252,13 @@ impl StorageManager {
                     let data_holder_unknown = data.as_ref();
                     if data.data_type_id == TypeId::of::<DataHolderType<T>>() {
                         // This unsafe block is safe, I think. We check if the typeId is the same so surely nothing wrong will happen.
-                        let data_holder_cast = unsafe { (data_holder_unknown as &dyn Any).downcast_ref_unchecked::<DataHolderType<T>>() };
-                        return Some(data_holder_cast.clone())   
+                        let data_holder_cast = unsafe {
+                            (data_holder_unknown as &dyn Any)
+                                .downcast_ref_unchecked::<DataHolderType<T>>()
+                        };
+                        return Some(data_holder_cast.clone());
                     }
                     panic!("Key exists but with a different type!")
-                    
                 }
             }
         }
@@ -252,10 +276,10 @@ impl StorageManager {
             let file = File::open(file_path).unwrap();
             let reader = BufReader::new(file);
             let parsed_data = serde_json::from_reader::<_, T>(reader).unwrap();
-            
+
             return Some(self.create_data(path, parsed_data).await);
         }
-        
+
         None
     }
 }
