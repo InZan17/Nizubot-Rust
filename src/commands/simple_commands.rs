@@ -1,6 +1,5 @@
 use super::Commands;
 
-//mod breakread;
 mod ping;
 mod read;
 mod rng;
@@ -11,7 +10,6 @@ pub fn get_commands() -> Commands {
         ping::ping(),
         rng::rng(),
         read::read(),
-        //breakread::breakread(),
         write::write(),
     ];
 }

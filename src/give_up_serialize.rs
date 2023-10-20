@@ -11,3 +11,9 @@ impl GiveUpSerialize for String {
         serde_json::to_string(self).unwrap()
     }
 }
+
+impl GiveUpSerialize for i32 {
+    fn serialize_json(&self) -> String {
+        serde_json::to_string(self).unwrap()
+    }
+}

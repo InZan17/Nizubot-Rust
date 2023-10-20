@@ -5,7 +5,9 @@ pub type Commands =
 mod simple_commands;
 
 pub fn get_commands() -> Commands {
-    let mut commands_groups: Vec<Commands> = vec![simple_commands::get_commands()];
+    let mut commands_groups: Vec<Commands> = vec![
+        simple_commands::get_commands()
+    ];
 
     let mut all_commands = vec![];
 

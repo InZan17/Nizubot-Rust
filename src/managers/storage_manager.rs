@@ -1,4 +1,4 @@
-use std::{collections::HashMap, any::Any, path::Path, fs::{self, File}, io::{BufReader, Write}, sync::{Arc, atomic::AtomicBool}, borrow::Borrow, ops::Deref};
+use std::{collections::HashMap, any::{Any, TypeId}, path::Path, fs::{self, File}, io::{BufReader, Write}, sync::{Arc, atomic::AtomicBool}, borrow::Borrow, ops::Deref};
 
 use serde::Serialize;
 use poise::{serenity_prelude::{RwLock, FutureExt, Context}, futures_util::lock::Mutex};
@@ -17,6 +17,7 @@ pub struct DataHolder<T: GiveUpSerialize + Send + Sync + 'static + ?Sized> {
     path: Vec<String>,
     save_queue: Arc<RwLock<Vec<DataHolderType<dyn GiveUpSerialize + Send + Sync>>>>,
     self_arc: Option<DataHolderType<dyn GiveUpSerialize + Send + Sync>>,
+    data_type_id: TypeId,
     data: RwLock<T>
 }
 
@@ -131,6 +132,7 @@ impl StorageManager {
             path: path_string,
             save_queue: self.save_queue.clone(),
             self_arc: None,
+            data_type_id: TypeId::of::<DataHolderType<T>>(),
             data: RwLock::new(data),
         });
 
@@ -226,9 +228,13 @@ impl StorageManager {
             if let Some(directory_info) = current_directory {
                 if let Some(data) = &directory_info.data {
                     let data_holder_unknown = data.as_ref();
-                    //TODO: Check if type matches because the normal downcast cant do it properly
-                    let data_holder_cast = unsafe { (data_holder_unknown as &dyn Any).downcast_ref_unchecked::<DataHolderType<T>>() };
-                    return Some(data_holder_cast.clone())
+                    if data.data_type_id == TypeId::of::<DataHolderType<T>>() {
+                        // This unsafe block is safe, I think. We check if the typeId is the same so surely nothing wrong will happen.
+                        let data_holder_cast = unsafe { (data_holder_unknown as &dyn Any).downcast_ref_unchecked::<DataHolderType<T>>() };
+                        return Some(data_holder_cast.clone())   
+                    }
+                    panic!("Key exists but with a different type!")
+                    
                 }
             }
         }
