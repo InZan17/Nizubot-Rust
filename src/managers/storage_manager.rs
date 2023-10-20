@@ -1,29 +1,54 @@
-use core::panic;
-use std::{
-    any::{type_name, type_name_of_val, Any, TypeId},
-    collections::HashMap,
-    fs::{self, File},
-    io::BufReader,
-    ops::{Deref, DerefMut},
-    path::Path,
-    sync::Arc,
-};
+use std::{collections::HashMap, any::Any, path::Path, fs::{self, File}, io::{BufReader, Write}, sync::{Arc, atomic::AtomicBool}, borrow::Borrow, ops::Deref};
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
+use poise::{serenity_prelude::{RwLock, FutureExt, Context}, futures_util::lock::Mutex};
 
-use poise::serenity_prelude::RwLock;
+use crate::{Data, give_up_serialize::GiveUpSerialize};
 
-pub type ArcDataInfo = Arc<RwLock<DataInfo<Box<dyn Any + Send + Sync>>>>;
+struct DirectoryInfo {
+    directories: HashMap<String, DirectoryInfo>,
+    data: Option<Box<DataHolderType<dyn GiveUpSerialize + Send + Sync>>>
+}
 
-pub struct DirectoryInfo {
-    pub data: Option<Box<Arc<RwLock<DataInfo<Box<dyn Any + Sync + Send>>>>>>,
-    pub directories: HashMap<String, DirectoryInfo>,
+type DataHolderType<T> = Arc<DataHolder<T>>;
+
+pub struct DataHolder<T: GiveUpSerialize + Send + Sync + 'static + ?Sized> {
+    saved: Mutex<bool>,
+    path: Vec<String>,
+    save_queue: Arc<RwLock<Vec<DataHolderType<dyn GiveUpSerialize + Send + Sync>>>>,
+    self_arc: Option<DataHolderType<dyn GiveUpSerialize + Send + Sync>>,
+    data: RwLock<T>
+}
+
+impl<T: GiveUpSerialize + Send + Sync + 'static + ?Sized> DataHolder<T> {
+    pub async fn get_data(&self) -> tokio::sync::RwLockReadGuard<'_, T> {
+        return self.data.read().await;
+    }
+
+    pub async fn get_data_mut(&self) -> tokio::sync::RwLockWriteGuard<'_, T> {
+        return self.data.write().await;
+    }
+
+    pub async fn request_file_write(&self) {
+        *self.saved.lock().await = false;
+        self.save_queue
+            .write()
+            .await
+            .push(self.self_arc.clone().unwrap());
+
+    }
+
+    pub async fn delete(&mut self) {}
+
+    pub async fn is_saved(&self) -> bool {
+        (*self.saved.lock().await).clone()
+    }
 }
 
 pub struct StorageManager {
     storage_path: String,
-    data: Arc<RwLock<HashMap<String, DirectoryInfo>>>,
-    save_queue: Arc<RwLock<Vec<Box<dyn Any + Sync + Send>>>>,
+    save_queue: Arc<RwLock<Vec<DataHolderType<dyn GiveUpSerialize + Send + Sync>>>>,
+    directories: RwLock<HashMap<String, DirectoryInfo>>,
 }
 
 impl StorageManager {
@@ -34,12 +59,12 @@ impl StorageManager {
             panic!("Path is not valid UTF-8")
         }
         if !path.exists() {
-            fs::create_dir_all(path).unwrap();
+            fs::create_dir(path).unwrap();
         }
         StorageManager {
-            data: Arc::new(RwLock::new(HashMap::new())),
+            directories: RwLock::new(HashMap::new()),
             save_queue: Arc::new(RwLock::new(vec![])),
-            storage_path: storage_path.into(),
+            storage_path
         }
     }
 
@@ -47,39 +72,89 @@ impl StorageManager {
         return format!("{}/{}.json", self.storage_path, key);
     }
 
-    async fn create_data<T: Any + Send + Sync>(
-        &self,
-        path: Vec<&str>,
-        parsed_data: Box<T>,
-    ) -> Arc<RwLock<DataInfo<Box<T>>>> {
-        let path_string = path.iter().map(|&s| s.to_owned()).collect();
-        let data_info = DataInfo {
-            saved: false,
-            data: Box::new(parsed_data),
-            path: path_string,
-            self_arc: None,
-            unsaved_list: self.save_queue.clone(),
-        };
-
-        let data_info_arc = Arc::new(RwLock::new(data_info));
-
-        let push_data: Box<Arc<RwLock<DataInfo<Box<T>>>>> = Box::new(data_info_arc.clone());
-
-        self.register_data(data_info_arc.clone()).await;
-
-        self.save_queue.write().await.push(push_data);
-
-        return data_info_arc;
+    pub fn get_full_directory(&self, key: String) -> String {
+        return format!("{}/{}", self.storage_path, key);
     }
 
-    async fn register_data<T: Any + Send + Sync>(&self, arc_data: Arc<RwLock<DataInfo<Box<T>>>>) {
-        let path = &arc_data.read().await.path;
-        let mut write = self.data.write().await;
+    async fn clear_save_queue(&self) {
+        let mut save_queue_write = self.save_queue.write().await;
+        let save_queue_clone = save_queue_write.clone();
+        save_queue_write.clear();
+        drop(save_queue_write);
+
+        if save_queue_clone.len() == 0 {
+            return;
+        }
+        
+        println!("Performing save...");
+
+        for data in save_queue_clone {
+
+            if data.is_saved().await {
+                println!("{} is already saved", data.path.join("/"));
+                continue;
+            }
+            
+            println!("Saving {}", data.path.join("/"));
+
+            let mut poping_path = data.path.clone();
+
+            let joined_file_path = self.get_full_path(poping_path.join("/"));
+            poping_path.pop();
+            let joined_file_directory = self.get_full_directory(poping_path.join("/"));;
+            
+            let file_path = Path::new(&joined_file_path);
+            let file_directory = Path::new(&joined_file_directory);
+
+            if !file_directory.exists() {
+                fs::create_dir_all(file_directory).unwrap();
+            }
+
+            let mut file = File::create(file_path).unwrap();
+            let data = data.get_data().await;
+            let json_data = data.serialize_json();
+            file.write(json_data.as_bytes()).unwrap();
+            
+
+            //local file = fs.open(joined_file_path, "w")
+            //fs.write(file, json.stringify(data:read()))
+            //fs.close(file)
+            //data.saved = true
+            //table.insert(savedKeys, key)
+        }
+    }
+
+    async fn create_data<T: GiveUpSerialize + Send + Sync + for<'de> serde::Deserialize<'de>>(&self, path: Vec<&str>, data: T) -> DataHolderType<T> {
+        let path_string: Vec<String> = path.iter().map(|&s| s.to_owned()).collect();
+        let mut data_info = Arc::new(DataHolder {
+            saved: Mutex::new(false),
+            path: path_string,
+            save_queue: self.save_queue.clone(),
+            self_arc: None,
+            data: RwLock::new(data),
+        });
+
+        // This unsafe block is safe because we know that the Arc has just been created and hasnt been distributed to anywhere else.
+        unsafe { Arc::get_mut_unchecked(&mut data_info).self_arc = Some(data_info.clone()) };
+
+        self.register_data(data_info.clone()).await;
+
+        data_info
+
+    }
+
+    async fn register_data<T: GiveUpSerialize + Send + Sync + for<'de> serde::Deserialize<'de>>(&self, data_holder: DataHolderType<T>) {
 
         let mut current_directory: Option<&mut DirectoryInfo> = None;
 
+        let mut self_directories = self.directories.write().await;
+
         //loop through path and populate the path.
-        for key in path.clone().into_iter() {
+        for key in data_holder.path.clone().into_iter() {
+
+            //if current_directory is some then we check if the key exists.
+            //If the key exists then we set current_directory to that key directory.
+            //If not then we make a new directory info for that key and make that directory current_directory
             if let Some(prev_directory) = current_directory {
                 if prev_directory.directories.get_mut(&key).is_some() {
                     current_directory = prev_directory.directories.get_mut(&key);
@@ -91,8 +166,12 @@ impl StorageManager {
                 };
                 prev_directory.directories.insert(key.clone(), directory);
                 current_directory = prev_directory.directories.get_mut(&key);
+
+            //if current_directory is none then that means this is the first iteration.
+            //If the key exists then we set current_directory to that key directory.
+            //If not then we make a new directory info for that key and make that directory current_directory
             } else {
-                current_directory = write.get_mut(&key);
+                current_directory = self_directories.get_mut(&key);
                 if current_directory.is_some() {
                     continue;
                 }
@@ -100,27 +179,39 @@ impl StorageManager {
                     data: None,
                     directories: HashMap::new(),
                 };
-                write.insert(key.clone(), directory);
-                current_directory = write.get_mut(&key);
+                self_directories.insert(key.clone(), directory);
+                current_directory = self_directories.get_mut(&key);
             }
         }
-        //let push_data: Option<Box<Arc<RwLock<DataInfo<Box<T>>>>>> = Some(Box::new(arc_data.clone()));
-        current_directory.unwrap().data = Some(Box::new(arc_data.clone()));
+        //current_directory should now NEVER be None
+        current_directory.unwrap().data = Some(Box::new(data_holder));
     }
 
-    pub async fn get_data<T>(&self, path: Vec<&str>) -> Option<Box<Arc<RwLock<DataInfo<Box<T>>>>>>
-    where
-        T: Serialize + Any + Send + Sync + for<'de> serde::Deserialize<'de>,
-    {
+    pub async fn get_data_or_default<T: GiveUpSerialize + Send + Sync + for<'de> serde::Deserialize<'de>>(&self, mut path: Vec<&str>, default_data: T) -> DataHolderType<T> {
+        if path.len() == 0 {
+            panic!("Give me a valid path please.");
+        }
+
+        let data = self.get_data::<T>(path.clone()).await;
+
+        if data.is_some() {
+            return data.unwrap();
+        }
+        
+        let data_holder = self.create_data(path, default_data).await;
+
+        data_holder
+    }
+
+    pub async fn get_data<T: GiveUpSerialize + Send + Sync + for<'de> serde::Deserialize<'de>>(&self, mut path: Vec<&str>) -> Option<DataHolderType<T>> {
         if path.len() == 0 {
             return None;
         }
 
         //First check if it's in the hashmap
         {
-            let read = self.data.read().await;
-
-            let mut current_hashmap = read.deref();
+            let self_directories = self.directories.read().await;
+            let mut current_hashmap = &*self_directories;
             let mut current_directory = None;
 
             //loop through path. If path is loaded current_directory shall be Some(). Else None.
@@ -133,91 +224,41 @@ impl StorageManager {
                 break;
             }
             if let Some(directory_info) = current_directory {
-                let directory_data = &directory_info.data;
-                let asref = directory_info.data.as_ref().unwrap();
-                let any: &dyn Any = asref;
-                println!("{}", type_name::<T>());
-                //this is really not good omg please someone help me fix rhis I have no idea why the unsafe function works but not the safe one.
-                let data_info =
-                    unsafe { any.downcast_ref_unchecked::<Box<Arc<RwLock<DataInfo<Box<T>>>>>>() };
-                //if data_info.is_none() {
-                //    panic!("Tried to get a type with a key but the key had a different type.");
-                //}
-                return Some(data_info.clone());
+                if let Some(data) = &directory_info.data {
+                    let data_holder_unknown = data.as_ref();
+                    //TODO: Check if type matches because the normal downcast cant do it properly
+                    let data_holder_cast = unsafe { (data_holder_unknown as &dyn Any).downcast_ref_unchecked::<DataHolderType<T>>() };
+                    return Some(data_holder_cast.clone())
+                }
             }
-            //let v = serde_json::from_str::<T>("ae");
         }
 
         //If not in hashmap, we read from files
 
-        let joined_path = path.join("/");
-        let full_path = self.get_full_path(joined_path);
-        println!("full_path: {}", full_path);
-        let file_path = Path::new(&full_path);
+        let joined_file_path = path.join("/");
 
-        if !file_path.exists() {
-            return None;
+        let full_file_path = self.get_full_path(joined_file_path);
+
+        let file_path = Path::new(&full_file_path);
+
+        if file_path.exists() {
+            //if path exists then we read from it
+            let file = File::open(file_path).unwrap();
+            let reader = BufReader::new(file);
+            let parsed_data = serde_json::from_reader::<_, T>(reader).unwrap();
+            
+            return Some(self.create_data(path, parsed_data).await);
         }
-
-        let file = File::open(file_path).unwrap();
-        let reader = BufReader::new(file);
-        let read = serde_json::from_reader::<_, T>(reader).unwrap();
-        let parsed_data = Box::new(read);
-
-        let data_info = self.create_data(path, parsed_data).await;
-        let return_data: Option<Box<Arc<RwLock<DataInfo<Box<T>>>>>> = Some(Box::new(data_info));
-        return return_data;
-
-        None
-    }
-
-    pub fn get_data_or_default<T: for<'a> Deserialize<'a> + Serialize>(
-        default_data: T,
-    ) -> Option<DataInfo<T>> {
-        None
-    }
-
-    pub fn set_data<T: for<'a> Deserialize<'a> + Serialize>(data: T) -> Option<DataInfo<T>> {
+        
         None
     }
 }
 
-pub struct DataInfo<T: ?Sized> {
-    saved: bool,
-    data: Box<T>,
-    self_arc: Option<ArcDataInfo>,
-    unsaved_list: Arc<RwLock<Vec<Box<dyn Any + Sync + Send>>>>,
-    path: Vec<String>,
-}
-
-impl<T> DataInfo<T> {
-    pub fn get_data(&self) -> &T {
-        return &self.data;
-    }
-
-    pub fn get_data_mut(&mut self) -> &mut T {
-        return &mut self.data;
-    }
-
-    pub fn overwrite(&mut self, data: T) {
-        self.data = Box::new(data);
-    }
-
-    pub async fn request_file_write(&mut self) {
-        self.saved = false;
-        self.unsaved_list
-            .write()
-            .await
-            .push(Box::new(self.self_arc.clone().unwrap()));
-        /*if self.registered == false then
-            self.registered = true
-            self.storageManager:getTable(self.key).data = self
-        end*/
-    }
-
-    pub async fn delete(&mut self) {}
-
-    pub fn is_saved(&self) -> bool {
-        self.saved
-    }
+pub fn storage_manager_loop(arc_ctx: Arc<Context>, storage_manager: Arc<StorageManager>) {
+    tokio::spawn(async move {
+        loop {
+            storage_manager.clear_save_queue().await;
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+        }
+    });
 }
