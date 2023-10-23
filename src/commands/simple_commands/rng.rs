@@ -1,6 +1,5 @@
 use crate::{reply, Context, Error};
 use rand::Rng;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 /// I will pick a random number!
 #[poise::command(slash_command)]

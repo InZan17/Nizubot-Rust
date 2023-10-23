@@ -9,7 +9,12 @@ pub async fn read(ctx: Context<'_>) -> Result<(), Error> {
         .get_data_or_default::<String>(vec!["storing"], "Nothing".to_owned())
         .await;
 
-    ctx.say(format!("Written data: {}", *data.get_data().await))
-        .await?;
+    let written_data = data.get_data().await;
+
+    ctx.send(|m| {
+        m.content(format!("Written data: {}", written_data))
+            .allowed_mentions(|a| a.empty_parse())
+    })
+    .await?;
     Ok(())
 }

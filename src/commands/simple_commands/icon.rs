@@ -1,9 +1,13 @@
 use crate::{Context, Error};
-use poise::serenity_prelude::{User, Emoji};
+use poise::serenity_prelude::{Emoji, User};
 
 /// Get the icon of whatever you want!
-#[poise::command(slash_command, subcommands("user", "server", "emoji"), subcommand_required)]
-pub async fn icon(ctx: Context<'_>) -> Result<(), Error> {
+#[poise::command(
+    slash_command,
+    subcommands("user", "server", "emoji"),
+    subcommand_required
+)]
+pub async fn icon(_ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
@@ -32,24 +36,34 @@ pub async fn user(
 
 /// Get the icon of the server.
 #[poise::command(slash_command)]
-pub async fn server(
-    ctx: Context<'_>,
-) -> Result<(), Error> {
+pub async fn server(ctx: Context<'_>) -> Result<(), Error> {
     if let Some(guild) = &ctx.guild() {
         let name = &guild.name;
         if let Some(icon_url) = guild.icon_url() {
-            ctx.send(|m| m.embed(|embed| embed.title(format!("{name}'s icon")).image(format!("{icon_url}?size=1024"))))
-                .await?;
-            return Ok(())
+            ctx.send(|m| {
+                m.embed(|embed| {
+                    embed
+                        .title(format!("{name}'s icon"))
+                        .image(format!("{icon_url}?size=1024"))
+                })
+            })
+            .await?;
+            return Ok(());
         }
 
-        ctx.send(|m| m.content("Sorry, this guild does not have an icon.").ephemeral(true))
-            .await?;
-        return Ok(())
+        ctx.send(|m| {
+            m.content("Sorry, this guild does not have an icon.")
+                .ephemeral(true)
+        })
+        .await?;
+        return Ok(());
     }
 
-    ctx.send(|m| m.content("Please run this command in a guild!").ephemeral(true))
-        .await?;
+    ctx.send(|m| {
+        m.content("Please run this command in a guild!")
+            .ephemeral(true)
+    })
+    .await?;
     Ok(())
 }
 
@@ -59,8 +73,13 @@ pub async fn emoji(
     ctx: Context<'_>,
     #[description = "The custom emoji to get the icon from."] emoji: Emoji,
 ) -> Result<(), Error> {
-    
-    ctx.send(|m| m.embed(|embed| embed.title(format!("{}'s icon", emoji.name)).image(format!("{}?size=1024", emoji.url()))))
-        .await?;
-    return Ok(())
+    ctx.send(|m| {
+        m.embed(|embed| {
+            embed
+                .title(format!("{}'s icon", emoji.name))
+                .image(format!("{}?size=1024", emoji.url()))
+        })
+    })
+    .await?;
+    return Ok(());
 }

@@ -6,14 +6,9 @@ pub mod give_up_serialize;
 mod managers;
 mod read;
 
-use poise::serenity_prelude::{RwLock, TypeMapKey};
-use std::{
-    any::Any,
-    collections::HashMap,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
 };
 
 use managers::storage_manager::{storage_manager_loop, StorageManager};
@@ -46,7 +41,7 @@ async fn event_handler(
         Event::Ready { data_about_bot } => {
             println!("Logged in as {}", data_about_bot.user.tag());
         }
-        Event::CacheReady { guilds } => {
+        Event::CacheReady { guilds: _ } => {
             if !data.started_loops.load(Ordering::Relaxed) {
                 let arc_ctx = Arc::new(ctx.clone());
                 storage_manager_loop(arc_ctx.clone(), data.storage_manager.clone());

@@ -1,5 +1,6 @@
 use super::Commands;
 
+mod echo;
 mod icon;
 mod ping;
 mod read;
@@ -13,5 +14,6 @@ pub fn get_commands() -> Commands {
         read::read(),
         write::write(),
         icon::icon(),
+        echo::echo(),
     ];
 }
