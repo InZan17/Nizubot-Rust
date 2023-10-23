@@ -1,8 +1,8 @@
 use crate::{Context, Error};
-use poise::serenity_prelude::User;
+use poise::serenity_prelude::{User, Emoji};
 
 /// Get the icon of whatever you want!
-#[poise::command(slash_command, subcommands("user", "server"), subcommand_required)]
+#[poise::command(slash_command, subcommands("user", "server", "emoji"), subcommand_required)]
 pub async fn icon(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
@@ -51,4 +51,16 @@ pub async fn server(
     ctx.send(|m| m.content("Please run this command in a guild!").ephemeral(true))
         .await?;
     Ok(())
+}
+
+/// Get the icon of a custom emoji.
+#[poise::command(slash_command)]
+pub async fn emoji(
+    ctx: Context<'_>,
+    #[description = "The custom emoji to get the icon from."] emoji: Emoji,
+) -> Result<(), Error> {
+    
+    ctx.send(|m| m.embed(|embed| embed.title(format!("{}'s icon", emoji.name)).image(format!("{}?size=1024", emoji.url()))))
+        .await?;
+    return Ok(())
 }
