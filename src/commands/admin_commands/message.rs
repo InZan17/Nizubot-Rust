@@ -8,7 +8,8 @@ use crate::{Context, Error};
 #[poise::command(
     slash_command,
     subcommands("edit", "clean", "analyze"),
-    subcommand_required
+    subcommand_required,
+    default_member_permissions = "ADMINISTRATOR"
 )]
 pub async fn message(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
