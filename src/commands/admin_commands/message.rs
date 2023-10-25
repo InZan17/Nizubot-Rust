@@ -1,5 +1,5 @@
 use poise::serenity_prelude::{
-    AttachmentType, CacheHttp, CreateEmbed, Embed, Message, MessageType,
+    AttachmentType, CreateEmbed, Embed, Message, MessageType,
 };
 
 use crate::{Context, Error};
@@ -11,7 +11,7 @@ use crate::{Context, Error};
     subcommand_required,
     default_member_permissions = "ADMINISTRATOR"
 )]
-pub async fn message(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn message(_ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
@@ -19,9 +19,9 @@ pub async fn message(ctx: Context<'_>) -> Result<(), Error> {
 #[poise::command(slash_command)]
 pub async fn analyze(
     ctx: Context<'_>,
-    #[description = "The message you want to get information from."] mut message: Message,
+    #[description = "The message you want to get information from."] message_id: Message,
 ) -> Result<(), Error> {
-    let data = serde_json::to_string_pretty(&message).unwrap();
+    let data = serde_json::to_string_pretty(&message_id).unwrap();
     let data_bytes = data.as_bytes();
     ctx.send(|m| {
         m.attachment(AttachmentType::Bytes {
@@ -100,17 +100,17 @@ pub async fn clean(
 #[poise::command(slash_command)]
 pub async fn edit(
     ctx: Context<'_>,
-    #[description = "The message you want to edit."] mut message: Message,
+    #[description = "The message you want to edit."] mut message_id: Message,
     #[description = "Contents of the message."] content: Option<String>,
     #[description = "Embeds of the message."] embeds: Option<String>,
 ) -> Result<(), Error> {
-    if !message.is_own(ctx) {
+    if !message_id.is_own(ctx) {
         ctx.send(|m| m.content("Please provide a message sent by me."))
             .await?;
         return Ok(());
     }
 
-    if message.kind != MessageType::Regular {
+    if message_id.kind != MessageType::Regular {
         ctx.send(|m| m.content("My message must not be from a command."))
             .await?;
         return Ok(());
@@ -130,7 +130,7 @@ pub async fn edit(
         }
     }
 
-    let message_result = message
+    let message_result = message_id
         .edit(ctx, |m| {
             if let Some(embed) = single_embed {
                 m.embed(|e| {
