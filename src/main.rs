@@ -52,9 +52,14 @@ async fn event_handler(
     }
     Ok(())
 }
-
+//1370065315
 #[tokio::main]
 async fn main() {
+    let mut crc = crc32fast::Hasher::new();
+    crc.update(&[0x50, 0x4c, 0x54, 0x45]);
+    crc.update(&[0xb6, 0xa8, 0x31]);
+    let result = crc.finalize();
+    println!("{}", result);
     println!("Starting bot...");
     let framework = poise::Framework::builder()
         .token(read::read_token())
