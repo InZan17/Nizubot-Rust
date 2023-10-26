@@ -5,6 +5,7 @@ mod icon;
 mod ping;
 mod read;
 mod rng;
+mod sleepcalc;
 mod write;
 
 pub fn get_commands() -> Commands {
@@ -15,5 +16,6 @@ pub fn get_commands() -> Commands {
         write::write(),
         icon::icon(),
         echo::echo(),
+        sleepcalc::sleepcalc(),
     ];
 }

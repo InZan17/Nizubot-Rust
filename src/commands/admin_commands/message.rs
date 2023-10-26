@@ -1,6 +1,4 @@
-use poise::serenity_prelude::{
-    AttachmentType, CreateEmbed, Embed, Message, MessageType,
-};
+use poise::serenity_prelude::{AttachmentType, CreateEmbed, Embed, Message, MessageType};
 
 use crate::{Context, Error};
 

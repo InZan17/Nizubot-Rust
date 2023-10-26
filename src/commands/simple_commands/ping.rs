@@ -13,7 +13,7 @@ pub async fn ping(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-fn get_current_ms_time() -> u128 {
+pub fn get_current_ms_time() -> u128 {
     let start = SystemTime::now();
     let since_the_epoch = start
         .duration_since(UNIX_EPOCH)
