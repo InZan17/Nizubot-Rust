@@ -52,14 +52,21 @@ async fn event_handler(
     }
     Ok(())
 }
-//1370065315
+//1269336405 hash plte
+//1370065315 result
 #[tokio::main]
 async fn main() {
+
+    //temporary code I will use for making an image with a single color
     let mut crc = crc32fast::Hasher::new();
     crc.update(&[0x50, 0x4c, 0x54, 0x45]);
+    let plte_result = crc.finalize();
+    println!("{}", plte_result);
+    let mut crc = crc32fast::Hasher::new_with_initial(plte_result);
     crc.update(&[0xb6, 0xa8, 0x31]);
-    let result = crc.finalize();
-    println!("{}", result);
+    let rest_result = crc.finalize();
+    println!("{}", rest_result);
+
     println!("Starting bot...");
     let framework = poise::Framework::builder()
         .token(read::read_token())
