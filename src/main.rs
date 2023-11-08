@@ -56,7 +56,6 @@ async fn event_handler(
 //1370065315 result
 #[tokio::main]
 async fn main() {
-
     //temporary code I will use for making an image with a single color
     let mut crc = crc32fast::Hasher::new();
     crc.update(&[0x50, 0x4c, 0x54, 0x45]);

@@ -5,7 +5,7 @@ mod message;
 
 pub fn get_commands() -> Commands {
     return vec![
-        message::message(), 
+        message::message(),
         //clear_data::clear_data()
     ];
 }

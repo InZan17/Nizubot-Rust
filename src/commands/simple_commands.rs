@@ -2,6 +2,7 @@ use super::Commands;
 
 mod echo;
 mod icon;
+mod joinorder;
 mod ping;
 mod read;
 mod rng;
@@ -17,5 +18,6 @@ pub fn get_commands() -> Commands {
         icon::icon(),
         echo::echo(),
         sleepcalc::sleepcalc(),
+        joinorder::joinorder(),
     ];
 }
