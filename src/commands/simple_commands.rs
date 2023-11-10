@@ -1,5 +1,6 @@
 use super::Commands;
 
+mod cotd;
 mod echo;
 mod icon;
 mod joinorder;
@@ -19,5 +20,6 @@ pub fn get_commands() -> Commands {
         echo::echo(),
         sleepcalc::sleepcalc(),
         joinorder::joinorder(),
+        cotd::cotd(),
     ];
 }

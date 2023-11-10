@@ -11,12 +11,16 @@ use std::sync::{
     Arc,
 };
 
-use managers::storage_manager::{storage_manager_loop, StorageManager};
+use managers::{
+    cotd_manager::{CotdManager, cotd_manager_loop},
+    storage_manager::{storage_manager_loop, StorageManager},
+};
 use poise::{serenity_prelude as serenity, Event, ReplyHandle};
 
 pub struct Data {
     started_loops: AtomicBool,
     storage_manager: Arc<StorageManager>,
+    cotd_manager: Arc<CotdManager>,
 } // User data, which is stored and accessible in all command invocations
 pub struct Handler {} // User data, which is stored and accessible in all command invocations
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -45,6 +49,7 @@ async fn event_handler(
             if !data.started_loops.load(Ordering::Relaxed) {
                 let arc_ctx = Arc::new(ctx.clone());
                 storage_manager_loop(arc_ctx.clone(), data.storage_manager.clone());
+                cotd_manager_loop(arc_ctx.clone());
                 data.started_loops.swap(true, Ordering::Relaxed);
             }
         }
@@ -81,8 +86,10 @@ async fn main() {
             Box::pin(async move {
                 println!("Registering commands...");
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
+                let storage_manager = Arc::new(StorageManager::new("./data").await);
                 Ok(Data {
-                    storage_manager: Arc::new(StorageManager::new("./data").await),
+                    storage_manager: storage_manager.clone(),
+                    cotd_manager: Arc::new(CotdManager::new(storage_manager)),
                     started_loops: AtomicBool::new(false),
                 })
             })

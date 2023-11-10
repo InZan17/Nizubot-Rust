@@ -82,7 +82,6 @@ pub async fn joinorder(
         min_index = max_possible_index - 8;
     }
 
-
     ctx.send(|m| {
         m.embed(|e| {
             e.title("Join order").footer(|f| {
@@ -95,7 +94,7 @@ pub async fn joinorder(
 
             let author_id = ctx.author().id;
 
-            for i in min_index..max_index+1 {
+            for i in min_index..max_index + 1 {
                 let member = &members[i as usize];
 
                 let tag = if member.user.discriminator == 0 {
@@ -103,7 +102,7 @@ pub async fn joinorder(
                 } else {
                     member.user.tag()
                 };
-                
+
                 description.push_str(format!("**{i}.** {tag}").as_str());
 
                 if member.user.id == author_id {
