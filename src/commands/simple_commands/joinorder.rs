@@ -1,9 +1,6 @@
-use std::{
-    cmp::Ordering,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use poise::serenity_prelude::{constants::LARGE_THRESHOLD, User, UserId};
+use poise::serenity_prelude::UserId;
 
 use crate::{Context, Error};
 

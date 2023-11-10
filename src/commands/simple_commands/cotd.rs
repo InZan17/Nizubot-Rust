@@ -28,8 +28,8 @@ pub async fn cotd(
             }
             Err(err) => {
                 ctx.reply(err).await?;
-                return Ok(())
-            },
+                return Ok(());
+            }
         }
     } else {
         match cotd_manager.get_current_color().await {
@@ -42,8 +42,8 @@ pub async fn cotd(
             }
             Err(err) => {
                 ctx.reply(err).await?;
-                return Ok(())
-            },
+                return Ok(());
+            }
         }
     }
 
@@ -57,7 +57,8 @@ pub async fn cotd(
             filename: file_name.clone(),
         })
         .embed(|e| {
-            e.title(title).description(format!("**{}** (#{})", color_info.name, color_info.hex))
+            e.title(title)
+                .description(format!("**{}** (#{})", color_info.name, color_info.hex))
                 .image(format!("attachment://{}", file_name))
                 .timestamp(
                     Timestamp::from_unix_timestamp(
@@ -71,8 +72,6 @@ pub async fn cotd(
     .await?;
     Ok(())
 }
-
-
 
 pub fn create_color_png(hex: &String) -> Vec<u8> {
     const PLTE_CRC_HASH: u32 = 1269336405;

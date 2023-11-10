@@ -2,8 +2,6 @@
 
 use std::{any::Any, collections::HashMap};
 
-use serde::Serialize;
-
 use crate::managers::cotd_manager::ColorInfo;
 
 pub trait GiveUpSerialize: Any {

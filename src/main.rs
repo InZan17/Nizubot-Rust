@@ -12,7 +12,7 @@ use std::sync::{
 };
 
 use managers::{
-    cotd_manager::{CotdManager, cotd_manager_loop},
+    cotd_manager::{cotd_manager_loop, CotdManager},
     storage_manager::{storage_manager_loop, StorageManager},
 };
 use poise::{serenity_prelude as serenity, Event, ReplyHandle};
