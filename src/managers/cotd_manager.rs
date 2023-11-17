@@ -103,7 +103,8 @@ impl CotdManager {
             Err(err_text) => return Err(err_text),
             Ok(color_info) => {
                 let res = role.edit(http, |r| {
-                    r.name(name.replace("<cotd>", &color_info.name))
+                    let color = u64::from_str_radix(color_info.hex.clone().as_str(), 16).unwrap();
+                    r.name(name.replace("<cotd>", &color_info.name)).colour(color)
                 }).await;
                 
                 match res {

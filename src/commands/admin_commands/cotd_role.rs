@@ -89,6 +89,7 @@ pub async fn create(
     drop(cotd_roles_read);
 
     cotd_roles_data.get_data_mut().await.push(guild_id);
+    cotd_roles_data.request_file_write().await;
 
     let cotd_role_info = CotdRoleInfo{
         id: role_id,
