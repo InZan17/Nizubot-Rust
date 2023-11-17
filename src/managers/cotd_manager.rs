@@ -4,7 +4,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use poise::serenity_prelude::Context;
+use poise::serenity_prelude::{Context, Role, Http, Error};
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 
@@ -96,6 +96,22 @@ impl CotdManager {
         color_info.hex.remove(0);
 
         Ok(color_info)
+    }
+
+    pub async fn update_role(&self, http: impl AsRef<Http>, role: Role, name: &String) -> Result<(), String> {
+        match self.get_current_color().await {
+            Err(err_text) => return Err(err_text),
+            Ok(color_info) => {
+                let res = role.edit(http, |r| {
+                    r.name(name.replace("<cotd>", &color_info.name))
+                }).await;
+                
+                match res {
+                    Ok(_) => return Ok(()),
+                    Err(err) => return Err(err.to_string()),
+                }
+            },
+        }
     }
 }
 
