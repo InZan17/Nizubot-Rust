@@ -3,14 +3,7 @@ use std::vec;
 use poise::serenity_prelude::{AttachmentType, CreateEmbed, Embed, Message, MessageType, Role, RoleId};
 use serde::{Serialize, Deserialize};
 
-use crate::{Context, Error};
-
-#[derive(Serialize, Deserialize)]
-pub struct CotdRoleInfo {
-    name: String,
-    day: u64,
-    id: u64
-}
+use crate::{Context, Error, managers::cotd_manager::CotdRoleInfo};
 
 /// COTD role.
 #[poise::command(

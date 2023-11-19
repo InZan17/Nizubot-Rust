@@ -2,7 +2,7 @@
 
 use std::{any::Any, collections::HashMap};
 
-use crate::{managers::cotd_manager::ColorInfo, commands::admin_commands::cotd_role::CotdRoleInfo};
+use crate::managers::cotd_manager::{ColorInfo, CotdRoleInfo};
 
 pub trait GiveUpSerialize: Any {
     fn serialize_json(&self) -> String;

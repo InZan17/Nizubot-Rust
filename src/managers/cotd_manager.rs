@@ -4,7 +4,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use poise::serenity_prelude::{Context, Role, Http, Error};
+use poise::serenity_prelude::{Context, Role, Http, Error, Guild, PartialGuild};
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 
@@ -16,6 +16,13 @@ const COLOR_API: &str = "https://api.color.pizza/v1/";
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct ColorResponse {
     colors: Vec<ColorInfo>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct CotdRoleInfo {
+    pub name: String,
+    pub day: u64,
+    pub id: u64
 }
 
 pub struct CotdManager {
@@ -116,10 +123,76 @@ impl CotdManager {
     }
 }
 
-pub fn cotd_manager_loop(arc_ctx: Arc<Context>) {
+pub fn cotd_manager_loop(arc_ctx: Arc<Context>, storage_manager: Arc<StorageManager>, cotd_manager: Arc<CotdManager>) {
     tokio::spawn(async move {
+        let mut last_updated_day = 0;
         loop {
             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+            let current_day = cotd_manager.get_current_day();
+
+            if last_updated_day == current_day {
+                continue;
+            }
+
+            let cotd_roles_data = storage_manager
+                .get_data_or_default::<Vec<u64>>(vec!["cotdRoles"], vec![])
+                .await;
+
+            last_updated_day = current_day;
+
+            let mut removal = vec![];
+
+            for guild_id in cotd_roles_data.get_data().await.iter() {
+                let guild_cotd_role_data = storage_manager
+                    .get_data::<CotdRoleInfo>(vec!["guilds", &guild_id.to_string(), "cotd_role"])
+                    .await;
+
+                let Some(guild_cotd_role_data) = guild_cotd_role_data else {
+                    removal.push(*guild_id);
+                    continue;
+                };
+                let mut cotd_role_data = guild_cotd_role_data.get_data_mut().await;
+
+                if cotd_role_data.day == current_day {
+                    continue;
+                }
+
+                let role;
+
+                if let Some(guild) = arc_ctx.cache.guild(*guild_id) {
+                    role = guild.roles.get(&poise::serenity_prelude::RoleId(cotd_role_data.id)).cloned();
+                } else {
+                    let guild_res = arc_ctx.http.get_guild(*guild_id).await;
+
+                    match guild_res {
+                        Ok(guild) => {
+                            role = guild.roles.get(&poise::serenity_prelude::RoleId(cotd_role_data.id)).cloned();
+                        },
+                        Err(err) => {
+                            println!("{}",err.to_string());
+                            continue;
+                        },
+                    }
+                }
+
+                if let Some(role) = role {
+                    let result = cotd_manager.update_role(&arc_ctx, role, &cotd_role_data.name).await;
+                    cotd_role_data.day = current_day;
+                    guild_cotd_role_data.request_file_write().await;
+                } else {
+                    removal.push(*guild_id);
+                }
+            }
+
+            if removal.len() != 0 {
+                cotd_roles_data.get_data_mut().await.retain(|guild_id| {
+                    !removal.contains(guild_id)
+                });
+                cotd_roles_data.request_file_write().await;
+            }
+
+            
         }
     });
 }
