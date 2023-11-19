@@ -58,7 +58,7 @@ pub async fn cotd(
         })
         .embed(|e| {
             e.title(title)
-                .description(format!("**{}** (#{})", color_info.name, color_info.hex))
+                .description(format!("**{}** (#{})", color_info.name, color_info.hex.to_ascii_uppercase()))
                 .image(format!("attachment://{}", file_name))
                 .timestamp(
                     Timestamp::from_unix_timestamp(
