@@ -1,12 +1,10 @@
 use std::vec;
 
-use poise::serenity_prelude::{
-    Role, RoleId,
-};
 use crate::{
     managers::{cotd_manager::CotdRoleInfo, storage_manager::DataDirectories},
     Context, Error,
 };
+use poise::serenity_prelude::{Role, RoleId};
 
 /// COTD role.
 #[poise::command(
