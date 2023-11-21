@@ -49,7 +49,11 @@ async fn event_handler(
             if !data.started_loops.load(Ordering::Relaxed) {
                 let arc_ctx = Arc::new(ctx.clone());
                 storage_manager_loop(arc_ctx.clone(), data.storage_manager.clone());
-                cotd_manager_loop(arc_ctx.clone(), data.storage_manager.clone(), data.cotd_manager.clone());
+                cotd_manager_loop(
+                    arc_ctx.clone(),
+                    data.storage_manager.clone(),
+                    data.cotd_manager.clone(),
+                );
                 data.started_loops.swap(true, Ordering::Relaxed);
             }
         }

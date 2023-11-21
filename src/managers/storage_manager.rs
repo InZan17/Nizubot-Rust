@@ -17,9 +17,11 @@ use serde::Serialize;
 
 use crate::{give_up_serialize::GiveUpSerialize, Data};
 
-pub struct DataDirectories{}
+pub struct DataDirectories {}
 impl DataDirectories {
-    pub fn cotd_guilds() -> Vec<&'static str> {vec!["cotd_guilds"]}
+    pub fn cotd_guilds() -> Vec<&'static str> {
+        vec!["cotd_guilds"]
+    }
 }
 
 struct DirectoryInfo {
@@ -118,7 +120,7 @@ impl StorageManager {
             }
 
             let test_data = self.get_data_raw(path_str).await;
-            
+
             let Some(test_data) = test_data else {
                 println!("Attempted to save outdated data! Canceled.");
                 continue;
@@ -270,7 +272,7 @@ impl StorageManager {
         }
         if let Some(directory_info) = current_directory {
             if let Some(data) = &directory_info.data {
-                return Some(data.as_ref().clone())
+                return Some(data.as_ref().clone());
             }
         }
         None
@@ -344,7 +346,6 @@ impl StorageManager {
 
         //loop through path.
         while let Some(key) = iter.next() {
-
             let key_string = key.to_string();
 
             if iter.peek().is_none() {
@@ -353,7 +354,7 @@ impl StorageManager {
                 }
                 break;
             }
-            
+
             match current_directory {
                 Some(prev_directory) => {
                     current_directory = prev_directory.directories.get_mut(&key_string);
@@ -361,14 +362,14 @@ impl StorageManager {
                         continue;
                     }
                     break;
-                },
+                }
                 None => {
                     current_directory = self_directories.get_mut(&key_string);
                     if current_directory.is_some() {
                         continue;
                     }
                     break;
-                },
+                }
             }
         }
 
@@ -376,7 +377,6 @@ impl StorageManager {
 
         tokio::fs::remove_dir_all(self.get_full_directory(path_joined.clone())).await;
         tokio::fs::remove_file(self.get_full_path(path_joined)).await;
-
     }
 }
 

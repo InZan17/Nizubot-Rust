@@ -4,11 +4,11 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use poise::serenity_prelude::{Context, Role, Http, Error, Guild, PartialGuild};
+use poise::serenity_prelude::{Context, Error, Guild, Http, PartialGuild, Role};
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 
-use super::storage_manager::{StorageManager, DataDirectories};
+use super::storage_manager::{DataDirectories, StorageManager};
 
 pub const SECONDS_IN_A_DAY: u64 = 86400;
 const COLOR_API: &str = "https://api.color.pizza/v1/";
@@ -22,7 +22,7 @@ struct ColorResponse {
 pub struct CotdRoleInfo {
     pub name: String,
     pub day: u64,
-    pub id: u64
+    pub id: u64,
 }
 
 pub struct CotdManager {
@@ -105,25 +105,38 @@ impl CotdManager {
         Ok(color_info)
     }
 
-    pub async fn update_role(&self, http: impl AsRef<Http>, role: Role, name: &String) -> Result<(), String> {
+    pub async fn update_role(
+        &self,
+        http: impl AsRef<Http>,
+        role: Role,
+        name: &String,
+    ) -> Result<(), String> {
         match self.get_current_color().await {
             Err(err_text) => return Err(err_text),
             Ok(color_info) => {
-                let res = role.edit(http, |r| {
-                    let color = u64::from_str_radix(color_info.hex.clone().as_str(), 16).unwrap();
-                    r.name(name.replace("<cotd>", &color_info.name)).colour(color)
-                }).await;
-                
+                let res = role
+                    .edit(http, |r| {
+                        let color =
+                            u64::from_str_radix(color_info.hex.clone().as_str(), 16).unwrap();
+                        r.name(name.replace("<cotd>", &color_info.name))
+                            .colour(color)
+                    })
+                    .await;
+
                 match res {
                     Ok(_) => return Ok(()),
                     Err(err) => return Err(err.to_string()),
                 }
-            },
+            }
         }
     }
 }
 
-pub fn cotd_manager_loop(arc_ctx: Arc<Context>, storage_manager: Arc<StorageManager>, cotd_manager: Arc<CotdManager>) {
+pub fn cotd_manager_loop(
+    arc_ctx: Arc<Context>,
+    storage_manager: Arc<StorageManager>,
+    cotd_manager: Arc<CotdManager>,
+) {
     tokio::spawn(async move {
         let mut last_updated_day = 0;
         loop {
@@ -161,23 +174,31 @@ pub fn cotd_manager_loop(arc_ctx: Arc<Context>, storage_manager: Arc<StorageMana
                 let role;
 
                 if let Some(guild) = arc_ctx.cache.guild(*guild_id) {
-                    role = guild.roles.get(&poise::serenity_prelude::RoleId(cotd_role_data.id)).cloned();
+                    role = guild
+                        .roles
+                        .get(&poise::serenity_prelude::RoleId(cotd_role_data.id))
+                        .cloned();
                 } else {
                     let guild_res = arc_ctx.http.get_guild(*guild_id).await;
 
                     match guild_res {
                         Ok(guild) => {
-                            role = guild.roles.get(&poise::serenity_prelude::RoleId(cotd_role_data.id)).cloned();
-                        },
+                            role = guild
+                                .roles
+                                .get(&poise::serenity_prelude::RoleId(cotd_role_data.id))
+                                .cloned();
+                        }
                         Err(err) => {
-                            println!("{}",err.to_string());
+                            println!("{}", err.to_string());
                             continue;
-                        },
+                        }
                     }
                 }
 
                 if let Some(role) = role {
-                    let result = cotd_manager.update_role(&arc_ctx, role, &cotd_role_data.name).await;
+                    let result = cotd_manager
+                        .update_role(&arc_ctx, role, &cotd_role_data.name)
+                        .await;
                     cotd_role_data.day = current_day;
                     guild_cotd_role_data.request_file_write().await;
                 } else {
@@ -186,13 +207,12 @@ pub fn cotd_manager_loop(arc_ctx: Arc<Context>, storage_manager: Arc<StorageMana
             }
 
             if removal.len() != 0 {
-                cotd_roles_data.get_data_mut().await.retain(|guild_id| {
-                    !removal.contains(guild_id)
-                });
+                cotd_roles_data
+                    .get_data_mut()
+                    .await
+                    .retain(|guild_id| !removal.contains(guild_id));
                 cotd_roles_data.request_file_write().await;
             }
-
-            
         }
     });
 }
