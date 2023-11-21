@@ -111,6 +111,24 @@ impl StorageManager {
                 continue;
             }
 
+            let mut path_str = vec![];
+
+            for key in data.path.iter() {
+                path_str.push(key.as_str());
+            }
+
+            let test_data = self.get_data_raw(path_str).await;
+            
+            let Some(test_data) = test_data else {
+                println!("Attempted to save outdated data! Canceled.");
+                continue;
+            };
+
+            if !Arc::ptr_eq(&test_data, &data) {
+                println!("Attempted to save outdated data! Canceled.");
+                continue;
+            }
+
             println!("Saving {}", data.path.join("/"));
 
             let mut poping_path = data.path.clone();
@@ -227,6 +245,35 @@ impl StorageManager {
         let data_holder = self.create_data(path, default_data).await;
 
         data_holder
+    }
+
+    pub async fn get_data_raw(
+        &self,
+        path: Vec<&str>,
+    ) -> Option<DataHolderType<dyn GiveUpSerialize + Send + Sync>> {
+        if path.len() == 0 {
+            return None;
+        }
+
+        let self_directories = self.directories.read().await;
+        let mut current_hashmap = &*self_directories;
+        let mut current_directory = None;
+
+        //loop through path. If path is loaded current_directory shall be Some(). Else None.
+        for key in path.clone().into_iter() {
+            current_directory = current_hashmap.get(key);
+            if let Some(directory_info) = current_directory {
+                current_hashmap = &directory_info.directories;
+                continue;
+            }
+            break;
+        }
+        if let Some(directory_info) = current_directory {
+            if let Some(data) = &directory_info.data {
+                return Some(data.as_ref().clone())
+            }
+        }
+        None
     }
 
     pub async fn get_data<T: GiveUpSerialize + Send + Sync + for<'de> serde::Deserialize<'de>>(
