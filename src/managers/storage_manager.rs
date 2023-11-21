@@ -1,10 +1,10 @@
 use std::{
     any::{Any, TypeId},
-    borrow::Borrow,
+    borrow::{Borrow, BorrowMut},
     collections::HashMap,
     fs::{self, File},
     io::{BufReader, Write},
-    ops::Deref,
+    ops::{Deref, DerefMut},
     path::Path,
     sync::{atomic::AtomicBool, Arc},
 };
@@ -16,6 +16,11 @@ use poise::{
 use serde::Serialize;
 
 use crate::{give_up_serialize::GiveUpSerialize, Data};
+
+pub struct DataDirectories{}
+impl DataDirectories {
+    pub fn cotd_guilds() -> Vec<&'static str> {vec!["cotd_guilds"]}
+}
 
 struct DirectoryInfo {
     directories: HashMap<String, DirectoryInfo>,
@@ -50,8 +55,6 @@ impl<T: GiveUpSerialize + Send + Sync + 'static + ?Sized> DataHolder<T> {
             .push(self.self_arc.clone().unwrap());
     }
 
-    pub async fn delete(&mut self) {}
-
     pub async fn is_saved(&self) -> bool {
         (*self.saved.lock().await).clone()
     }
@@ -60,6 +63,7 @@ impl<T: GiveUpSerialize + Send + Sync + 'static + ?Sized> DataHolder<T> {
 pub struct StorageManager {
     storage_path: String,
     save_queue: Arc<RwLock<Vec<DataHolderType<dyn GiveUpSerialize + Send + Sync>>>>,
+    //delete_queue: Arc<RwLock<Vec<String>>>,
     directories: RwLock<HashMap<String, DirectoryInfo>>,
 }
 
@@ -76,6 +80,7 @@ impl StorageManager {
         StorageManager {
             directories: RwLock::new(HashMap::new()),
             save_queue: Arc::new(RwLock::new(vec![])),
+            //delete_queue: Arc::new(RwLock::new(vec![])),
             storage_path,
         }
     }
@@ -281,6 +286,50 @@ impl StorageManager {
         }
 
         None
+    }
+
+    pub async fn delete_data(&self, path: Vec<&str>) {
+        let mut current_directory: Option<&mut DirectoryInfo> = None;
+
+        let mut self_directories = self.directories.write().await;
+
+        let mut iter = path.clone().into_iter().peekable();
+
+        //loop through path.
+        while let Some(key) = iter.next() {
+
+            let key_string = key.to_string();
+
+            if iter.peek().is_none() {
+                if let Some(current_directory) = current_directory {
+                    current_directory.directories.remove(&key_string);
+                }
+                break;
+            }
+            
+            match current_directory {
+                Some(prev_directory) => {
+                    current_directory = prev_directory.directories.get_mut(&key_string);
+                    if current_directory.is_some() {
+                        continue;
+                    }
+                    break;
+                },
+                None => {
+                    current_directory = self_directories.get_mut(&key_string);
+                    if current_directory.is_some() {
+                        continue;
+                    }
+                    break;
+                },
+            }
+        }
+
+        let path_joined = path.join("/");
+
+        tokio::fs::remove_dir_all(self.get_full_directory(path_joined.clone())).await;
+        tokio::fs::remove_file(self.get_full_path(path_joined)).await;
+
     }
 }
 
