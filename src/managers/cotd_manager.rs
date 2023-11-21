@@ -8,7 +8,7 @@ use poise::serenity_prelude::{Context, Role, Http, Error, Guild, PartialGuild};
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 
-use super::storage_manager::StorageManager;
+use super::storage_manager::{StorageManager, DataDirectories};
 
 pub const SECONDS_IN_A_DAY: u64 = 86400;
 const COLOR_API: &str = "https://api.color.pizza/v1/";
@@ -136,7 +136,7 @@ pub fn cotd_manager_loop(arc_ctx: Arc<Context>, storage_manager: Arc<StorageMana
             }
 
             let cotd_roles_data = storage_manager
-                .get_data_or_default::<Vec<u64>>(vec!["cotdRoles"], vec![])
+                .get_data_or_default::<Vec<u64>>(DataDirectories::cotd_guilds(), vec![])
                 .await;
 
             last_updated_day = current_day;

@@ -3,7 +3,7 @@ use std::vec;
 use poise::serenity_prelude::{AttachmentType, CreateEmbed, Embed, Message, MessageType, Role, RoleId};
 use serde::{Serialize, Deserialize};
 
-use crate::{Context, Error, managers::cotd_manager::CotdRoleInfo};
+use crate::{Context, Error, managers::{cotd_manager::{CotdRoleInfo}, storage_manager::DataDirectories}};
 
 /// COTD role.
 #[poise::command(
@@ -28,7 +28,7 @@ pub async fn create(
 
     let cotd_roles_data = ctx.data()
         .storage_manager
-        .get_data_or_default::<Vec<u64>>(vec!["cotdRoles"], vec![])
+        .get_data_or_default::<Vec<u64>>(DataDirectories::cotd_guilds(), vec![])
         .await;
     
     let cotd_roles_read = cotd_roles_data.get_data().await;
@@ -141,7 +141,57 @@ pub async fn create(
 #[poise::command(slash_command)]
 pub async fn remove(
     ctx: Context<'_>,
-    #[description = "If you wanna delete the role from the guild or not. (Default: False)"] content: Option<bool>,
+    #[description = "If you wanna delete the role from the guild or not. (Default: False)"] delete: Option<bool>,
 ) -> Result<(), Error> {
+
+    let guild_id = ctx.guild_id().unwrap();
+
+    let guild_cotd_role_data = ctx.data()
+        .storage_manager
+        .get_data::<CotdRoleInfo>(vec!["guilds", &guild_id.to_string(), "cotd_role"])
+        .await;
+
+
+    let Some(guild_cotd_role_data) = guild_cotd_role_data else {
+        ctx.send(|m| {
+            m.content("This guild does not have a COTD role.")
+        }).await?;
+        return Ok(())
+    };
+
+    let cotd_roles_data = ctx.data()
+        .storage_manager
+        .get_data_or_default::<Vec<u64>>(DataDirectories::cotd_guilds(), vec![])
+        .await;
+
+
+    cotd_roles_data.get_data_mut().await.retain(|saved_guild_id| {
+        saved_guild_id != guild_id.as_u64()
+    });
+
+    let role_id = guild_cotd_role_data.get_data().await.id;
+
+    drop(guild_cotd_role_data);
+
+    ctx.data().storage_manager.delete_data(vec!["guilds", &guild_id.to_string(), "cotd_role"]).await;
+
+    if delete.unwrap_or(false) {
+        let res = ctx.guild().unwrap().delete_role(ctx, RoleId(role_id)).await;
+        if let Err(err) = res {
+            ctx.send(|m| {
+                m.content(format!("<@&{}> is no longer a COTD role but I was unable to delete it.\n\n{}", role_id, err.to_string()))
+            }).await?;
+        } else {
+            ctx.send(|m| {
+                m.content(format!("<@&{}> has been successfully deleted.", role_id))
+            }).await?;
+        }
+        return Ok(())
+    }
+
+    ctx.send(|m| {
+        m.content(format!("<@&{}> is no longer a COTD role.", role_id))
+    }).await?;
+    
     return Ok(());
 }
