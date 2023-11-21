@@ -1,21 +1,18 @@
 use std::{
     any::{Any, TypeId},
-    borrow::{Borrow, BorrowMut},
     collections::HashMap,
     fs::{self, File},
     io::{BufReader, Write},
-    ops::{Deref, DerefMut},
     path::Path,
-    sync::{atomic::AtomicBool, Arc},
+    sync::Arc,
 };
 
 use poise::{
     futures_util::lock::Mutex,
-    serenity_prelude::{Context, FutureExt, RwLock},
+    serenity_prelude::{Context, RwLock},
 };
-use serde::Serialize;
 
-use crate::{give_up_serialize::GiveUpSerialize, Data};
+use crate::give_up_serialize::GiveUpSerialize;
 
 pub struct DataDirectories {}
 impl DataDirectories {
@@ -231,7 +228,7 @@ impl StorageManager {
         T: GiveUpSerialize + Send + Sync + for<'de> serde::Deserialize<'de>,
     >(
         &self,
-        mut path: Vec<&str>,
+        path: Vec<&str>,
         default_data: T,
     ) -> DataHolderType<T> {
         if path.len() == 0 {
@@ -280,7 +277,7 @@ impl StorageManager {
 
     pub async fn get_data<T: GiveUpSerialize + Send + Sync + for<'de> serde::Deserialize<'de>>(
         &self,
-        mut path: Vec<&str>,
+        path: Vec<&str>,
     ) -> Option<DataHolderType<T>> {
         if path.len() == 0 {
             return None;
@@ -375,12 +372,12 @@ impl StorageManager {
 
         let path_joined = path.join("/");
 
-        tokio::fs::remove_dir_all(self.get_full_directory(path_joined.clone())).await;
-        tokio::fs::remove_file(self.get_full_path(path_joined)).await;
+        let _ = tokio::fs::remove_dir_all(self.get_full_directory(path_joined.clone())).await;
+        let _ = tokio::fs::remove_file(self.get_full_path(path_joined)).await;
     }
 }
 
-pub fn storage_manager_loop(arc_ctx: Arc<Context>, storage_manager: Arc<StorageManager>) {
+pub fn storage_manager_loop(_arc_ctx: Arc<Context>, storage_manager: Arc<StorageManager>) {
     tokio::spawn(async move {
         loop {
             storage_manager.clear_save_queue().await;

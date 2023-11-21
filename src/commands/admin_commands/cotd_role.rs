@@ -1,10 +1,8 @@
 use std::vec;
 
 use poise::serenity_prelude::{
-    AttachmentType, CreateEmbed, Embed, Message, MessageType, Role, RoleId,
+    Role, RoleId,
 };
-use serde::{Deserialize, Serialize};
-
 use crate::{
     managers::{cotd_manager::CotdRoleInfo, storage_manager::DataDirectories},
     Context, Error,

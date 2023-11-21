@@ -4,7 +4,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use poise::serenity_prelude::{Context, Error, Guild, Http, PartialGuild, Role};
+use poise::serenity_prelude::{Context, Http, Role};
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 
@@ -196,7 +196,7 @@ pub fn cotd_manager_loop(
                 }
 
                 if let Some(role) = role {
-                    let result = cotd_manager
+                    let _result = cotd_manager
                         .update_role(&arc_ctx, role, &cotd_role_data.name)
                         .await;
                     cotd_role_data.day = current_day;
