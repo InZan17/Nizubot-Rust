@@ -4,7 +4,7 @@
 mod commands;
 pub mod give_up_serialize;
 mod managers;
-mod read;
+mod tokens;
 
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -16,11 +16,13 @@ use managers::{
     storage_manager::{storage_manager_loop, StorageManager},
 };
 use poise::{serenity_prelude as serenity, Event, ReplyHandle};
+use tokens::Tokens;
 
 pub struct Data {
     started_loops: AtomicBool,
     storage_manager: Arc<StorageManager>,
     cotd_manager: Arc<CotdManager>,
+    tokens: Tokens
 } // User data, which is stored and accessible in all command invocations
 pub struct Handler {} // User data, which is stored and accessible in all command invocations
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -65,7 +67,7 @@ async fn event_handler(
 async fn main() {
     println!("Starting bot...");
     let framework = poise::Framework::builder()
-        .token(read::read_token())
+        .token(tokens::get_discord_token())
         .intents(serenity::GatewayIntents::from_bits_truncate(3243775))
         .options(poise::FrameworkOptions {
             commands: commands::get_commands(),
@@ -83,6 +85,8 @@ async fn main() {
                     storage_manager: storage_manager.clone(),
                     cotd_manager: Arc::new(CotdManager::new(storage_manager)),
                     started_loops: AtomicBool::new(false),
+                    tokens: tokens::get_other_tokens()
+                    
                 })
             })
         });
