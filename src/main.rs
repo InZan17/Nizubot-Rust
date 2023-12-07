@@ -13,6 +13,7 @@ use std::sync::{
 
 use managers::{
     cotd_manager::{cotd_manager_loop, CotdManager},
+    remind_manager::RemindManager,
     storage_manager::{storage_manager_loop, StorageManager},
 };
 use poise::{serenity_prelude as serenity, Event, ReplyHandle};
@@ -22,7 +23,8 @@ pub struct Data {
     started_loops: AtomicBool,
     storage_manager: Arc<StorageManager>,
     cotd_manager: Arc<CotdManager>,
-    tokens: Tokens
+    remind_manager: Arc<RemindManager>,
+    tokens: Tokens,
 } // User data, which is stored and accessible in all command invocations
 pub struct Handler {} // User data, which is stored and accessible in all command invocations
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -83,10 +85,10 @@ async fn main() {
                 let storage_manager = Arc::new(StorageManager::new("./data").await);
                 Ok(Data {
                     storage_manager: storage_manager.clone(),
-                    cotd_manager: Arc::new(CotdManager::new(storage_manager)),
+                    cotd_manager: Arc::new(CotdManager::new(storage_manager.clone())),
+                    remind_manager: Arc::new(RemindManager::new(storage_manager)),
                     started_loops: AtomicBool::new(false),
-                    tokens: tokens::get_other_tokens()
-                    
+                    tokens: tokens::get_other_tokens(),
                 })
             })
         });

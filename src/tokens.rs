@@ -4,11 +4,10 @@ pub const DISCORD_TOKEN_PATH: &str = "./token";
 pub const OPENEXCHANGERATES_KEY_PATH: &str = "./openExchangeRatesApiKey";
 
 pub struct Tokens {
-    openexchangerates_token: Option<String>
+    openexchangerates_token: Option<String>,
 }
 
 pub fn get_other_tokens() -> Tokens {
-    
     let openexchangerates_token = fs::read_to_string(OPENEXCHANGERATES_KEY_PATH);
     if let Err(err) = &openexchangerates_token {
         println!("Couldn't read file 'openExchangeRatesApiKey'. The /currency command will not work.\n{}", err.to_string())

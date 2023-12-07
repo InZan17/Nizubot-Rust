@@ -1,2 +1,3 @@
 pub mod cotd_manager;
+pub mod remind_manager;
 pub mod storage_manager;
