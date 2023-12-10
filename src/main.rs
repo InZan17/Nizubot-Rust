@@ -13,7 +13,7 @@ use std::sync::{
 
 use managers::{
     cotd_manager::{cotd_manager_loop, CotdManager},
-    remind_manager::RemindManager,
+    remind_manager::{remind_manager_loop, RemindManager},
     storage_manager::{storage_manager_loop, StorageManager},
 };
 use poise::{serenity_prelude as serenity, Event, ReplyHandle};
@@ -58,6 +58,7 @@ async fn event_handler(
                     data.storage_manager.clone(),
                     data.cotd_manager.clone(),
                 );
+                remind_manager_loop(arc_ctx.clone(), data.remind_manager.clone());
                 data.started_loops.swap(true, Ordering::Relaxed);
             }
         }

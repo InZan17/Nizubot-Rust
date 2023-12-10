@@ -166,10 +166,9 @@ pub async fn remove(
         .await;
 
     let Some(guild_cotd_role_data) = guild_cotd_role_data else {
-        ctx.send(|m| {
-            m.content("This guild does not have a COTD role.")
-        }).await?;
-        return Ok(())
+        ctx.send(|m| m.content("This guild does not have a COTD role."))
+            .await?;
+        return Ok(());
     };
 
     let cotd_roles_data = ctx

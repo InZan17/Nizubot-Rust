@@ -25,9 +25,11 @@ pub async fn add(
 
     let Some(duration) = parse_duration_string(duration) else {
         ctx.send(|m| {
-            m.content("Please give me a valid duration.").ephemeral(true)
-        }).await?;
-        return Ok(())
+            m.content("Please give me a valid duration.")
+                .ephemeral(true)
+        })
+        .await?;
+        return Ok(());
     };
 
     if duration < 0. {
@@ -83,11 +85,12 @@ pub async fn add(
                 m.content(format!(
                     "Sorry, I wasn't able to add that reminder. {}",
                     err
-                )).ephemeral(true)
+                ))
+                .ephemeral(true)
             })
             .await?;
             return Ok(());
-        },
+        }
 
         Ok((index, data_holder)) => {
             let remind_time = get_seconds() as f64 + duration;
@@ -122,7 +125,6 @@ pub async fn add(
             drop(data_mut);
 
             data_holder.request_file_write().await;
-
         }
     }
     Ok(())

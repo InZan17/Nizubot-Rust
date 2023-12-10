@@ -91,7 +91,8 @@ impl CotdManager {
         let random_color =
             poise::serenity_prelude::Colour::from(thread_rng().gen_range(0..TWO_POW_24));
 
-        let Ok(resp) = reqwest::get(format!("{COLOR_API}?values={}", random_color.hex())).await else {
+        let Ok(resp) = reqwest::get(format!("{COLOR_API}?values={}", random_color.hex())).await
+        else {
             return Err("Got no response from the Api.".to_owned());
         };
 
