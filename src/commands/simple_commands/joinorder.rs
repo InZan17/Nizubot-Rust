@@ -20,8 +20,7 @@ pub async fn joinorder(
     }
 
     let Some(guild) = ctx.guild() else {
-        ctx.send(|m| m.content("cant find giild"))
-            .await?;
+        ctx.send(|m| m.content("cant find giild")).await?;
         return Ok(());
     };
 
