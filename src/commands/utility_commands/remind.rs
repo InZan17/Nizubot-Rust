@@ -1,4 +1,7 @@
-use std::{time::{SystemTime, UNIX_EPOCH}, ops::Add};
+use std::{
+    ops::Add,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use crate::{managers::remind_manager::RemindInfo, Context, Error};
 
@@ -130,33 +133,42 @@ pub async fn remove(
     ctx: Context<'_>,
     #[description = "Which reminder to remove. (See reminders with /remind list)"] index: u8,
 ) -> Result<(), Error> {
-    let a: bool = todo!();
-    let removed: bool = todo!();
+    let guild_id;
 
-    if !a {
-        ctx.send(|m| {
-            m.content("Failed to remove reminder. Are you using a valid index?")
-                .ephemeral(true)
-        })
-        .await?;
-        return Ok(());
+    if let Some(id) = ctx.guild_id() {
+        guild_id = Some(*id.as_u64());
+    } else {
+        guild_id = None;
     }
+
+    let user_id = *ctx.author().id.as_u64();
+
+    let removed_reminder = ctx
+        .data()
+        .remind_manager
+        .remove_reminder(user_id, guild_id, index as usize)
+        .await;
+
+    let Some(removed_reminder) = removed_reminder else {
+        ctx.send(|m| m.content("Failed to remove reminder. Are you using a valid index?").ephemeral(true))
+            .await?;
+
+        return Ok(());
+    };
 
     let message_ending;
 
-    if !removed {
-        message_ending = ".".to_string()
+    if let Some(message) = removed_reminder.message {
+        message_ending = format!(" <t:{}:R>: {}", removed_reminder.finish_time, message)
     } else {
-        if true {
-            //removed.message
-            message_ending = format!(" <t:{}:R>.", "Finisejd time")
-        } else {
-            message_ending = format!(" <t:{}:R>: {}", "Finisejd time", "remoed.messafg")
-        }
+        message_ending = format!(" <t:{}:R>.", removed_reminder.finish_time)
     }
 
-    ctx.send(|m| m.content(format!("Successfully removed reminder{}", message_ending)))
-        .await?;
+    ctx.send(|m| {
+        m.content(format!("Successfully removed reminder{}", message_ending))
+            .allowed_mentions(|a| a.empty_parse())
+    })
+    .await?;
 
     Ok(())
 }

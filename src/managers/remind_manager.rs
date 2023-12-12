@@ -145,7 +145,46 @@ impl RemindManager {
         return Ok(());
     }
 
-    pub fn remove_reminder(&self) {}
+    pub async fn remove_reminder(
+        &self,
+        user_id: u64,
+        guild_id: Option<u64>,
+        removal_index: usize,
+    ) -> Option<RemindInfo> {
+        let user_reminders_data = self
+            .storage_manager
+            .get_data_or_default::<Vec<RemindInfo>>(
+                vec!["users", &user_id.to_string(), "reminders"],
+                vec![],
+            )
+            .await;
+
+        let mut user_reminders_mut = user_reminders_data.get_data_mut().await;
+
+        let mut reminders_index = 0;
+        let mut reminders_guild_index = 0;
+        let mut found = false;
+
+        for (index, reminder) in user_reminders_mut.iter().enumerate() {
+            reminders_index = index;
+            if reminder.guild_id == guild_id {
+                if reminders_guild_index == removal_index {
+                    found = true;
+                    break;
+                }
+                reminders_guild_index += 1;
+            }
+        }
+
+        if !found {
+            return None;
+        }
+        let removed_reminder = user_reminders_mut.remove(reminders_index);
+
+        user_reminders_data.request_file_write().await;
+
+        return Some(removed_reminder);
+    }
 
     pub async fn list_reminders(&self, user_id: u64, guild_id: Option<u64>) -> Vec<RemindInfo> {
         let user_reminders_data = self
