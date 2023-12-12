@@ -1,7 +1,8 @@
 use std::{
     collections::HashSet,
+    future::Future,
     sync::Arc,
-    time::{SystemTime, UNIX_EPOCH}, future::Future,
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use poise::serenity_prelude::{
@@ -22,15 +23,15 @@ pub struct RemindManager {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct RemindInfo {
-    original_time: u64,
-    request_time: u64,
-    finish_time: u64,
-    channel_id: Option<u64>,
-    guild_id: Option<u64>,
-    user_id: u64,
+    pub original_time: u64,
+    pub request_time: u64,
+    pub finish_time: u64,
+    pub channel_id: Option<u64>,
+    pub guild_id: Option<u64>,
+    pub user_id: u64,
     pub message_id: Option<u64>,
-    message: Option<String>,
-    looping: bool,
+    pub message: Option<String>,
+    pub looping: bool,
 }
 
 impl RemindManager {
@@ -114,7 +115,7 @@ impl RemindManager {
         };
 
         let message_id = message_id_callback().await?;
-        
+
         remind_info.message_id = Some(message_id);
 
         let mut index = 0;
@@ -146,7 +147,27 @@ impl RemindManager {
 
     pub fn remove_reminder(&self) {}
 
-    pub fn list_reminders(&self) {}
+    pub async fn list_reminders(&self, user_id: u64, guild_id: Option<u64>) -> Vec<RemindInfo> {
+        let user_reminders_data = self
+            .storage_manager
+            .get_data_or_default::<Vec<RemindInfo>>(
+                vec!["users", &user_id.to_string(), "reminders"],
+                vec![],
+            )
+            .await;
+
+        let user_reminders = user_reminders_data.get_data().await;
+
+        let mut reminders = vec![];
+
+        for reminder in user_reminders.iter() {
+            if reminder.guild_id == guild_id {
+                reminders.push(reminder.clone());
+            }
+        }
+
+        reminders
+    }
 }
 
 fn get_seconds() -> u64 {

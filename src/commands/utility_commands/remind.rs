@@ -1,6 +1,6 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{time::{SystemTime, UNIX_EPOCH}, ops::Add};
 
-use crate::{Context, Error, managers::remind_manager::RemindInfo};
+use crate::{managers::remind_manager::RemindInfo, Context, Error};
 
 /// Command for reminders.
 #[poise::command(
@@ -86,7 +86,9 @@ pub async fn add(
                         .send(|m| {
                             m.content(format!(
                                 "Sure! I will now keep reminding you <t:{remind_time}:R>{message_ending}"
-                            ))
+                            )).allowed_mentions(|a| {
+                                a.empty_parse()
+                            })
                         })
                         .await?;
                 } else {
@@ -94,7 +96,9 @@ pub async fn add(
                         .send(|m| {
                             m.content(format!(
                                 "Sure! I will now remind you <t:{remind_time}:R>{message_ending}"
-                            ))
+                            )).allowed_mentions(|a| {
+                                a.empty_parse()
+                            })
                         })
                         .await?;
                 }
@@ -160,29 +164,45 @@ pub async fn remove(
 /// Command to list reminders.
 #[poise::command(slash_command)]
 pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
-    /*
-    local reminders = _G.reminder:listReminders(ia.guildId, ia.channelId, ia.user.id)
-    local embed = {
-        title = "Reminders",
-        description = "All of your reminders on this channel.",
-        fields = {},
-        footer = {
-            text = "Total reminders: "..#reminders
-        }
+    let remind_manager = &ctx.data().remind_manager;
+    let guild_id;
+    if let Some(the_guild_id) = ctx.guild_id() {
+        guild_id = Some(*the_guild_id.as_u64())
+    } else {
+        guild_id = None
     }
 
-    for i, v in ipairs(reminders) do
-        local ending = ""
-        if v.looping then
-            ending = " (Looped)"
-        end
-        table.insert(embed.fields, {
-            name = i..": <t:"..v.finishedTime..":R>"..ending,
-            value = v.message
+    let user_id = ctx.author().id.0;
+    let reminders = remind_manager.list_reminders(user_id, guild_id).await;
+
+    ctx.send(|m| {
+        m.embed(|e| {
+            e.title("Reminders")
+                .description("All of your reminders on this guild.")
+                .footer(|f| f.text(format!("Total reminders: {}", reminders.len())));
+
+            for (index, reminder) in reminders.iter().enumerate() {
+                let mut ending = "".to_owned();
+
+                if let Some(channel_id) = reminder.channel_id {
+                    ending = ending.add(&format!(" <#{channel_id}>"));
+                }
+
+                if reminder.looping {
+                    ending = ending.add(" (Looped)");
+                }
+
+                e.field(
+                    format!("{index}: <t:{}:R>{ending}", reminder.finish_time),
+                    reminder.message.clone().unwrap_or_default(),
+                    false,
+                );
+            }
+
+            e
         })
-    end
-    ia:reply{embed=embed}
-    */
+    })
+    .await?;
     Ok(())
 }
 
