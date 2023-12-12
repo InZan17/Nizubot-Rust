@@ -1,6 +1,6 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::{Context, Error};
+use crate::{Context, Error, managers::remind_manager::RemindInfo};
 
 /// Command for reminders.
 #[poise::command(
@@ -76,57 +76,47 @@ pub async fn add(
             duration as u64,
             looped,
             message,
+            || async {
+                let remind_time = get_seconds() as f64 + duration;
+
+                let handle;
+
+                if looped {
+                    handle = ctx
+                        .send(|m| {
+                            m.content(format!(
+                                "Sure! I will now keep reminding you <t:{remind_time}:R>{message_ending}"
+                            ))
+                        })
+                        .await?;
+                } else {
+                    handle = ctx
+                        .send(|m| {
+                            m.content(format!(
+                                "Sure! I will now remind you <t:{remind_time}:R>{message_ending}"
+                            ))
+                        })
+                        .await?;
+                }
+
+                let message_id = handle.message().await?.id.as_u64().clone();
+                return Ok(message_id)
+            }
         )
         .await;
 
-    match add_result {
-        Err(err) => {
-            ctx.send(|m| {
-                m.content(format!(
-                    "Sorry, I wasn't able to add that reminder. {}",
-                    err
-                ))
-                .ephemeral(true)
-            })
-            .await?;
-            return Ok(());
-        }
-
-        Ok((index, data_holder)) => {
-            let remind_time = get_seconds() as f64 + duration;
-
-            let handle;
-
-            if looped {
-                handle = ctx
-                    .send(|m| {
-                        m.content(format!(
-                            "Sure! I will now keep reminding you <t:{remind_time}:R>{message_ending}"
-                        ))
-                    })
-                    .await?;
-            } else {
-                handle = ctx
-                    .send(|m| {
-                        m.content(format!(
-                            "Sure! I will now remind you <t:{remind_time}:R>{message_ending}"
-                        ))
-                    })
-                    .await?;
-            }
-
-            let message_id = handle.message().await?.id.as_u64().clone();
-
-            let mut data_mut = data_holder.get_data_mut().await;
-            let remind_info = &mut data_mut[index];
-
-            remind_info.message_id = Some(message_id);
-
-            drop(data_mut);
-
-            data_holder.request_file_write().await;
-        }
+    if let Err(err) = add_result {
+        ctx.send(|m| {
+            m.content(format!(
+                "Sorry, I wasn't able to add that reminder. {}",
+                err
+            ))
+            .ephemeral(true)
+        })
+        .await?;
+        return Ok(());
     }
+
     Ok(())
 }
 
