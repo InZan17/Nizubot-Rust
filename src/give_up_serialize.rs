@@ -7,6 +7,7 @@ use std::{
 
 use crate::managers::{
     cotd_manager::{ColorInfo, CotdRoleInfo},
+    detector_manager::DetectorInfo,
     remind_manager::RemindInfo,
 };
 
@@ -51,6 +52,12 @@ impl GiveUpSerialize for CotdRoleInfo {
 }
 
 impl GiveUpSerialize for Vec<RemindInfo> {
+    fn serialize_json(&self) -> String {
+        serde_json::to_string(self).unwrap()
+    }
+}
+
+impl GiveUpSerialize for Vec<DetectorInfo> {
     fn serialize_json(&self) -> String {
         serde_json::to_string(self).unwrap()
     }
