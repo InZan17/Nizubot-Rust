@@ -150,8 +150,11 @@ pub async fn remove(
         .await;
 
     let Some(removed_reminder) = removed_reminder else {
-        ctx.send(|m| m.content("Failed to remove reminder. Are you using a valid index?").ephemeral(true))
-            .await?;
+        ctx.send(|m| {
+            m.content("Failed to remove reminder. Are you using a valid index?")
+                .ephemeral(true)
+        })
+        .await?;
 
         return Ok(());
     };
