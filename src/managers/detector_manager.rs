@@ -8,12 +8,27 @@ use crate::{Context, Error};
 
 use super::storage_manager::{self, StorageManager};
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, poise::ChoiceParameter)]
 pub enum DetectType {
+    #[name = "Starts with"]
     StartsWith,
+    #[name = "Contains"]
     Contains,
+    #[name = "Ends with"]
     EndsWith,
+    #[name = "Equals"]
     Equals,
+}
+
+impl DetectType {
+    pub fn to_sentence(&self) -> &str {
+        match self {
+            DetectType::StartsWith => "starts with",
+            DetectType::Contains => "contains",
+            DetectType::EndsWith => "ends with",
+            DetectType::Equals => "equals",
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
