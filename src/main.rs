@@ -77,7 +77,12 @@ async fn main() {
     println!("Starting bot...");
     let framework = poise::Framework::builder()
         .token(tokens::get_discord_token())
-        .intents(serenity::GatewayIntents::from_bits_truncate(3243775))
+        .intents(
+            serenity::GatewayIntents::GUILD_MESSAGES
+                | serenity::GatewayIntents::GUILD_MESSAGE_REACTIONS
+                | serenity::GatewayIntents::DIRECT_MESSAGES
+                | serenity::GatewayIntents::MESSAGE_CONTENT,
+        )
         .options(poise::FrameworkOptions {
             commands: commands::get_commands(),
             event_handler: |_ctx: &serenity::Context, event: &Event<'_>, _framework, _data| {
