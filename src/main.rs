@@ -54,6 +54,7 @@ async fn event_handler(
         }
         Event::CacheReady { guilds } => {
             if !data.started_loops.load(Ordering::Relaxed) {
+                println!("Caches are ready! Starting all the managers.");
                 let arc_ctx = Arc::new(ctx.clone());
                 storage_manager_loop(arc_ctx.clone(), data.storage_manager.clone());
                 cotd_manager_loop(
@@ -78,7 +79,8 @@ async fn main() {
     let framework = poise::Framework::builder()
         .token(tokens::get_discord_token())
         .intents(
-            serenity::GatewayIntents::GUILD_MESSAGES
+            serenity::GatewayIntents::GUILDS
+                | serenity::GatewayIntents::GUILD_MESSAGES
                 | serenity::GatewayIntents::GUILD_MESSAGE_REACTIONS
                 | serenity::GatewayIntents::DIRECT_MESSAGES
                 | serenity::GatewayIntents::MESSAGE_CONTENT,
