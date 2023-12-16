@@ -16,10 +16,13 @@ use managers::{
     remind_manager::{remind_manager_loop, RemindManager},
     storage_manager::{storage_manager_loop, StorageManager},
 };
-use poise::{serenity_prelude as serenity, Event, ReplyHandle};
+use poise::{
+    serenity_prelude::{self as serenity},
+    Event, ReplyHandle,
+};
 use tokens::Tokens;
 
-use crate::managers::detector_manager::DetectorManager;
+use crate::managers::{detector_manager::DetectorManager, reaction_manager::ReactionManager};
 
 pub struct Data {
     started_loops: AtomicBool,
@@ -27,6 +30,7 @@ pub struct Data {
     cotd_manager: Arc<CotdManager>,
     remind_manager: Arc<RemindManager>,
     detector_manager: Arc<DetectorManager>,
+    reaction_manager: Arc<ReactionManager>,
     tokens: Tokens,
 } // User data, which is stored and accessible in all command invocations
 pub struct Handler {} // User data, which is stored and accessible in all command invocations
@@ -65,9 +69,19 @@ async fn event_handler(
                 remind_manager_loop(arc_ctx.clone(), data.remind_manager.clone());
                 data.started_loops.swap(true, Ordering::Relaxed);
             }
+            // TODO: Look through all relevant data and check if its still valid.
+            // If a reminder for a user is in a guild the user is no longer in, remove them. 
+            // If a reaction role has an emoji, message or role that no longer exists, remove them.
+            // 
         }
         Event::Message { new_message } => {
             data.detector_manager.on_message(ctx, new_message).await;
+        }
+        Event::ReactionAdd { add_reaction } => {
+            data.reaction_manager.reaction_add(ctx, add_reaction).await;
+        }
+        Event::ReactionRemove { removed_reaction } => {
+            data.reaction_manager.reaction_remove(ctx, removed_reaction).await;
         }
         _ => {}
     }
@@ -101,6 +115,7 @@ async fn main() {
                     cotd_manager: Arc::new(CotdManager::new(storage_manager.clone())),
                     remind_manager: Arc::new(RemindManager::new(storage_manager.clone())),
                     detector_manager: Arc::new(DetectorManager::new(storage_manager.clone())),
+                    reaction_manager: Arc::new(ReactionManager::new(storage_manager.clone())),
                     storage_manager,
                     started_loops: AtomicBool::new(false),
                     tokens: tokens::get_other_tokens(),

@@ -122,7 +122,6 @@ pub async fn remove(
 /// List all message detectors in this guild.
 #[poise::command(slash_command)]
 pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
-
     let guild_or_user_id;
     let is_dms;
 
@@ -156,7 +155,11 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
                 }
 
                 e.field(
-                    format!("{index}: {}: {}{ending}", detector.detect_type.to_sentence(), detector.key),
+                    format!(
+                        "{index}: {}: {}{ending}",
+                        detector.detect_type.to_sentence(),
+                        detector.key
+                    ),
                     &detector.response,
                     false,
                 );
