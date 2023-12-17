@@ -72,6 +72,7 @@ async fn event_handler(
             // TODO: Look through all relevant data and check if its still valid.
             // If a reminder for a user is in a guild the user is no longer in, remove them. 
             // If a reaction role has an emoji, message or role that no longer exists, remove them.
+            // If a folder about a guild still exists even though the bot is no longer in the guild, remove them.
             // 
         }
         Event::Message { new_message } => {
