@@ -62,3 +62,9 @@ impl GiveUpSerialize for Vec<DetectorInfo> {
         serde_json::to_string(self).unwrap()
     }
 }
+
+impl GiveUpSerialize for HashMap<String, u64> {
+    fn serialize_json(&self) -> String {
+        serde_json::to_string(self).unwrap()
+    }
+}

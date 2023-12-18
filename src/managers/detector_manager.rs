@@ -34,11 +34,11 @@ impl DetectType {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct DetectorInfo {
     #[serde(alias = "detectionType", alias = "detect_type")]
-    detect_type: DetectType,
-    key: String,
-    response: String,
+    pub detect_type: DetectType,
+    pub key: String,
+    pub response: String,
     #[serde(alias = "caseSensitive", alias = "case_sensitive")]
-    case_sensitive: bool,
+    pub case_sensitive: bool,
 }
 
 pub struct DetectorManager {
