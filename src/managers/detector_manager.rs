@@ -205,8 +205,6 @@ impl DetectorManager {
                 .await;
         }
 
-        let channel = message.channel(ctx).await?;
-
         let detectors_read = detectors.get_data().await;
 
         for detector_info in detectors_read.iter() {
@@ -236,19 +234,9 @@ impl DetectorManager {
             };
 
             if should_send {
-                match channel {
-                    serenity_prelude::Channel::Guild(channel) => {
-                        channel
-                            .send_message(ctx, |m| m.content(&detector_info.response))
-                            .await?;
-                    }
-                    serenity_prelude::Channel::Private(channel) => {
-                        channel
-                            .send_message(ctx, |m| m.content(&detector_info.response))
-                            .await?;
-                    }
-                    _ => {}
-                }
+                message.channel_id
+                    .send_message(ctx, |m| m.content(&detector_info.response))
+                    .await?;
                 break;
             }
         }
