@@ -1,6 +1,6 @@
-use std::{sync::Arc, collections::HashMap};
+use std::{collections::HashMap, sync::Arc};
 
-use poise::serenity_prelude::{Context, Reaction, RoleId, Member};
+use poise::serenity_prelude::{Context, Member, Reaction, RoleId};
 
 use super::storage_manager::StorageManager;
 
@@ -37,19 +37,19 @@ impl ReactionManager {
         let message_reaction_roles_read = message_reaction_roles.get_data().await;
 
         let Some(role_id) = message_reaction_roles_read.get(&reaction.emoji.as_data()) else {
-            return
+            return;
         };
 
         let Some(user_id) = reaction.user_id else {
-            return
+            return;
         };
 
         let Ok(mut member) = guild_id.member(&ctx, user_id).await else {
-            return
+            return;
         };
 
         // TODO: If this fails, send a notification to the servers error log.
-        let res = member.add_role(&ctx, RoleId(*role_id)).await;     
+        let res = member.add_role(&ctx, RoleId(*role_id)).await;
     }
 
     pub async fn reaction_remove(&self, ctx: &Context, reaction: &Reaction) {
@@ -77,18 +77,18 @@ impl ReactionManager {
         let message_reaction_roles_read = message_reaction_roles.get_data().await;
 
         let Some(role_id) = message_reaction_roles_read.get(&reaction.emoji.as_data()) else {
-            return
+            return;
         };
 
         let Some(user_id) = reaction.user_id else {
-            return
+            return;
         };
 
         let Ok(mut member) = guild_id.member(&ctx, user_id).await else {
-            return
+            return;
         };
 
         // TODO: If this fails, send a notification to the servers error log.
-        let res = member.remove_role(&ctx, RoleId(*role_id)).await;     
+        let res = member.remove_role(&ctx, RoleId(*role_id)).await;
     }
 }

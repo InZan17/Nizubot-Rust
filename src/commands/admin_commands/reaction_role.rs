@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use poise::serenity_prelude::{
-    AttachmentType, CreateEmbed, Embed, Emoji, Message, MessageType, Role, ReactionType,
+    AttachmentType, CreateEmbed, Embed, Emoji, Message, MessageType, ReactionType, Role,
 };
 
 use crate::{Context, Error};

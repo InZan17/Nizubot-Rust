@@ -13,6 +13,7 @@ use std::sync::{
 
 use managers::{
     cotd_manager::{cotd_manager_loop, CotdManager},
+    currency_manager::CurrencyManager,
     remind_manager::{remind_manager_loop, RemindManager},
     storage_manager::{storage_manager_loop, StorageManager},
 };
@@ -31,6 +32,7 @@ pub struct Data {
     remind_manager: Arc<RemindManager>,
     detector_manager: Arc<DetectorManager>,
     reaction_manager: Arc<ReactionManager>,
+    currency_manager: Arc<CurrencyManager>,
     tokens: Tokens,
 } // User data, which is stored and accessible in all command invocations
 pub struct Handler {} // User data, which is stored and accessible in all command invocations
@@ -70,10 +72,10 @@ async fn event_handler(
                 data.started_loops.swap(true, Ordering::Relaxed);
             }
             // TODO: Look through all relevant data and check if its still valid.
-            // If a reminder for a user is in a guild the user is no longer in, remove them. 
+            // If a reminder for a user is in a guild the user is no longer in, remove them.
             // If a reaction role has an emoji, message or role that no longer exists, remove them.
             // If a folder about a guild still exists even though the bot is no longer in the guild, remove them.
-            // 
+            //
         }
         Event::Message { new_message } => {
             data.detector_manager.on_message(ctx, new_message).await;
@@ -82,7 +84,9 @@ async fn event_handler(
             data.reaction_manager.reaction_add(ctx, add_reaction).await;
         }
         Event::ReactionRemove { removed_reaction } => {
-            data.reaction_manager.reaction_remove(ctx, removed_reaction).await;
+            data.reaction_manager
+                .reaction_remove(ctx, removed_reaction)
+                .await;
         }
         _ => {}
     }
@@ -117,6 +121,7 @@ async fn main() {
                     remind_manager: Arc::new(RemindManager::new(storage_manager.clone())),
                     detector_manager: Arc::new(DetectorManager::new(storage_manager.clone())),
                     reaction_manager: Arc::new(ReactionManager::new(storage_manager.clone())),
+                    currency_manager: Arc::new(CurrencyManager::new(storage_manager.clone()).await),
                     storage_manager,
                     started_loops: AtomicBool::new(false),
                     tokens: tokens::get_other_tokens(),

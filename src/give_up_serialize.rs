@@ -7,6 +7,7 @@ use std::{
 
 use crate::managers::{
     cotd_manager::{ColorInfo, CotdRoleInfo},
+    currency_manager::CurrenciesInfo,
     detector_manager::DetectorInfo,
     remind_manager::RemindInfo,
 };
@@ -64,6 +65,12 @@ impl GiveUpSerialize for Vec<DetectorInfo> {
 }
 
 impl GiveUpSerialize for HashMap<String, u64> {
+    fn serialize_json(&self) -> String {
+        serde_json::to_string(self).unwrap()
+    }
+}
+
+impl GiveUpSerialize for CurrenciesInfo {
     fn serialize_json(&self) -> String {
         serde_json::to_string(self).unwrap()
     }
