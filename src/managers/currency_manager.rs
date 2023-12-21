@@ -96,7 +96,7 @@ impl CurrencyManager {
     pub async fn get_rates() -> Result<CurrencyRates, Error> {
         let response = reqwest::get(format!(
             "{API_LINK}latest.json?show_alternative=1&app_id={}",
-            "a666b8ebfab942faa07054cb5e4b8c43"
+            " i messed up"
         ))
         .await?;
 
