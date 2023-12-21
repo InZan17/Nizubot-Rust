@@ -4,7 +4,7 @@ pub const DISCORD_TOKEN_PATH: &str = "./token";
 pub const OPENEXCHANGERATES_KEY_PATH: &str = "./openExchangeRatesApiKey";
 
 pub struct Tokens {
-    openexchangerates_token: Option<String>,
+    pub openexchangerates_token: Option<String>,
 }
 
 pub fn get_other_tokens() -> Tokens {

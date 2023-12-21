@@ -31,6 +31,7 @@ pub struct CurrencyManager {
     pub storage_manager: Arc<StorageManager>,
     pub currency_info: Arc<DataHolder<CurrenciesInfo>>,
     pub list_currency_embed: RwLock<CreateEmbed>,
+    token: String,
 }
 
 const SECONDS_IN_HOUR: u64 = 3600;
@@ -40,7 +41,7 @@ const SECONDS_IN_WEEK: u64 = SECONDS_IN_DAY * 7;
 const API_LINK: &str = "https://openexchangerates.org/api/";
 
 impl CurrencyManager {
-    pub async fn new(storage_manager: Arc<StorageManager>) -> Self {
+    pub async fn new(storage_manager: Arc<StorageManager>, token: String) -> Self {
         let currency_info = storage_manager
             .get_data_or_default(vec!["currecy_info"], CurrenciesInfo::default())
             .await;
@@ -49,6 +50,7 @@ impl CurrencyManager {
             storage_manager,
             currency_info,
             list_currency_embed: RwLock::new(CreateEmbed::default()),
+            token
         };
 
         self_manager.update_embed().await;
@@ -93,10 +95,10 @@ impl CurrencyManager {
         self.list_currency_embed.read().await.clone()
     }
 
-    pub async fn get_rates() -> Result<CurrencyRates, Error> {
+    pub async fn get_rates(&self) -> Result<CurrencyRates, Error> {
         let response = reqwest::get(format!(
             "{API_LINK}latest.json?show_alternative=1&app_id={}",
-            " i messed up"
+            self.token
         ))
         .await?;
 
@@ -111,7 +113,7 @@ impl CurrencyManager {
         Ok(json_res)
     }
 
-    pub async fn get_names() -> Result<HashMap<String, String>, Error> {
+    pub async fn get_names(&self) -> Result<HashMap<String, String>, Error> {
         let response =
             reqwest::get(format!("{API_LINK}currencies.json?show_alternative=1")).await?;
 
@@ -142,7 +144,7 @@ impl CurrencyManager {
         let mut currency_info_mut = currency_info.get_data_mut().await;
 
         if currency_info_mut.rates_last_updated < get_seconds() - SECONDS_IN_HOUR {
-            let new_rates = Self::get_rates().await;
+            let new_rates = self.get_rates().await;
             match new_rates {
                 Ok(new_rates) => {
                     currency_info_mut.rates = new_rates;
@@ -156,7 +158,7 @@ impl CurrencyManager {
             }
         }
         if currency_info_mut.names_last_updated < get_seconds() - SECONDS_IN_WEEK {
-            let new_names = Self::get_names().await;
+            let new_names = self.get_names().await;
             match new_names {
                 Ok(new_names) => {
                     currency_info_mut.names = new_names;
@@ -208,7 +210,7 @@ impl CurrencyManager {
 
         let converted = amount / from_rate * to_rate;
 
-        return Ok((converted, currencies_info_read.rates_last_updated));
+        return Ok((converted, currencies_info_read.rates.timestamp));
     }
 
     pub async fn get_full_name(&self, currency: &String) -> Option<String> {
