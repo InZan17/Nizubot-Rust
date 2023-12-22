@@ -1,5 +1,6 @@
 #![feature(downcast_unchecked)]
 #![feature(get_mut_unchecked)]
+#![feature(slice_pattern)]
 
 mod commands;
 pub mod give_up_serialize;
@@ -120,7 +121,13 @@ async fn main() {
                     remind_manager: Arc::new(RemindManager::new(storage_manager.clone())),
                     detector_manager: Arc::new(DetectorManager::new(storage_manager.clone())),
                     reaction_manager: Arc::new(ReactionManager::new(storage_manager.clone())),
-                    currency_manager: Arc::new(CurrencyManager::new(storage_manager.clone(), tokens.openexchangerates_token.unwrap_or("".to_string())).await),
+                    currency_manager: Arc::new(
+                        CurrencyManager::new(
+                            storage_manager.clone(),
+                            tokens.openexchangerates_token.unwrap_or("".to_string()),
+                        )
+                        .await,
+                    ),
                     storage_manager,
                     started_loops: AtomicBool::new(false),
                 })

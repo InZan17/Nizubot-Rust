@@ -50,7 +50,7 @@ impl CurrencyManager {
             storage_manager,
             currency_info,
             list_currency_embed: RwLock::new(CreateEmbed::default()),
-            token
+            token,
         };
 
         self_manager.update_embed().await;

@@ -60,7 +60,7 @@ impl<T: GiveUpSerialize + Send + Sync + 'static + ?Sized> DataHolder<T> {
 }
 
 pub struct StorageManager {
-    storage_path: String,
+    pub storage_path: String,
     save_queue: Arc<RwLock<Vec<DataHolderType<dyn GiveUpSerialize + Send + Sync>>>>,
     //delete_queue: Arc<RwLock<Vec<String>>>,
     directories: RwLock<HashMap<String, DirectoryInfo>>,
