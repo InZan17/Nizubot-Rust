@@ -34,6 +34,7 @@ const BRICK_TITLES: [&str; 6] = [
 #[poise::command(slash_command)]
 pub async fn brick(
     // TODO: better error messages
+    // TODO: Make a cooldown per user
     ctx: Context<'_>,
     #[description = "The user to throw the brick."] user: Option<User>,
 ) -> Result<(), Error> {
@@ -100,16 +101,6 @@ pub async fn brick(
         let exit = spawned.wait().await?;
 
         if !exit.success() {
-            let mut stderr = spawned.stderr.take();
-            if let Some(stderr) = &mut stderr {
-                let mut dst = String::new();
-                let _ = stderr.read_to_string(&mut dst).await;
-
-                ctx.send(|m| m.content(format!("Sorry, I couldn't generate the gif.\n\n{dst}")))
-                    .await?;
-                return Ok(());
-            }
-
             ctx.send(|m| m.content("Sorry, I couldn't generate the gif."))
                 .await?;
             return Ok(());
