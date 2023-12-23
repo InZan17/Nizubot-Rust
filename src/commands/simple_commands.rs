@@ -9,6 +9,7 @@ mod read;
 mod rng;
 mod sleepcalc;
 mod write;
+mod eval;
 
 pub fn get_commands() -> Commands {
     return vec![
@@ -21,5 +22,6 @@ pub fn get_commands() -> Commands {
         sleepcalc::sleepcalc(),
         joinorder::joinorder(),
         cotd::cotd(),
+        eval::eval(),
     ];
 }
