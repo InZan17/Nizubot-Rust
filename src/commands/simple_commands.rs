@@ -2,6 +2,7 @@ use super::Commands;
 
 mod cotd;
 mod echo;
+mod eval;
 mod icon;
 mod joinorder;
 mod ping;
@@ -9,7 +10,6 @@ mod read;
 mod rng;
 mod sleepcalc;
 mod write;
-mod eval;
 
 pub fn get_commands() -> Commands {
     return vec![

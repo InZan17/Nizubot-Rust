@@ -1,15 +1,15 @@
-use std::{sync::Arc, ops::Deref, path::Path};
 use core::slice::SlicePattern;
+use std::{ops::Deref, path::Path, sync::Arc};
 
 use poise::serenity_prelude::User;
 use tokio::{fs, io::AsyncWriteExt};
 
 use crate::{managers::storage_manager::StorageManager, Error};
 
-
-
-
-pub async fn gen_brick_gif(storage_manager: &Arc<StorageManager>, user: &User) -> Result<String, Error>{
+pub async fn gen_brick_gif(
+    storage_manager: &Arc<StorageManager>,
+    user: &User,
+) -> Result<String, Error> {
     let avatar_url = user.avatar_url().unwrap_or(user.default_avatar_url());
 
     let saved_normal_pfp = storage_manager
@@ -69,7 +69,7 @@ pub async fn gen_brick_gif(storage_manager: &Arc<StorageManager>, user: &User) -
         let exit = spawned.wait().await?;
 
         if !exit.success() {
-            return Err(Error::from(format!("`ffmpeg` exited with {}",exit)))
+            return Err(Error::from(format!("`ffmpeg` exited with {}", exit)));
         }
 
         *saved_brick_pfp.get_data_mut().await = avatar_url.clone();

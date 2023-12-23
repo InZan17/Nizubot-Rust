@@ -32,6 +32,8 @@ pub async fn add(
     let guild_id = ctx.guild_id().unwrap();
     let message_id_string = message_id.id.to_string();
 
+    //TODO: Move this code to the reaction manager.
+
     let message_reaction_roles = ctx
         .data()
         .storage_manager
@@ -86,6 +88,8 @@ pub async fn remove(
 
     let guild_id = ctx.guild_id().unwrap();
     let message_id_string = message_id.id.to_string();
+
+    //TODO: Move this code to the reaction manager.
 
     let message_reaction_roles = ctx
         .data()

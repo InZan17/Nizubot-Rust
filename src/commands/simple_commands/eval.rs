@@ -1,14 +1,15 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use evalexpr::{context_map, Value, EvalexprError};
+use evalexpr::{context_map, EvalexprError, Value};
 
 use crate::{Context, Error};
 
 /// I will evaluate an expression!
 #[poise::command(slash_command)]
-pub async fn eval(ctx: Context<'_>,
-#[description = "The expression"] expression: String) -> Result<(), Error> {
-
+pub async fn eval(
+    ctx: Context<'_>,
+    #[description = "The expression"] expression: String,
+) -> Result<(), Error> {
     let mut context = context_map! {
         "sin" => Function::new(|argument| {
             if let Ok(int) = argument.as_int() {
@@ -28,7 +29,8 @@ pub async fn eval(ctx: Context<'_>,
                 Err(EvalexprError::expected_number(argument.clone()))
             }
         })
-    }.unwrap(); // Do proper error handling here
+    }
+    .unwrap(); // Do proper error handling here
 
     let value = evalexpr::eval_with_context_mut(&expression, &mut context)?;
 
