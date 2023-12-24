@@ -1,5 +1,5 @@
 use crate::{managers::cotd_manager::SECONDS_IN_A_DAY, Context, Error};
-use poise::serenity_prelude::{AttachmentType, Timestamp};
+use poise::serenity_prelude::{AttachmentType, Color, Timestamp};
 
 /// Get the current color of the day.
 #[poise::command(slash_command)]
@@ -47,7 +47,11 @@ pub async fn cotd(
         }
     }
 
-    let png_bytes = create_color_png(&color_info.hex);
+    let color_value = u32::from_str_radix(&color_info.hex, 16).unwrap();
+
+    let color = Color::from(color_value);
+
+    let png_bytes = create_color_png(&color);
 
     let file_name = format!("{}.png", color_info.hex);
 
@@ -71,23 +75,18 @@ pub async fn cotd(
                     .unwrap(),
                 )
                 .footer(|f| f.text(format!("Day {working_day} | {date_description}")))
+                .color(Color::from_rgb(color.r() / 2, color.g() / 2, color.b() / 2))
         })
     })
     .await?;
     Ok(())
 }
 
-pub fn create_color_png(hex: &String) -> Vec<u8> {
+pub fn create_color_png(color: &Color) -> Vec<u8> {
     const PLTE_CRC_HASH: u32 = 1269336405;
 
-    let color_value = u32::from_str_radix(&hex, 16).unwrap();
-
     let mut crc = crc32fast::Hasher::new_with_initial(PLTE_CRC_HASH);
-    crc.update(&[
-        ((color_value >> 16) & 255) as u8,
-        ((color_value >> 8) & 255) as u8,
-        (color_value & 255) as u8,
-    ]);
+    crc.update(&[color.r(), color.g(), color.b()]);
     let color_hash_result = crc.finalize();
 
     vec![
@@ -132,9 +131,9 @@ pub fn create_color_png(hex: &String) -> Vec<u8> {
         0x4C, //L
         0x54, //T
         0x45, //E
-        ((color_value >> 16) & 255) as u8,
-        ((color_value >> 8) & 255) as u8,
-        (color_value & 255) as u8,
+        color.r(),
+        color.g(),
+        color.b(),
         ((color_hash_result >> 24) & 255) as u8,
         ((color_hash_result >> 16) & 255) as u8,
         ((color_hash_result >> 8) & 255) as u8,
