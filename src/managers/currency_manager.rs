@@ -128,14 +128,14 @@ impl CurrencyManager {
         Ok(json_res)
     }
 
-    pub async fn update_data(&self) {
+    pub async fn update_data(&self) -> Result<(), Error> {
         let currency_info = &self.currency_info;
 
         let currency_info_read = currency_info.get_data().await;
 
         if currency_info_read.rates_last_updated >= get_seconds() - SECONDS_IN_HOUR {
             if currency_info_read.names_last_updated >= get_seconds() - SECONDS_IN_WEEK {
-                return;
+                return Ok(());
             }
         }
 
@@ -151,12 +151,10 @@ impl CurrencyManager {
                     currency_info_mut.rates_last_updated = get_seconds();
                     currency_info.request_file_write().await;
                 }
-                Err(err) => {
-                    //TODO: Do something more useful with this
-                    println!("{err}")
-                }
+                Err(err) => return Err(err),
             }
         }
+
         if currency_info_mut.names_last_updated < get_seconds() - SECONDS_IN_WEEK {
             let new_names = self.get_names().await;
             match new_names {
@@ -165,15 +163,14 @@ impl CurrencyManager {
                     currency_info_mut.names_last_updated = get_seconds();
                     currency_info.request_file_write().await;
 
-                    drop(currency_info_mut);
+                    drop(currency_info_mut); //we drop it for the update_embed method
                     self.update_embed().await;
                 }
-                Err(err) => {
-                    //TODO: Do something more useful with this
-                    println!("{err}")
-                }
+                Err(err) => return Err(err),
             }
         }
+
+        Ok(())
     }
 
     pub async fn convert(
@@ -188,7 +185,7 @@ impl CurrencyManager {
             .get_data_or_default(vec!["currecy_info"], CurrenciesInfo::default())
             .await;
 
-        self.update_data().await;
+        self.update_data().await?;
 
         let currencies_info_read = currencies_info.get_data().await;
 
@@ -219,8 +216,6 @@ impl CurrencyManager {
         let currencies_info = storage_manager
             .get_data_or_default(vec!["currecy_info"], CurrenciesInfo::default())
             .await;
-
-        self.update_data().await;
 
         let currencies_info_read = currencies_info.get_data().await;
 
