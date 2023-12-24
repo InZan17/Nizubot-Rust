@@ -153,7 +153,7 @@ pub async fn caption(
             file: &generated_image_file,
             filename: format!(
                 "{}_{}.{}",
-                image.filename,
+                image.filename, //TODO: Remove the extension from file name. Rn if a file named "brick.gif" goes in, then "brick.gif_what.gif" will come out when we want "brick_what.gif"
                 caption_type.to_string(),
                 extension
             ),

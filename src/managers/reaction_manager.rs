@@ -14,6 +14,7 @@ impl ReactionManager {
     }
 
     pub async fn reaction_add(&self, ctx: &Context, reaction: &Reaction) {
+        //TODO: make function return errors.
         let Some(guild_id) = reaction.guild_id else {
             return;
         };
@@ -53,6 +54,7 @@ impl ReactionManager {
     }
 
     pub async fn reaction_remove(&self, ctx: &Context, reaction: &Reaction) {
+        //TODO: make function return errors.
         //TODO: Check if the removed reaction is self.
         let Some(guild_id) = reaction.guild_id else {
             return;

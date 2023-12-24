@@ -77,12 +77,15 @@ async fn event_handler(
             //
         }
         Event::Message { new_message } => {
+            //TODO: Handle errors
             data.detector_manager.on_message(ctx, new_message).await;
         }
         Event::ReactionAdd { add_reaction } => {
+            //TODO: Handle errors
             data.reaction_manager.reaction_add(ctx, add_reaction).await;
         }
         Event::ReactionRemove { removed_reaction } => {
+            //TODO: Handle errors
             data.reaction_manager
                 .reaction_remove(ctx, removed_reaction)
                 .await;
