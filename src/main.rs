@@ -20,7 +20,7 @@ use managers::{
 };
 use poise::{
     serenity_prelude::{self as serenity},
-    Event, ReplyHandle,
+    Event, ReplyHandle, framework,
 };
 
 use crate::managers::{detector_manager::DetectorManager, reaction_manager::ReactionManager};
@@ -50,7 +50,7 @@ pub async fn reply(
 async fn event_handler(
     ctx: &serenity::Context,
     event: &Event<'_>,
-    _framework: poise::FrameworkContext<'_, Data, Error>,
+    framework: poise::FrameworkContext<'_, Data, Error>,
     data: &Data,
 ) -> Result<(), Error> {
     match event {
@@ -82,12 +82,12 @@ async fn event_handler(
         }
         Event::ReactionAdd { add_reaction } => {
             //TODO: Handle errors
-            data.reaction_manager.reaction_add(ctx, add_reaction).await;
+            data.reaction_manager.reaction_add(ctx, add_reaction, framework.bot_id).await;
         }
         Event::ReactionRemove { removed_reaction } => {
             //TODO: Handle errors
             data.reaction_manager
-                .reaction_remove(ctx, removed_reaction)
+                .reaction_remove(ctx, removed_reaction, framework.bot_id)
                 .await;
         }
         _ => {}
