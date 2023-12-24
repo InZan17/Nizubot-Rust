@@ -9,6 +9,7 @@ use poise::serenity_prelude::{
     CacheHttp, Channel, ChannelId, Context, CreateMessage, GuildId, Message, MessageId,
     MessageReference, UserId,
 };
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
@@ -26,7 +27,7 @@ pub struct RemindInfo {
     pub original_time: u64,
     pub request_time: u64,
     pub finish_time: u64,
-    pub channel_id: Option<u64>,
+    pub channel_id: u64,
     pub guild_id: Option<u64>,
     pub user_id: u64,
     pub message_id: Option<u64>,
@@ -45,7 +46,7 @@ impl RemindManager {
     pub async fn add_reminder<'a, F, Fut>(
         &self,
         guild_id: Option<u64>,
-        channel_id: Option<u64>,
+        channel_id: u64,
         user_id: UserId,
         duration: u64,
         looping: bool,
@@ -56,10 +57,6 @@ impl RemindManager {
         F: FnOnce() -> Fut,
         Fut: Future<Output = Result<u64, Error>>,
     {
-        if guild_id.is_some() != channel_id.is_some() {
-            panic!("guild_id and channel_id should either both be Some or both be None.")
-        }
-
         let reminding_users_data = self
             .storage_manager
             .get_data_or_default::<HashSet<u64>>(vec!["reminders"], HashSet::new())
@@ -229,8 +226,6 @@ pub fn remind_manager_loop(arc_ctx: Arc<Context>, remind_manager: Arc<RemindMana
 
             let wait_until = remind_manager.wait_until.lock().await.clone();
 
-            // TODO: ping discord. If it doesnt work then dont try to remind people.
-
             if wait_until > current_time {
                 continue;
             }
@@ -261,17 +256,13 @@ pub fn remind_manager_loop(arc_ctx: Arc<Context>, remind_manager: Arc<RemindMana
 
                 let mut add_reminders = vec![];
                 let mut remove_reminders = vec![];
-                for (index, reminder_info) in user_reminders_data_mut.iter().enumerate() {
+                for (index, reminder_info) in user_reminders_data_mut.iter_mut().enumerate() {
                     if reminder_info.finish_time > current_time {
                         next_wait_until = next_wait_until.min(reminder_info.finish_time);
                         break;
                     }
 
-                    let channel = get_channel(reminder_info, arc_ctx.clone()).await;
-
-                    let Some(channel) = channel else {
-                        continue;
-                    };
+                    let channel_id = ChannelId(reminder_info.channel_id);
 
                     let message_ending;
 
@@ -287,7 +278,7 @@ pub fn remind_manager_loop(arc_ctx: Arc<Context>, remind_manager: Arc<RemindMana
 
                     if let Some(message_id) = reminder_info.message_id {
                         let mut message_refrence =
-                            MessageReference::from((channel.id(), MessageId(message_id)));
+                            MessageReference::from((channel_id, MessageId(message_id)));
                         if let Some(guild_id) = reminder_info.guild_id {
                             message_refrence.guild_id = Some(GuildId(guild_id));
                         }
@@ -303,19 +294,28 @@ pub fn remind_manager_loop(arc_ctx: Arc<Context>, remind_manager: Arc<RemindMana
                         let missed_reminders =
                             (current_time - reminder_info.request_time) / wait_time - 1;
 
-                        // TODO: if res is None or Err, add it to remove_reminders.
-                        if time_difference > 60 {
-                            let res = send_message(&channel, arc_ctx.clone(), |m| {
+                        let res = if time_difference > 60 {
+                            channel_id.send_message(arc_ctx.clone(), |m| {
                                 if let Some(message_refrence) = message_refrence_opt {
                                     m.reference_message(message_refrence);
                                 }
-                                m.allowed_mentions(|a| {a.users(vec![reminder_info.user_id])}).content(format!("Sorry <@!{}>, I was supposed to remind you <t:{}:R>! <t:{}:R> you told me to keep reminding you{message_ending}", reminder_info.user_id, reminder_info.finish_time, reminder_info.original_time))}).await;
+                                m.allowed_mentions(|a| {a.users(vec![reminder_info.user_id])}).content(format!("Sorry <@!{}>, I was supposed to remind you <t:{}:R>! <t:{}:R> you told me to keep reminding you{message_ending}", reminder_info.user_id, reminder_info.finish_time, reminder_info.original_time))}).await
                         } else {
-                            let res = send_message(&channel, arc_ctx.clone(), |m| {
+                            channel_id.send_message(arc_ctx.clone(), |m| {
                                 if let Some(message_refrence) = message_refrence_opt {
                                     m.reference_message(message_refrence);
                                 }
-                                m.allowed_mentions(|a| {a.users(vec![reminder_info.user_id])}).content(format!("<@!{}>! <t:{}:R> you told me to keep reminding you{message_ending}", reminder_info.user_id, reminder_info.original_time))}).await;
+                                m.allowed_mentions(|a| {a.users(vec![reminder_info.user_id])}).content(format!("<@!{}>! <t:{}:R> you told me to keep reminding you{message_ending}", reminder_info.user_id, reminder_info.original_time))}).await
+                        };
+
+                        if let Err(err) = res {
+                            if should_keep(err) {
+                                next_wait_until = 0;
+                                continue;
+                            } else {
+                                //TODO: notify to the user/server log
+                                remove_reminders.push(index);
+                            }
                         }
 
                         let mut new_reminder = reminder_info.clone();
@@ -328,26 +328,32 @@ pub fn remind_manager_loop(arc_ctx: Arc<Context>, remind_manager: Arc<RemindMana
 
                         add_reminders.push(new_reminder);
                     } else {
-                        if time_difference > 60 {
-                            let res = send_message(&channel, arc_ctx.clone(), |m| {
+                        let res = if time_difference > 60 {
+                            channel_id.send_message(arc_ctx.clone(), |m| {
                                 if let Some(message_refrence) = message_refrence_opt {
                                     m.reference_message(message_refrence);
                                 }
-                                m.allowed_mentions(|a| {a.users(vec![reminder_info.user_id])}).content(format!("Sorry <@!{}>, I was supposed to remind you <t:{}:R>! <t:{}:R> you told me to remind you{message_ending}", reminder_info.user_id, reminder_info.finish_time, reminder_info.original_time))}).await;
+                                m.allowed_mentions(|a| {a.users(vec![reminder_info.user_id])}).content(format!("Sorry <@!{}>, I was supposed to remind you <t:{}:R>! <t:{}:R> you told me to remind you{message_ending}", reminder_info.user_id, reminder_info.finish_time, reminder_info.original_time))}).await
                         } else {
-                            let res = send_message(&channel, arc_ctx.clone(), |m| {
+                            channel_id.send_message(arc_ctx.clone(), |m| {
                                 if let Some(message_refrence) = message_refrence_opt {
                                     m.reference_message(message_refrence);
                                 }
-                                m.allowed_mentions(|a| {a.users(vec![reminder_info.user_id])}).content(format!("<@!{}>! <t:{}:R> you told me to remind you{message_ending}", reminder_info.user_id, reminder_info.original_time))}).await;
+                                m.allowed_mentions(|a| {a.users(vec![reminder_info.user_id])}).content(format!("<@!{}>! <t:{}:R> you told me to remind you{message_ending}", reminder_info.user_id, reminder_info.original_time))}).await
+                        };
+
+                        if let Err(err) = res {
+                            if should_keep(err) {
+                                next_wait_until = 0;
+                                continue;
+                            } else {
+                                //TODO: Notify to the user/server log
+                            }
                         }
                     }
 
                     remove_reminders.push(index);
                 }
-
-                // TODO: Make 2 remove reminders arrays. One for  those that we are certain shall be removed and one where we are a bit unsure. Maybe include a bool in a tuple.
-                // All the certain reminders are removed immediately. Meanwhile the uncertain ones should only be removed if when pinging discord fails.
                 for removal_index in remove_reminders.iter().rev() {
                     user_reminders_data_mut.remove(*removal_index);
                 }
@@ -386,57 +392,18 @@ pub fn remind_manager_loop(arc_ctx: Arc<Context>, remind_manager: Arc<RemindMana
     });
 }
 
-async fn send_message<'a, F>(
-    channel: &Channel,
-    arc_ctx: Arc<Context>,
-    f: F,
-) -> Option<poise::serenity_prelude::Result<Message>>
-where
-    for<'b> F: FnOnce(&'b mut CreateMessage<'a>) -> &'b mut CreateMessage<'a>,
-{
-    if let Some(channel) = &channel.clone().guild() {
-        return Some(channel.send_message(arc_ctx, f).await);
-    } else if let Some(channel) = &channel.clone().private() {
-        return Some(channel.send_message(arc_ctx, f).await);
-    } else {
-        return None;
-    }
-}
-
-async fn get_channel(reminder_info: &RemindInfo, arc_ctx: Arc<Context>) -> Option<Channel> {
-    if let Some(guild_id) = reminder_info.guild_id {
-        if let Some(channel_id) = reminder_info.channel_id {
-            if let Some(guild) = arc_ctx.cache.guild(guild_id) {
-                let channel_test = guild.channels.get(&ChannelId(channel_id)).cloned();
-                return channel_test;
-            } else {
-                let guild_res = arc_ctx.http.get_guild(guild_id).await;
-                if let Ok(guild) = guild_res {
-                    let channel_res = guild.channels(arc_ctx).await;
-                    if let Ok(ok_channel) = channel_res {
-                        let guild_channel = ok_channel.get(&ChannelId(channel_id)).cloned();
-                        if let Some(guild_channel) = guild_channel {
-                            return Some(Channel::Guild(guild_channel));
-                        } else {
-                            return None;
-                        }
-                    }
-                }
+fn should_keep(error: poise::serenity_prelude::Error) -> bool {
+    match error {
+        poise::serenity_prelude::Error::Http(http) => {
+            match *http {
+                poise::serenity_prelude::HttpError::Request(req) => {
+                    req.is_request() || req.is_timeout()
+                    
+                },
+                _ => false,
             }
+            
         }
-        return None;
-    } else {
-        let user;
-        if let Some(some_user) = arc_ctx.cache.user(reminder_info.user_id) {
-            user = some_user;
-        } else if let Ok(ok_user) = arc_ctx.http.get_user(reminder_info.user_id).await {
-            user = ok_user;
-        } else {
-            return None;
-        }
-        if let Ok(dm_channel) = user.create_dm_channel(&arc_ctx).await {
-            return Some(Channel::Private(dm_channel));
-        }
+        _ => false,
     }
-    None
 }

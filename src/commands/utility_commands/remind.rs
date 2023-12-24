@@ -59,15 +59,14 @@ pub async fn add(
     }
 
     let guild_id;
-    let channel_id;
 
     if let Some(id) = ctx.guild_id() {
         guild_id = Some(*id.as_u64());
-        channel_id = Some(*ctx.channel_id().as_u64());
     } else {
         guild_id = None;
-        channel_id = None;
     }
+
+    let channel_id = *ctx.channel_id().as_u64();
 
     let add_result = ctx
         .data()
@@ -197,11 +196,7 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
                 .footer(|f| f.text(format!("Total reminders: {}", reminders.len())));
 
             for (index, reminder) in reminders.iter().enumerate() {
-                let mut ending = "".to_owned();
-
-                if let Some(channel_id) = reminder.channel_id {
-                    ending = ending.add(&format!(" <#{channel_id}>"));
-                }
+                let mut ending = format!(" <#{}>", reminder.channel_id);
 
                 if reminder.looping {
                     ending = ending.add(" (Looped)");
