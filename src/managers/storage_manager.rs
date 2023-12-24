@@ -66,7 +66,7 @@ pub struct StorageManager {
     directories: RwLock<HashMap<String, DirectoryInfo>>,
 }
 
-// TODO: Add custom extension support for StorageManager so I can save pngs through it.
+// TODO: use SurrealDB
 impl StorageManager {
     pub async fn new(storage_path: impl Into<String>) -> Self {
         let storage_path = storage_path.into();
