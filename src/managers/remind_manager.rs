@@ -394,16 +394,12 @@ pub fn remind_manager_loop(arc_ctx: Arc<Context>, remind_manager: Arc<RemindMana
 
 fn should_keep(error: poise::serenity_prelude::Error) -> bool {
     match error {
-        poise::serenity_prelude::Error::Http(http) => {
-            match *http {
-                poise::serenity_prelude::HttpError::Request(req) => {
-                    req.is_request() || req.is_timeout()
-                    
-                },
-                _ => false,
+        poise::serenity_prelude::Error::Http(http) => match *http {
+            poise::serenity_prelude::HttpError::Request(req) => {
+                req.is_request() || req.is_timeout()
             }
-            
-        }
+            _ => false,
+        },
         _ => false,
     }
 }

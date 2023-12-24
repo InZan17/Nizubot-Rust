@@ -19,8 +19,9 @@ use managers::{
     storage_manager::{storage_manager_loop, StorageManager},
 };
 use poise::{
+    framework,
     serenity_prelude::{self as serenity},
-    Event, ReplyHandle, framework,
+    Event, ReplyHandle,
 };
 
 use crate::managers::{detector_manager::DetectorManager, reaction_manager::ReactionManager};
@@ -82,7 +83,9 @@ async fn event_handler(
         }
         Event::ReactionAdd { add_reaction } => {
             //TODO: Handle errors
-            data.reaction_manager.reaction_add(ctx, add_reaction, framework.bot_id).await;
+            data.reaction_manager
+                .reaction_add(ctx, add_reaction, framework.bot_id)
+                .await;
         }
         Event::ReactionRemove { removed_reaction } => {
             //TODO: Handle errors

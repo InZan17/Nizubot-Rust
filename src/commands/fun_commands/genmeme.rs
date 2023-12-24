@@ -49,7 +49,7 @@ pub async fn brick(
                 f.text("Original gif by \"mega-KOT\" on newgrounds.\nhttps://www.newgrounds.com/art/view/mega-kot/think-fast")
             })
             .attachment("brick.gif");
-        
+
             let mut rng = rand::thread_rng();
             let random_index = rng.gen_range(0..BRICK_TITLES.len());
             let random_title = BRICK_TITLES[random_index].replace("<user>", &user.name);

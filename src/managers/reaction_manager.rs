@@ -15,7 +15,12 @@ impl ReactionManager {
         Self { storage_manager }
     }
 
-    pub async fn reaction_add(&self, ctx: &Context, reaction: &Reaction, bot_id: UserId) -> Result<(), Error> {
+    pub async fn reaction_add(
+        &self,
+        ctx: &Context,
+        reaction: &Reaction,
+        bot_id: UserId,
+    ) -> Result<(), Error> {
         let Some(guild_id) = reaction.guild_id else {
             return Ok(());
         };
@@ -23,9 +28,9 @@ impl ReactionManager {
         let Some(user_id) = reaction.user_id else {
             return Err("Couldn't get the UserId from a reaction.".into());
         };
-        
+
         if user_id == bot_id {
-            return Ok(())
+            return Ok(());
         }
 
         let message_id = reaction.message_id;
@@ -55,13 +60,18 @@ impl ReactionManager {
         let res = member.add_role(&ctx, RoleId(*role_id)).await;
 
         if let Err(err) = res {
-            return Err(err.into())
+            return Err(err.into());
         } else {
-            return Ok(())
+            return Ok(());
         }
     }
 
-    pub async fn reaction_remove(&self, ctx: &Context, reaction: &Reaction, bot_id: UserId) -> Result<(), Error> {
+    pub async fn reaction_remove(
+        &self,
+        ctx: &Context,
+        reaction: &Reaction,
+        bot_id: UserId,
+    ) -> Result<(), Error> {
         let Some(guild_id) = reaction.guild_id else {
             return Ok(());
         };
@@ -104,9 +114,9 @@ impl ReactionManager {
         let res = member.remove_role(&ctx, RoleId(*role_id)).await;
 
         if let Err(err) = res {
-            return Err(err.into())
+            return Err(err.into());
         } else {
-            return Ok(())
+            return Ok(());
         }
     }
 }
