@@ -48,6 +48,8 @@ pub async fn caption(
         return Err(Error::from("`break_height` cannot be a negative number."));
     }
 
+    evalexpr::eval_empty_with_context_mut(&format!("break_height = {break_height}"), &mut context)?;
+
     let padding_expr = padding_expr.unwrap_or_else(|| match caption_type {
         CaptionType::Boxes => "width/20".to_owned(),
         CaptionType::What => "width/9".to_owned(),
@@ -200,6 +202,8 @@ pub async fn caption(
     process.args(&["-filter_complex", &ffmpeg_filter]);
     process.arg(&generated_file);
     process.arg("-y");
+    
+    //TODO: Make ffmpeg not write to disk and make everything be in ram.
 
     let mut spawned = process.spawn()?;
     let exit = spawned.wait().await?;
