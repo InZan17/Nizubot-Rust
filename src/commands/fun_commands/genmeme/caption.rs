@@ -32,8 +32,15 @@ pub async fn caption(
         CaptionType::What => "width/7".to_owned(),
         CaptionType::Overlay => "height/10".to_owned(),
     });
-    //TODO: If an error occurs, also provide the expression which was faulty for easier debugging.
-    let font_size = evalexpr::eval_number_with_context(&font_size_expr, &context)?;
+    
+    let font_size = match evalexpr::eval_number_with_context(&font_size_expr, &context) {
+        Ok(ok) => ok,
+        Err(err) => {
+            return Err(format!("Couldn't evaluate font_size with \"{font_size_expr}\". {err}").into())
+        },
+    };
+
+    
 
     if font_size < 0. {
         return Err(Error::from("`font_size` cannot be a negative number."));
@@ -42,7 +49,12 @@ pub async fn caption(
     evalexpr::eval_empty_with_context_mut(&format!("fontsize = {font_size}"), &mut context)?;
 
     let break_height_expr = break_height_expr.unwrap_or_else(|| "fontsize/4".to_owned());
-    let break_height = evalexpr::eval_number_with_context(&break_height_expr, &context)?;
+    let break_height = match evalexpr::eval_number_with_context(&break_height_expr, &context) {
+        Ok(ok) => ok,
+        Err(err) => {
+            return Err(format!("Couldn't evaluate break_height with \"{break_height_expr}\". {err}").into())
+        },
+    };
 
     if break_height < 0. {
         return Err(Error::from("`break_height` cannot be a negative number."));
@@ -55,7 +67,12 @@ pub async fn caption(
         CaptionType::What => "width/9".to_owned(),
         CaptionType::Overlay => "height/30".to_owned(),
     });
-    let padding = evalexpr::eval_number_with_context(&padding_expr, &context)?;
+    let padding = match evalexpr::eval_number_with_context(&padding_expr, &context) {
+        Ok(ok) => ok,
+        Err(err) => {
+            return Err(format!("Couldn't evaluate padding with \"{padding_expr}\". {err}").into())
+        },
+    };
 
     if padding < 0. {
         return Err(Error::from("`padding` cannot be a negative number."));

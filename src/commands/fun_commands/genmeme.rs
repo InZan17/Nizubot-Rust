@@ -153,7 +153,7 @@ pub async fn caption(
             file: &generated_image_file,
             filename: format!(
                 "{}_{}.{}",
-                image.filename, //TODO: Remove the extension from file name. Rn if a file named "brick.gif" goes in, then "brick.gif_what.gif" will come out when we want "brick_what.gif"
+                remove_extension(&image.filename),
                 caption_type.to_string(),
                 extension
             ),
@@ -162,4 +162,14 @@ pub async fn caption(
     .await?;
 
     Ok(())
+}
+
+fn remove_extension(file_name: &str) -> String {
+    let mut parts: Vec<&str> = file_name.split('.').collect();
+
+    if parts.len() > 1 {
+        parts.pop();
+    }
+
+    parts.join(".")
 }

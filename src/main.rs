@@ -78,17 +78,17 @@ async fn event_handler(
             //
         }
         Event::Message { new_message } => {
-            //TODO: Handle errors
+            //TODO: notify errors to the user/server log
             data.detector_manager.on_message(ctx, new_message).await;
         }
         Event::ReactionAdd { add_reaction } => {
-            //TODO: Handle errors
+            //TODO: notify errors to the user/server log
             data.reaction_manager
                 .reaction_add_event(ctx, add_reaction, framework.bot_id)
                 .await;
         }
         Event::ReactionRemove { removed_reaction } => {
-            //TODO: Handle errors
+            //TODO: notify errors to the user/server log
             data.reaction_manager
                 .reaction_remove_event(ctx, removed_reaction, framework.bot_id)
                 .await;
