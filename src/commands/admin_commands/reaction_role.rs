@@ -18,54 +18,27 @@ pub async fn reaction_role(_ctx: Context<'_>) -> Result<(), Error> {
 }
 
 /// Add reaction role to message.
-#[poise::command(slash_command)]
+#[poise::command(slash_command, guild_only)]
 pub async fn add(
     ctx: Context<'_>,
     #[description = "ID of the message."] message_id: Message,
     #[description = "The emoji to react with."] emoji: ReactionType,
     #[description = "Role to give."] role: Role,
 ) -> Result<(), Error> {
-    println!("{emoji}");
-    //TODO: use the react error return as a way to validate if the emoji is actually valid or not.
-    message_id.react(ctx, emoji.clone()).await?;
-
-    let guild_id = ctx.guild_id().unwrap();
-    let message_id_string = message_id.id.to_string();
-
-    //TODO: Move this code to the reaction manager.
-
-    let message_reaction_roles = ctx
-        .data()
-        .storage_manager
-        .get_data_or_default::<HashMap<String, u64>>(
-            vec![
-                "guilds",
-                &guild_id.to_string(),
-                "messages",
-                &message_id_string,
-                "reaction_roles",
-            ],
-            HashMap::new(),
-        )
-        .await;
-
-    let mut message_reaction_roles_mut = message_reaction_roles.get_data_mut().await;
-
-    if let Some(role_id) = message_reaction_roles_mut.get(&emoji.as_data()) {
-        // TODO: Check if role still exists. Also double check that the bot is not reacted to the reaction. If it isnt then the reaction role should've been removed.
+    if let Err(err) = message_id.react(ctx, emoji.clone()).await {
         ctx.send(|m| {
-            m.content(format!(
-                "This emoji already has a role assigned to it. <@&{}>",
-                role_id
-            ))
-            .ephemeral(true)
-        })
-        .await?;
+            m.content(format!("Sorry, I couldn't react with the emoji you provided. Please make sure to provide an actual emoji.\n\nHere's the error: {}", err))
+        }).await?;
         return Ok(());
     }
 
-    message_reaction_roles_mut.insert(emoji.as_data(), *role.id.as_u64());
-    message_reaction_roles.request_file_write().await;
+    let guild_id = ctx.guild_id().unwrap();
+    let message_id = message_id.id;
+
+    ctx.data()
+        .reaction_manager
+        .add_reaction(emoji, role.id.0, guild_id.0, message_id.0)
+        .await?;
 
     ctx.send(|m| {
         m.content(format!("Sucessfully added reaction role!\nTo remove the reaction role, simply remove my reaction or run `/reaction_role remove`.")).ephemeral(true)
@@ -81,48 +54,24 @@ pub async fn remove(
     #[description = "ID of the message."] message_id: Message,
     #[description = "The emoji to remove."] emoji: ReactionType,
 ) -> Result<(), Error> {
-    //TODO: See the TODO in the other function.
-    message_id
+    //Unreacting is not as important as reacting. Therefor we do not need to error out if reaction deletion doesnt work.
+    let _ = message_id
         .delete_reaction(ctx, Some(ctx.framework().bot_id), emoji.clone())
-        .await?;
-
-    let guild_id = ctx.guild_id().unwrap();
-    let message_id_string = message_id.id.to_string();
-
-    //TODO: Move this code to the reaction manager.
-
-    let message_reaction_roles = ctx
-        .data()
-        .storage_manager
-        .get_data_or_default::<HashMap<String, u64>>(
-            vec![
-                "guilds",
-                &guild_id.to_string(),
-                "messages",
-                &message_id_string,
-                "reaction_roles",
-            ],
-            HashMap::new(),
-        )
         .await;
 
-    let mut message_reaction_roles_mut = message_reaction_roles.get_data_mut().await;
+    let guild_id = ctx.guild_id().unwrap();
+    let message_id = message_id.id;
 
-    let Some(role_id) = message_reaction_roles_mut.remove(&emoji.as_data()) else {
-        ctx.send(|m| {
-            m.content("This message doesn't have this reaction.")
-                .ephemeral(true)
-        })
+    let removed_role = ctx
+        .data()
+        .reaction_manager
+        .remove_reaction(emoji, guild_id.0, message_id.0)
         .await?;
-        return Ok(());
-    };
-
-    message_reaction_roles.request_file_write().await;
 
     ctx.send(|m| {
         m.content(format!(
             "Sucessfully removed reaction role! <@&{}>",
-            role_id
+            removed_role
         ))
         .ephemeral(true)
     })

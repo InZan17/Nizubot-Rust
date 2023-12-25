@@ -84,13 +84,13 @@ async fn event_handler(
         Event::ReactionAdd { add_reaction } => {
             //TODO: Handle errors
             data.reaction_manager
-                .reaction_add(ctx, add_reaction, framework.bot_id)
+                .reaction_add_event(ctx, add_reaction, framework.bot_id)
                 .await;
         }
         Event::ReactionRemove { removed_reaction } => {
             //TODO: Handle errors
             data.reaction_manager
-                .reaction_remove(ctx, removed_reaction, framework.bot_id)
+                .reaction_remove_event(ctx, removed_reaction, framework.bot_id)
                 .await;
         }
         _ => {}
