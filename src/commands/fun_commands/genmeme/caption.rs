@@ -32,15 +32,15 @@ pub async fn caption(
         CaptionType::What => "width/7".to_owned(),
         CaptionType::Overlay => "height/10".to_owned(),
     });
-    
+
     let font_size = match evalexpr::eval_number_with_context(&font_size_expr, &context) {
         Ok(ok) => ok,
         Err(err) => {
-            return Err(format!("Couldn't evaluate font_size with \"{font_size_expr}\". {err}").into())
-        },
+            return Err(
+                format!("Couldn't evaluate font_size with \"{font_size_expr}\". {err}").into(),
+            )
+        }
     };
-
-    
 
     if font_size < 0. {
         return Err(Error::from("`font_size` cannot be a negative number."));
@@ -52,8 +52,11 @@ pub async fn caption(
     let break_height = match evalexpr::eval_number_with_context(&break_height_expr, &context) {
         Ok(ok) => ok,
         Err(err) => {
-            return Err(format!("Couldn't evaluate break_height with \"{break_height_expr}\". {err}").into())
-        },
+            return Err(format!(
+                "Couldn't evaluate break_height with \"{break_height_expr}\". {err}"
+            )
+            .into())
+        }
     };
 
     if break_height < 0. {
@@ -71,7 +74,7 @@ pub async fn caption(
         Ok(ok) => ok,
         Err(err) => {
             return Err(format!("Couldn't evaluate padding with \"{padding_expr}\". {err}").into())
-        },
+        }
     };
 
     if padding < 0. {
@@ -219,7 +222,7 @@ pub async fn caption(
     process.args(&["-filter_complex", &ffmpeg_filter]);
     process.arg(&generated_file);
     process.arg("-y");
-    
+
     //TODO: Make ffmpeg not write to disk and make everything be in ram.
 
     let mut spawned = process.spawn()?;
