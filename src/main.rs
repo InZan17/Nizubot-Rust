@@ -23,8 +23,15 @@ use poise::{
     serenity_prelude::{self as serenity},
     Event, ReplyHandle,
 };
+use surrealdb::{
+    engine::remote::ws::{Ws, Wss, Client},
+    opt::auth::Root, Surreal,
+};
 
-use crate::managers::{detector_manager::DetectorManager, reaction_manager::ReactionManager};
+use crate::managers::{
+    detector_manager::DetectorManager,
+    reaction_manager::ReactionManager,
+};
 
 pub struct Data {
     started_loops: AtomicBool,
@@ -34,6 +41,7 @@ pub struct Data {
     detector_manager: Arc<DetectorManager>,
     reaction_manager: Arc<ReactionManager>,
     currency_manager: Arc<CurrencyManager>,
+    db: Surreal<Client>,
 } // User data, which is stored and accessible in all command invocations
 pub struct Handler {} // User data, which is stored and accessible in all command invocations
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -100,6 +108,11 @@ async fn event_handler(
 #[tokio::main]
 async fn main() {
     println!("Starting bot...");
+
+    let db = managers::db::new_db().await;
+
+    let storage_manager = Arc::new(StorageManager::new("./data").await);
+
     let framework = poise::Framework::builder()
         .token(tokens::get_discord_token())
         .intents(
@@ -120,7 +133,6 @@ async fn main() {
             Box::pin(async move {
                 println!("Registering commands...");
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                let storage_manager = Arc::new(StorageManager::new("./data").await);
                 let tokens = tokens::get_other_tokens();
                 Ok(Data {
                     cotd_manager: Arc::new(CotdManager::new(storage_manager.clone())),
@@ -136,6 +148,7 @@ async fn main() {
                     ),
                     storage_manager,
                     started_loops: AtomicBool::new(false),
+                    db
                 })
             })
         });

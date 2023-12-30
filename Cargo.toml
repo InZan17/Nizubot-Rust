@@ -15,3 +15,4 @@ serde_json = "1.0.107"
 tokio = {version = "1.32.0", features = ["macros", "rt-multi-thread", "process"]}
 evalexpr = "11.3.0"
 percent-encoding = "2.3.1"
+surrealdb = "1.0.2"

@@ -25,3 +25,4 @@ token
 data/
 openExchangeRatesApiKey
 .vscode/
+surrealdb_signin.json
