@@ -6,17 +6,16 @@ mod eval;
 mod icon;
 mod joinorder;
 mod ping;
-mod read;
+mod read_write;
 mod rng;
 mod sleepcalc;
-mod write;
 
 pub fn get_commands() -> Commands {
     return vec![
         ping::ping(),
         rng::rng(),
-        read::read(),
-        write::write(),
+        read_write::read(),
+        read_write::write(),
         icon::icon(),
         echo::echo(),
         sleepcalc::sleepcalc(),

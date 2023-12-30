@@ -1,10 +1,19 @@
 use std::{time::Duration, future::IntoFuture};
 
-use surrealdb::{Surreal, engine::remote::ws::{Client, Ws}, opt::auth::Database};
+use serde::Deserialize;
+use surrealdb::{Surreal, engine::remote::ws::{Client, Ws}, opt::auth::Database, sql::Thing};
 
 use crate::{tokens, Error};
 
+#[derive(Debug, Deserialize)]
+pub struct Record {
+    #[allow(dead_code)]
+    id: Thing,
+}
+
 pub trait IsConnected {
+    /// Returns an error if it isnt connected and an Ok if it is connected.
+    /// The reason it returns a result is because then we can use the ? thing.
     async fn is_connected(&self) -> Result<(), Error>;
 }
 
