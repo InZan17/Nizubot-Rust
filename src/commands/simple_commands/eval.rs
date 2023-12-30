@@ -29,8 +29,7 @@ pub async fn eval(
                 Err(EvalexprError::expected_number(argument.clone()))
             }
         })
-    }
-    .unwrap(); // Do proper error handling here
+    }?;
 
     let value = evalexpr::eval_with_context_mut(&expression, &mut context)?;
 
