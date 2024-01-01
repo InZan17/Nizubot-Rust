@@ -1,7 +1,11 @@
 use std::vec;
 
 use crate::{
-    managers::{cotd_manager::CotdRoleInfo, storage_manager::DataDirectories},
+    managers::{
+        cotd_manager::{CotdRoleData, CotdRoleDataQuery},
+        db::IsConnected,
+        storage_manager::DataDirectories,
+    },
     Context, Error,
 };
 use poise::serenity_prelude::{Role, RoleId};
@@ -28,39 +32,38 @@ pub async fn create(
 ) -> Result<(), Error> {
     let name = name.unwrap_or("<cotd>".to_owned());
 
-    let cotd_roles_data = ctx
-        .data()
-        .storage_manager
-        .get_data_or_default::<Vec<u64>>(DataDirectories::cotd_guilds(), vec![])
-        .await;
+    let data = ctx.data();
 
-    let cotd_roles_read = cotd_roles_data.get_data().await;
+    data.db.is_connected().await?;
 
     let guild = ctx.guild().unwrap();
 
     let guild_id = guild.id.as_u64().clone();
 
-    if cotd_roles_read.contains(&guild_id) {
-        let guild_cotd_role_data = ctx
-            .data()
-            .storage_manager
-            .get_data::<CotdRoleInfo>(vec!["guilds", &guild_id.to_string(), "cotd_role"])
-            .await;
+    let table_id = format!("guild:{guild_id}");
 
-        if let Some(guild_cotd_role_data) = guild_cotd_role_data {
-            let read_data = guild_cotd_role_data.get_data().await;
-            let guild_roles = &guild.roles;
-            if guild_roles.contains_key(&RoleId(read_data.id)) {
-                ctx.send(|m| {
-                    m.content(format!(
-                        "You already have a COTD role! <@&{}>",
-                        read_data.id
-                    ))
+    let cotd_role_data_vec: Vec<CotdRoleDataQuery> = data
+        .db
+        .query(format!(
+            "SELECT id, cotd_role FROM {table_id} WHERE cotd_role;"
+        ))
+        .await?
+        .take(0)?;
+
+    if cotd_role_data_vec.len() > 1 {
+        return Err("Multiple guilds with same id??".into());
+    }
+
+    if cotd_role_data_vec.len() == 1 {
+        let role_id = cotd_role_data_vec[0].cotd_role.id;
+        let guild_roles = &guild.roles;
+        if guild_roles.contains_key(&RoleId(role_id)) {
+            ctx.send(|m| {
+                m.content(format!("You already have a COTD role! <@&{role_id}>",))
                     .ephemeral(true)
-                })
-                .await?;
-                return Ok(());
-            }
+            })
+            .await?;
+            return Ok(());
         }
     }
 
@@ -86,63 +89,19 @@ pub async fn create(
         return Ok(());
     }
 
-    drop(cotd_roles_read);
-
-    cotd_roles_data.get_data_mut().await.push(guild_id);
-    cotd_roles_data.request_file_write().await;
-
-    let cotd_role_info = CotdRoleInfo {
+    let cotd_role_info = CotdRoleData {
         id: role_id,
         day,
         name,
     };
 
-    let guild_cotd_role_data = ctx
-        .data()
-        .storage_manager
-        .get_data_or_default::<CotdRoleInfo>(
-            vec!["guilds", &guild_id.to_string(), "cotd_role"],
-            CotdRoleInfo {
-                name: "".to_owned(),
-                day: 0,
-                id: 0,
-            },
-        )
-        .await;
+    let cotd_role_data_string = serde_json::to_string(&cotd_role_info)?;
 
-    *(guild_cotd_role_data.get_data_mut().await) = cotd_role_info;
-    guild_cotd_role_data.request_file_write().await;
-
-    /*
-
-    local role, err = ia.guild:createRole(name)
-
-    if not role then
-        local code = funs.parseDiaError(err)
-        if code == "30005" then
-            return ia:reply("It seems like this guild has reached the max amount of roles. Try deleting some of the roles.", true)
-        end
-        return ia:reply("Sorry, it seems like I wasn't able to create the role. \n\nHere's the error:\n"..err, true)
-    end
-
-    local success, updateErr = _G.cotd.updateRole(role, name)
-
-    if not success then
-        return ia:reply("Sorry, it seems like I wasn't able to create the role properly. \n\nHere's the error:\n"..updateErr, true)
-    end
-
-    cotdRolesRead[ia.guild.id] = {
-        id = role.id,
-        name = name
-    }
-    cotdRolesData:write(cotdRolesRead)
-
-    ctx.send(|m| {
-        m.content(format!("Sorry, it seems like I wasn't able to create the role properly. \n\nHere's the error:\n{err}")).ephemeral(true)
-    }).await?;
-
-    ia:reply("Successfully made <@&"..role.id.."> a COTD role.\nPlease remember to not put this role above my highest role or else I wont be able to edit it.", true)
-    */
+    data.db
+        .query(format!(
+            "UPDATE {table_id} SET cotd_role = {cotd_role_data_string};"
+        ))
+        .await?;
 
     ctx.send(|m| {
         m.content(format!("Successfully made <@&{role_id}> a COTD role.\nPlease remember to not put this role above my highest role or else I wont be able to edit it.")).ephemeral(true)
@@ -157,39 +116,38 @@ pub async fn remove(
     ctx: Context<'_>,
     #[description = "If you wanna delete the role from the guild or not. (Default: False)"] delete: Option<bool>,
 ) -> Result<(), Error> {
-    let guild_id = ctx.guild_id().unwrap();
+    let data = ctx.data();
 
-    let guild_cotd_role_data = ctx
-        .data()
-        .storage_manager
-        .get_data::<CotdRoleInfo>(vec!["guilds", &guild_id.to_string(), "cotd_role"])
-        .await;
+    data.db.is_connected().await?;
 
-    let Some(guild_cotd_role_data) = guild_cotd_role_data else {
+    let guild = ctx.guild().unwrap();
+
+    let guild_id = guild.id.as_u64().clone();
+
+    let table_id = format!("guild:{guild_id}");
+
+    let cotd_role_data_vec: Vec<CotdRoleDataQuery> = data
+        .db
+        .query(format!(
+            "SELECT id, cotd_role FROM {table_id} WHERE cotd_role;"
+        ))
+        .await?
+        .take(0)?;
+
+    if cotd_role_data_vec.len() > 1 {
+        return Err("Multiple guilds with same id??".into());
+    }
+
+    if cotd_role_data_vec.len() == 0 {
         ctx.send(|m| m.content("This guild does not have a COTD role."))
             .await?;
         return Ok(());
-    };
+    }
+    let role_id = cotd_role_data_vec[0].cotd_role.id;
 
-    let cotd_roles_data = ctx
-        .data()
-        .storage_manager
-        .get_data_or_default::<Vec<u64>>(DataDirectories::cotd_guilds(), vec![])
-        .await;
-
-    cotd_roles_data
-        .get_data_mut()
-        .await
-        .retain(|saved_guild_id| saved_guild_id != guild_id.as_u64());
-
-    let role_id = guild_cotd_role_data.get_data().await.id;
-
-    drop(guild_cotd_role_data);
-
-    ctx.data()
-        .storage_manager
-        .delete_data(vec!["guilds", &guild_id.to_string(), "cotd_role"])
-        .await;
+    data.db
+        .query(format!("UPDATE {table_id} SET cotd_role = NONE;"))
+        .await?;
 
     if delete.unwrap_or(false) {
         let res = ctx.guild().unwrap().delete_role(ctx, RoleId(role_id)).await;

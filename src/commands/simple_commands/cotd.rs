@@ -27,7 +27,7 @@ pub async fn cotd(
                 date_offset = 0;
             }
             Err(err) => {
-                ctx.reply(err).await?;
+                ctx.reply(err.to_string()).await?;
                 return Ok(());
             }
         }
@@ -41,7 +41,7 @@ pub async fn cotd(
                 date_offset = 86400;
             }
             Err(err) => {
-                ctx.reply(err).await?;
+                ctx.reply(err.to_string()).await?;
                 return Ok(());
             }
         }

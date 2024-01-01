@@ -1,9 +1,7 @@
 use std::vec;
 
 use crate::{
-    managers::{
-        cotd_manager::CotdRoleInfo, detector_manager::DetectType, storage_manager::DataDirectories,
-    },
+    managers::{detector_manager::DetectType, storage_manager::DataDirectories},
     Context, Error,
 };
 use poise::serenity_prelude::{Role, RoleId};

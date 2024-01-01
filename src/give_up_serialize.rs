@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::managers::{
-    cotd_manager::{ColorInfo, CotdRoleInfo},
+    cotd_manager::{ColorInfo, CotdRoleData},
     currency_manager::CurrenciesInfo,
     detector_manager::DetectorInfo,
     remind_manager::RemindInfo,
@@ -46,7 +46,7 @@ impl GiveUpSerialize for HashSet<u64> {
     }
 }
 
-impl GiveUpSerialize for CotdRoleInfo {
+impl GiveUpSerialize for CotdRoleData {
     fn serialize_json(&self) -> String {
         serde_json::to_string(self).unwrap()
     }

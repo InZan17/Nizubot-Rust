@@ -1,14 +1,14 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-use crate::{Context, Error, managers::db::{IsConnected, Record}};
-
-
+use crate::{
+    managers::db::{IsConnected, Record},
+    Context, Error,
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct StoredData {
     pub content: String,
 }
-
 
 /// Read!
 #[poise::command(slash_command)]
@@ -17,7 +17,7 @@ pub async fn read(ctx: Context<'_>) -> Result<(), Error> {
 
     data.db.is_connected().await?;
 
-    let opt: Option<StoredData> = data.db.select(("stored_data",1)).await?;
+    let opt: Option<StoredData> = data.db.select(("stored_data", 1)).await?;
 
     let content = if let Some(stored_data) = opt {
         stored_data.content
@@ -33,8 +33,6 @@ pub async fn read(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-
-
 /// Writes data!
 #[poise::command(slash_command)]
 pub async fn write(ctx: Context<'_>, #[description = "Write."] write: String) -> Result<(), Error> {
@@ -42,7 +40,10 @@ pub async fn write(ctx: Context<'_>, #[description = "Write."] write: String) ->
 
     data.db.is_connected().await?;
 
-    data.db.update::<Option<Record>>(("stored_data", 1)).content(StoredData{content: write}).await?;
+    data.db
+        .update::<Option<Record>>(("stored_data", 1))
+        .content(StoredData { content: write })
+        .await?;
 
     ctx.say(format!("Data written!")).await?;
     Ok(())
