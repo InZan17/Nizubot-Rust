@@ -135,7 +135,7 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
         .data()
         .detector_manager
         .get_message_detects(guild_or_user_id, is_dms)
-        .await;
+        .await?;
 
     ctx.send(|m| {
         m.embed(|e| {

@@ -131,7 +131,7 @@ async fn main() {
                 Ok(Data {
                     cotd_manager: Arc::new(CotdManager::new(db.clone())),
                     remind_manager: Arc::new(RemindManager::new(storage_manager.clone())),
-                    detector_manager: Arc::new(DetectorManager::new(storage_manager.clone())),
+                    detector_manager: Arc::new(DetectorManager::new(db.clone())),
                     reaction_manager: Arc::new(ReactionManager::new(storage_manager.clone())),
                     currency_manager: Arc::new(
                         CurrencyManager::new(

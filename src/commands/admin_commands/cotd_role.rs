@@ -4,7 +4,6 @@ use crate::{
     managers::{
         cotd_manager::{CotdRoleData, CotdRoleDataQuery},
         db::IsConnected,
-        storage_manager::DataDirectories,
     },
     Context, Error,
 };
