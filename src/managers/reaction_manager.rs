@@ -2,18 +2,19 @@ use std::{collections::HashMap, sync::Arc};
 
 use percent_encoding::{percent_decode_str, utf8_percent_encode, NON_ALPHANUMERIC};
 use poise::serenity_prelude::{Context, Member, Reaction, ReactionType, RoleId, UserId};
+use surrealdb::{Surreal, engine::remote::ws::Client};
 
 use crate::Error;
 
-use super::storage_manager::StorageManager;
+use super::{storage_manager::StorageManager, db::IsConnected};
 
 pub struct ReactionManager {
-    pub storage_manager: Arc<StorageManager>,
+    pub db: Arc<Surreal<Client>>,
 }
 
 impl ReactionManager {
-    pub fn new(storage_manager: Arc<StorageManager>) -> Self {
-        Self { storage_manager }
+    pub fn new(db: Arc<Surreal<Client>>) -> Self {
+        Self { db }
     }
 
     pub async fn add_reaction(
@@ -23,47 +24,45 @@ impl ReactionManager {
         guild_id: u64,
         message_id: u64,
     ) -> Result<(), Error> {
-        let message_reaction_roles = self
-            .storage_manager
-            .get_data_or_default::<HashMap<String, u64>>(
-                vec![
-                    "guilds",
-                    &guild_id.to_string(),
-                    "messages",
-                    &message_id.to_string(),
-                    "reaction_roles",
-                ],
-                HashMap::new(),
-            )
-            .await;
 
-        let mut message_reaction_roles_mut = message_reaction_roles.get_data_mut().await;
+        let db = &self.db;
+        
+        db.is_connected().await?;
 
-        if let Some(role_id) = message_reaction_roles_mut.get(&get_emoji_id(&emoji)) {
-            return Err(
-                format!("This emoji already has a role assigned to it. <@&{role_id}>").into(),
-            );
-        }
+        let table_id = format!("guild:{guild_id}");
 
-        for (other_emoji, other_role_id) in message_reaction_roles_mut.iter() {
-            if *other_role_id != role_id {
-                continue;
+        let message_reaction_roles_option: Option<HashMap<String, u64>> = db.query(format!("SELECT VALUE messages.{message_id}.reaction_roles from {table_id};")).await?.take(0)?;
+
+        if let Some(message_reaction_roles) = message_reaction_roles_option {
+            if let Some(role_id) = message_reaction_roles.get(&get_emoji_id(&emoji)) {
+                return Err(
+                    format!("This emoji already has a role assigned to it. <@&{role_id}>").into(),
+                );
             }
+    
+            for (other_emoji, other_role_id) in message_reaction_roles.iter() {
+                if *other_role_id != role_id {
+                    continue;
+                }
+    
+                let emoji_string = if other_emoji.chars().all(char::is_numeric) {
+                    format!("<:custom:{other_emoji}>")
+                } else {
+                    percent_decode_str(other_emoji)
+                        .decode_utf8_lossy()
+                        .to_string()
+                };
+                return Err(
+                    format!("This role already has an emoji assigned to it. {emoji_string}").into(),
+                );
+            }
+        };
 
-            let emoji_string = if other_emoji.chars().all(char::is_numeric) {
-                format!("<:_:{other_emoji}>")
-            } else {
-                percent_decode_str(other_emoji)
-                    .decode_utf8_lossy()
-                    .to_string()
-            };
-            return Err(
-                format!("This role already has an emoji assigned to it. {emoji_string}").into(),
-            );
-        }
+        let emoji_id = get_emoji_id(&emoji);
+        
+        // I have to use merge here because if I try doing ["🧀"] like I do on the other queries then inside the database it will be "'🧀'" instead of "🧀"
+        db.query(format!("UPDATE {table_id} MERGE {{ \"messages\": {{ {message_id}: {{ \"reaction_roles\": {{ \"{emoji_id}\": {role_id} }} }} }} }};")).await?;
 
-        message_reaction_roles_mut.insert(get_emoji_id(&emoji), role_id);
-        message_reaction_roles.request_file_write().await;
         Ok(())
     }
 
@@ -72,28 +71,24 @@ impl ReactionManager {
         emoji: ReactionType,
         guild_id: u64,
         message_id: u64,
-    ) -> Result<(u64), Error> {
-        let message_reaction_roles = self
-            .storage_manager
-            .get_data_or_default::<HashMap<String, u64>>(
-                vec![
-                    "guilds",
-                    &guild_id.to_string(),
-                    "messages",
-                    &message_id.to_string(),
-                    "reaction_roles",
-                ],
-                HashMap::new(),
-            )
-            .await;
+    ) -> Result<u64, Error> {
 
-        let mut message_reaction_roles_mut = message_reaction_roles.get_data_mut().await;
+        let db = &self.db;
+        
+        db.is_connected().await?;
 
-        let Some(role_id) = message_reaction_roles_mut.remove(&emoji.as_data()) else {
+        let table_id = format!("guild:{guild_id}");
+
+        let emoji_id = get_emoji_id(&emoji);
+
+        let role_id: Option<u64> = db.query(format!("SELECT VALUE messages.{message_id}.reaction_roles['{emoji_id}'] from {table_id};")).await?.take(0)?;
+
+        let Some(role_id) = role_id else {
             return Err("This message doesn't have this reaction.".into());
         };
 
-        message_reaction_roles.request_file_write().await;
+        db.query(format!("UPDATE {table_id} SET messages.{message_id}.reaction_roles['{emoji_id}'] = NONE;")).await?;
+
         Ok(role_id)
     }
 
@@ -115,37 +110,27 @@ impl ReactionManager {
             return Ok(());
         }
 
+        let db = &self.db;
+        
+        db.is_connected().await?;
+
         let message_id = reaction.message_id;
 
-        let message_reaction_roles = self
-            .storage_manager
-            .get_data_or_default::<HashMap<String, u64>>(
-                vec![
-                    "guilds",
-                    &guild_id.to_string(),
-                    "messages",
-                    &message_id.to_string(),
-                    "reaction_roles",
-                ],
-                HashMap::new(),
-            )
-            .await;
+        let table_id = format!("guild:{guild_id}");
 
-        let message_reaction_roles_read = message_reaction_roles.get_data().await;
+        let emoji_id = get_emoji_id(&reaction.emoji);
 
-        let Some(role_id) = message_reaction_roles_read.get(&get_emoji_id(&reaction.emoji)) else {
+        let role_id: Option<u64> = db.query(format!("SELECT VALUE messages.{message_id}.reaction_roles['{emoji_id}'] from {table_id};")).await?.take(0)?;
+
+        let Some(role_id) = role_id else {
             return Ok(());
         };
 
         let mut member = guild_id.member(&ctx, user_id).await?;
 
-        let res = member.add_role(&ctx, RoleId(*role_id)).await;
+        member.add_role(&ctx, RoleId(role_id)).await?;
 
-        if let Err(err) = res {
-            return Err(err.into());
-        } else {
-            return Ok(());
-        }
+        Ok(())
     }
 
     pub async fn reaction_remove_event(
@@ -158,48 +143,36 @@ impl ReactionManager {
             return Ok(());
         };
 
-        let message_id = reaction.message_id;
-
-        let message_reaction_roles = self
-            .storage_manager
-            .get_data_or_default::<HashMap<String, u64>>(
-                vec![
-                    "guilds",
-                    &guild_id.to_string(),
-                    "messages",
-                    &message_id.to_string(),
-                    "reaction_roles",
-                ],
-                HashMap::new(),
-            )
-            .await;
-
         let Some(user_id) = reaction.user_id else {
             return Err("Couldn't get the UserId from a reaction.".into());
         };
 
-        if user_id == bot_id {
-            let mut message_reaction_roles_mut = message_reaction_roles.get_data_mut().await;
-            message_reaction_roles_mut.remove(&get_emoji_id(&reaction.emoji));
-            message_reaction_roles.request_file_write().await;
-            return Err("Bot reaction has been removed. This also removes the ability to get roles from the reaction.".into());
-        }
+        let message_id = reaction.message_id;
 
-        let message_reaction_roles_read = message_reaction_roles.get_data().await;
+        let table_id = format!("guild:{guild_id}");
 
-        let Some(role_id) = message_reaction_roles_read.get(&get_emoji_id(&reaction.emoji)) else {
+        let emoji_id = get_emoji_id(&reaction.emoji);
+
+        let db = &self.db;
+        
+        db.is_connected().await?;
+
+        let role_id: Option<u64> = db.query(format!("SELECT VALUE messages.{message_id}.reaction_roles['{emoji_id}'] from {table_id};")).await?.take(0)?;
+
+        let Some(role_id) = role_id else {
             return Ok(());
         };
 
+        if user_id == bot_id {
+            db.query(format!("UPDATE {table_id} SET messages.{message_id}.reaction_roles['{emoji_id}'] = NONE;")).await?;
+            return Err("Bot reaction has been removed. This also removes the ability to get roles from the reaction.".into());
+        }
+
         let mut member = guild_id.member(&ctx, user_id).await?;
 
-        let res = member.remove_role(&ctx, RoleId(*role_id)).await;
+        member.remove_role(&ctx, RoleId(role_id)).await?;
 
-        if let Err(err) = res {
-            return Err(err.into());
-        } else {
-            return Ok(());
-        }
+        Ok(())
     }
 }
 
@@ -210,7 +183,7 @@ fn get_emoji_id(emoji: &ReactionType) -> String {
             id,
             name: _,
         } => id.0.to_string(),
-        ReactionType::Unicode(name) => utf8_percent_encode(name, NON_ALPHANUMERIC).to_string(),
+        ReactionType::Unicode(name) => name.to_string(),
         _ => emoji.as_data(),
     }
 }

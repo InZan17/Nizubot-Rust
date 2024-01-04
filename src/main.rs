@@ -89,6 +89,9 @@ async fn event_handler(
                 .reaction_add_event(ctx, add_reaction, framework.bot_id)
                 .await;
         }
+        Event::ReactionRemoveAll { channel_id, removed_from_message_id } => {
+            //TODO: REmove all reaction roles from the message.
+        }
         Event::ReactionRemove { removed_reaction } => {
             //TODO: notify errors to the user/server log
             data.reaction_manager
@@ -132,7 +135,7 @@ async fn main() {
                     cotd_manager: Arc::new(CotdManager::new(db.clone())),
                     remind_manager: Arc::new(RemindManager::new(storage_manager.clone())),
                     detector_manager: Arc::new(DetectorManager::new(db.clone())),
-                    reaction_manager: Arc::new(ReactionManager::new(storage_manager.clone())),
+                    reaction_manager: Arc::new(ReactionManager::new(db.clone())),
                     currency_manager: Arc::new(
                         CurrencyManager::new(
                             storage_manager.clone(),
