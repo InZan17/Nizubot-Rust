@@ -146,7 +146,7 @@ pub async fn remove(
         .data()
         .remind_manager
         .remove_reminder(user_id, guild_id, index as usize)
-        .await;
+        .await?;
 
     let Some(removed_reminder) = removed_reminder else {
         ctx.send(|m| {
@@ -187,7 +187,7 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
     }
 
     let user_id = ctx.author().id.0;
-    let reminders = remind_manager.list_reminders(user_id, guild_id).await;
+    let reminders = remind_manager.list_reminders(user_id, guild_id).await?;
 
     ctx.send(|m| {
         m.embed(|e| {

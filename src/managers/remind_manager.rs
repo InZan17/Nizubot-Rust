@@ -1,3 +1,4 @@
+use core::panic;
 use std::{
     collections::HashSet,
     future::Future,
@@ -11,14 +12,16 @@ use poise::serenity_prelude::{
 };
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use surrealdb::{engine::remote::ws::Client, Surreal, sql::Thing};
 use tokio::sync::Mutex;
 
 use crate::Error;
 
-use super::storage_manager::{self, DataHolder, StorageManager};
+use super::{storage_manager::{self, DataHolder, StorageManager}, db::IsConnected};
 
 pub struct RemindManager {
-    storage_manager: Arc<StorageManager>,
+    db: Arc<Surreal<Client>>,
     pub wait_until: Mutex<u64>,
 }
 
@@ -30,15 +33,18 @@ pub struct RemindInfo {
     pub channel_id: u64,
     pub guild_id: Option<u64>,
     pub user_id: u64,
+    // id will be Some() when retrieved from surrealdb. Otherwise None.
+    #[serde(skip_serializing)]
+    pub id: Option<Thing>,
     pub message_id: Option<u64>,
     pub message: Option<String>,
     pub looping: bool,
 }
 
 impl RemindManager {
-    pub fn new(storage_manager: Arc<StorageManager>) -> Self {
+    pub fn new(db: Arc<Surreal<Client>>) -> Self {
         RemindManager {
-            storage_manager,
+            db,
             wait_until: Mutex::new(0),
         }
     }
@@ -57,32 +63,30 @@ impl RemindManager {
         F: FnOnce() -> Fut,
         Fut: Future<Output = Result<u64, Error>>,
     {
-        let reminding_users_data = self
-            .storage_manager
-            .get_data_or_default::<HashSet<u64>>(vec!["reminders"], HashSet::new())
-            .await;
-        let mut reminding_users_mut = reminding_users_data.get_data_mut().await;
-        reminding_users_mut.insert(*user_id.as_u64());
-        reminding_users_data.request_file_write().await;
+        let db = &self.db;
 
-        let user_reminders_data = self
-            .storage_manager
-            .get_data_or_default::<Vec<RemindInfo>>(
-                vec!["users", &user_id.as_u64().to_string(), "reminders"],
-                vec![],
-            )
-            .await;
+        db.is_connected().await?;
 
-        let mut user_reminders_mut = user_reminders_data.get_data_mut().await;
+        let user_table_id = format!("user:{user_id}");
 
-        if user_reminders_mut.len() >= 50 {
-            return Err(Error::from("You already have 10 reminders in this guild."));
+        let user_reminders: Vec<RemindInfo> = db.query(format!("
+            LET $reminders = SELECT VALUE ->reminds->reminder FROM {user_table_id};
+
+            IF array::len($reminders) THEN
+                SELECT * FROM array::first($reminders) ORDER BY original_time;
+            ELSE
+                RETURN [];
+            END
+        ")).await?.take(1)?;
+
+        if user_reminders.len() >= 50 {
+            return Err(Error::from("You've already got a total of 50 reminders. Consider removing some."));
         }
 
         let mut counter = 0;
 
         if let Some(guild_id) = &guild_id {
-            for reminder in user_reminders_mut.iter() {
+            for reminder in user_reminders.iter() {
                 if let Some(reminder_guild_id) = &reminder.guild_id {
                     if guild_id == reminder_guild_id {
                         counter += 1
@@ -90,7 +94,7 @@ impl RemindManager {
                 }
             }
         }
-        // in dms we dont really care how many reminders they have.
+        // in dms we dont really care how many reminders they have since it doesnt affect others.
 
         if counter >= 10 {
             return Err(Error::from("You already have 10 reminders in this guild."));
@@ -99,41 +103,44 @@ impl RemindManager {
         let current_time = get_seconds();
         let finish_time = current_time + duration;
 
-        let mut remind_info = RemindInfo {
+        let remind_info = RemindInfo {
             original_time: current_time,
             request_time: current_time,
             finish_time,
             channel_id,
             guild_id,
+            id: None,
             user_id: *user_id.as_u64(),
-            message_id: None,
+            message_id: Some(message_id_callback().await?),
             message,
             looping,
         };
 
-        let message_id = message_id_callback().await?;
+        let remind_info_json = serde_json::to_string(&remind_info)?;
 
-        remind_info.message_id = Some(message_id);
+        let guild_relate_statement = if let Some(guild_id) = guild_id {
+            let guild_table_id = format!("guild:{guild_id}");
+            format!("
+            UPDATE {guild_table_id};
+            RELATE {guild_table_id}->reminds->$reminder;
+            ")
+        } else {
+            "RETURN;RETURN;".to_owned()
+        };
 
-        let mut index = 0;
+        self.db.query(format!("
+        BEGIN TRANSACTION;
 
-        for i in 0..(user_reminders_mut.len() + 1) {
-            index = i;
+        LET $reminder = (CREATE reminder CONTENT {remind_info_json});
 
-            if i == user_reminders_mut.len() {
-                user_reminders_mut.push(remind_info);
-                break;
-            }
+        UPDATE {user_table_id};
+        RELATE {user_table_id}->reminds->$reminder;
+        {guild_relate_statement}
 
-            let check_reminder = &user_reminders_mut[i];
+        COMMIT TRANSACTION;
+        ")).await?;
 
-            if check_reminder.finish_time > finish_time {
-                user_reminders_mut.insert(i, remind_info);
-                break;
-            }
-        }
-
-        user_reminders_data.request_file_write().await;
+        //TODO: add remidner and also fix the index
 
         let mut mut_wait_until = self.wait_until.lock().await;
         *mut_wait_until = mut_wait_until.min(finish_time);
@@ -147,22 +154,28 @@ impl RemindManager {
         user_id: u64,
         guild_id: Option<u64>,
         removal_index: usize,
-    ) -> Option<RemindInfo> {
-        let user_reminders_data = self
-            .storage_manager
-            .get_data_or_default::<Vec<RemindInfo>>(
-                vec!["users", &user_id.to_string(), "reminders"],
-                vec![],
-            )
-            .await;
+    ) -> Result<Option<RemindInfo>, Error> {
+        let db = &self.db;
 
-        let mut user_reminders_mut = user_reminders_data.get_data_mut().await;
+        db.is_connected().await?;
+
+        let table_id = format!("user:{user_id}");
+
+        let mut reminders: Vec<RemindInfo> = db.query(format!("
+            LET $reminders = SELECT VALUE ->reminds->reminder FROM {table_id};
+
+            IF array::len($reminders) THEN
+                SELECT * FROM array::first($reminders) ORDER BY original_time;
+            ELSE
+                RETURN [];
+            END
+        ")).await?.take(1)?;
 
         let mut reminders_index = 0;
         let mut reminders_guild_index = 0;
         let mut found = false;
 
-        for (index, reminder) in user_reminders_mut.iter().enumerate() {
+        for (index, reminder) in reminders.iter().enumerate() {
             reminders_index = index;
             if reminder.guild_id == guild_id {
                 if reminders_guild_index == removal_index {
@@ -174,35 +187,46 @@ impl RemindManager {
         }
 
         if !found {
-            return None;
+            return Ok(None);
         }
-        let removed_reminder = user_reminders_mut.remove(reminders_index);
 
-        user_reminders_data.request_file_write().await;
+        let removed_reminder = reminders.swap_remove(reminders_index);
 
-        return Some(removed_reminder);
+        let Some(reminder_id) = &removed_reminder.id else {
+            return Err("Reminder didn't have a database id.".into());
+        };
+
+        db.query(format!("DELETE {reminder_id}")).await?;
+
+        return Ok(Some(removed_reminder))
     }
 
-    pub async fn list_reminders(&self, user_id: u64, guild_id: Option<u64>) -> Vec<RemindInfo> {
-        let user_reminders_data = self
-            .storage_manager
-            .get_data_or_default::<Vec<RemindInfo>>(
-                vec!["users", &user_id.to_string(), "reminders"],
-                vec![],
-            )
-            .await;
+    pub async fn list_reminders(&self, user_id: u64, guild_id: Option<u64>) -> Result<Vec<RemindInfo>, Error> {
+        let db = &self.db;
 
-        let user_reminders = user_reminders_data.get_data().await;
+        db.is_connected().await?;
 
-        let mut reminders = vec![];
+        let table_id = format!("user:{user_id}");
 
-        for reminder in user_reminders.iter() {
+        let reminders: Vec<RemindInfo> = db.query(format!("
+            LET $reminders = SELECT VALUE ->reminds->reminder FROM {table_id};
+
+            IF array::len($reminders) THEN
+                SELECT * FROM array::first($reminders) ORDER BY original_time;
+            ELSE
+                RETURN [];
+            END
+        ")).await?.take(1)?;
+
+        let mut specific_reminders = vec![];
+
+        for reminder in reminders.iter() {
             if reminder.guild_id == guild_id {
-                reminders.push(reminder.clone());
+                specific_reminders.push(reminder.clone());
             }
         }
 
-        reminders
+        Ok(specific_reminders)
     }
 }
 
@@ -217,7 +241,7 @@ fn get_seconds() -> u64 {
 
 pub fn remind_manager_loop(arc_ctx: Arc<Context>, remind_manager: Arc<RemindManager>) {
     tokio::spawn(async move {
-        let storage_manager = &remind_manager.storage_manager;
+        let db = &remind_manager.db;
 
         loop {
             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
@@ -232,161 +256,128 @@ pub fn remind_manager_loop(arc_ctx: Arc<Context>, remind_manager: Arc<RemindMana
 
             let mut next_wait_until = u64::MAX;
 
-            let reminders_data = storage_manager
-                .get_data_or_default::<HashSet<u64>>(vec!["reminders"], HashSet::new())
-                .await;
+            let mut query_response = match db.query(format!("SELECT * FROM reminder WHERE finish_time <= {current_time};")).await {
+                Ok(response) => response,
+                Err(err) => {
+                    panic!("{err}");
+                    //TODO; Do somethign with the error. Maybe use a log for the bot specifically.
+                    continue;
+                },
+            };
 
-            let mut set_of_reminding_users = reminders_data.get_data_mut().await;
-
-            let mut remove_users = vec![1];
-
-            for user_id in set_of_reminding_users.iter() {
-                let user_reminders_data = storage_manager
-                    .get_data_or_default::<Vec<RemindInfo>>(
-                        vec!["users", &user_id.to_string(), "reminders"],
-                        vec![],
-                    )
-                    .await;
-
-                let mut user_reminders_data_mut = user_reminders_data.get_data_mut().await;
-
-                if user_reminders_data_mut.len() == 0 {
-                    remove_users.push(*user_id);
+            let mut reminders: Vec<RemindInfo> = match query_response.take(0) {
+                Ok(reminders) => reminders,
+                Err(err) => {
+                    panic!("{err}");
+                    //TODO; Do somethign with the error. Maybe use a log for the bot specifically.
+                    continue;
+                },
+            };
+            for (index, reminder_info) in reminders.iter_mut().enumerate() {
+                if reminder_info.finish_time > current_time {
+                    next_wait_until = next_wait_until.min(reminder_info.finish_time);
+                    break;
                 }
 
-                let mut add_reminders = vec![];
-                let mut remove_reminders = vec![];
-                for (index, reminder_info) in user_reminders_data_mut.iter_mut().enumerate() {
-                    if reminder_info.finish_time > current_time {
-                        next_wait_until = next_wait_until.min(reminder_info.finish_time);
-                        break;
+                let Some(reminder_id) = &reminder_info.id else {
+                    //TODO: notify or soeming;
+                    continue;
+                };
+
+                let channel_id = ChannelId(reminder_info.channel_id);
+
+                let message_ending;
+
+                if let Some(message) = &reminder_info.message {
+                    message_ending = format!(" with: {message}")
+                } else {
+                    message_ending = ".".to_string()
+                }
+
+                let time_difference = current_time - reminder_info.finish_time;
+
+                let message_refrence_opt;
+
+                if let Some(message_id) = reminder_info.message_id {
+                    let mut message_refrence =
+                        MessageReference::from((channel_id, MessageId(message_id)));
+                    if let Some(guild_id) = reminder_info.guild_id {
+                        message_refrence.guild_id = Some(GuildId(guild_id));
                     }
+                    message_refrence_opt = Some(message_refrence);
+                } else {
+                    message_refrence_opt = None;
+                }
 
-                    let channel_id = ChannelId(reminder_info.channel_id);
+                println!("{}", message_refrence_opt.is_some());
 
-                    let message_ending;
+                if reminder_info.looping {
+                    let wait_time = reminder_info.finish_time - reminder_info.request_time;
+                    let missed_reminders =
+                        (current_time - reminder_info.request_time) / wait_time - 1;
 
-                    if let Some(message) = &reminder_info.message {
-                        message_ending = format!(" with: {message}")
-                    } else {
-                        message_ending = ".".to_string()
-                    }
-
-                    let time_difference = current_time - reminder_info.finish_time;
-
-                    let message_refrence_opt;
-
-                    if let Some(message_id) = reminder_info.message_id {
-                        let mut message_refrence =
-                            MessageReference::from((channel_id, MessageId(message_id)));
-                        if let Some(guild_id) = reminder_info.guild_id {
-                            message_refrence.guild_id = Some(GuildId(guild_id));
-                        }
-                        message_refrence_opt = Some(message_refrence);
-                    } else {
-                        message_refrence_opt = None;
-                    }
-
-                    println!("{}", message_refrence_opt.is_some());
-
-                    if reminder_info.looping {
-                        let wait_time = reminder_info.finish_time - reminder_info.request_time;
-                        let missed_reminders =
-                            (current_time - reminder_info.request_time) / wait_time - 1;
-
-                        let res = if time_difference > 60 {
-                            channel_id.send_message(arc_ctx.clone(), |m| {
-                                if let Some(message_refrence) = message_refrence_opt {
-                                    m.reference_message(message_refrence);
-                                }
-                                m.allowed_mentions(|a| {a.users(vec![reminder_info.user_id])}).content(format!("Sorry <@!{}>, I was supposed to remind you <t:{}:R>! <t:{}:R> you told me to keep reminding you{message_ending}", reminder_info.user_id, reminder_info.finish_time, reminder_info.original_time))}).await
-                        } else {
-                            channel_id.send_message(arc_ctx.clone(), |m| {
-                                if let Some(message_refrence) = message_refrence_opt {
-                                    m.reference_message(message_refrence);
-                                }
-                                m.allowed_mentions(|a| {a.users(vec![reminder_info.user_id])}).content(format!("<@!{}>! <t:{}:R> you told me to keep reminding you{message_ending}", reminder_info.user_id, reminder_info.original_time))}).await
-                        };
-
-                        if let Err(err) = res {
-                            if should_keep(err) {
-                                next_wait_until = 0;
-                                continue;
-                            } else {
-                                //TODO: notify to the user/server log
-                                remove_reminders.push(index);
+                    let res = if time_difference > 60 {
+                        channel_id.send_message(arc_ctx.clone(), |m| {
+                            if let Some(message_refrence) = message_refrence_opt {
+                                m.reference_message(message_refrence);
                             }
-                        }
-
-                        let mut new_reminder = reminder_info.clone();
-
-                        new_reminder.request_time =
-                            new_reminder.finish_time + wait_time * missed_reminders;
-                        new_reminder.finish_time = new_reminder.request_time + wait_time;
-
-                        next_wait_until = next_wait_until.min(new_reminder.finish_time);
-
-                        add_reminders.push(new_reminder);
+                            m.allowed_mentions(|a| {a.users(vec![reminder_info.user_id])}).content(format!("Sorry <@!{}>, I was supposed to remind you <t:{}:R>! <t:{}:R> you told me to keep reminding you{message_ending}", reminder_info.user_id, reminder_info.finish_time, reminder_info.original_time))}).await
                     } else {
-                        let res = if time_difference > 60 {
-                            channel_id.send_message(arc_ctx.clone(), |m| {
-                                if let Some(message_refrence) = message_refrence_opt {
-                                    m.reference_message(message_refrence);
-                                }
-                                m.allowed_mentions(|a| {a.users(vec![reminder_info.user_id])}).content(format!("Sorry <@!{}>, I was supposed to remind you <t:{}:R>! <t:{}:R> you told me to remind you{message_ending}", reminder_info.user_id, reminder_info.finish_time, reminder_info.original_time))}).await
-                        } else {
-                            channel_id.send_message(arc_ctx.clone(), |m| {
-                                if let Some(message_refrence) = message_refrence_opt {
-                                    m.reference_message(message_refrence);
-                                }
-                                m.allowed_mentions(|a| {a.users(vec![reminder_info.user_id])}).content(format!("<@!{}>! <t:{}:R> you told me to remind you{message_ending}", reminder_info.user_id, reminder_info.original_time))}).await
-                        };
-
-                        if let Err(err) = res {
-                            if should_keep(err) {
-                                next_wait_until = 0;
-                                continue;
-                            } else {
-                                //TODO: Notify to the user/server log
+                        channel_id.send_message(arc_ctx.clone(), |m| {
+                            if let Some(message_refrence) = message_refrence_opt {
+                                m.reference_message(message_refrence);
                             }
+                            m.allowed_mentions(|a| {a.users(vec![reminder_info.user_id])}).content(format!("<@!{}>! <t:{}:R> you told me to keep reminding you{message_ending}", reminder_info.user_id, reminder_info.original_time))}).await
+                    };
+
+                    if let Err(err) = res {
+                        if should_keep(err) {
+                            next_wait_until = 0;
+                        } else {
+                            //TODO: notify to the user/server log. 
+                            //If a deletion fails, abort the remind manager loop because else it will just keep spamming the same reminders.
+                            db.query(format!("DELETE {reminder_id}")).await.unwrap().take::<Vec<Value>>(0).unwrap();
+                        }
+                        continue;
+                    }
+
+                    reminder_info.request_time =
+                    reminder_info.finish_time + wait_time * missed_reminders;
+                    reminder_info.finish_time = reminder_info.request_time + wait_time;
+
+                    next_wait_until = next_wait_until.min(reminder_info.finish_time);
+
+                    let json_string = serde_json::to_string(&reminder_info).unwrap();
+
+                    let a:Option<RemindInfo> = db.query(format!("UPDATE {reminder_id} CONTENT {json_string}")).await.unwrap().take(0).unwrap();
+                } else {
+                    let res = if time_difference > 60 {
+                        channel_id.send_message(arc_ctx.clone(), |m| {
+                            if let Some(message_refrence) = message_refrence_opt {
+                                m.reference_message(message_refrence);
+                            }
+                            m.allowed_mentions(|a| {a.users(vec![reminder_info.user_id])}).content(format!("Sorry <@!{}>, I was supposed to remind you <t:{}:R>! <t:{}:R> you told me to remind you{message_ending}", reminder_info.user_id, reminder_info.finish_time, reminder_info.original_time))}).await
+                    } else {
+                        channel_id.send_message(arc_ctx.clone(), |m| {
+                            if let Some(message_refrence) = message_refrence_opt {
+                                m.reference_message(message_refrence);
+                            }
+                            m.allowed_mentions(|a| {a.users(vec![reminder_info.user_id])}).content(format!("<@!{}>! <t:{}:R> you told me to remind you{message_ending}", reminder_info.user_id, reminder_info.original_time))}).await
+                    };
+
+                    if let Err(err) = res {
+                        if should_keep(err) {
+                            next_wait_until = 0;
+                            continue;
+                        } else {
+                            //TODO: Notify to the user/server log
                         }
                     }
 
-                    remove_reminders.push(index);
-                }
-                for removal_index in remove_reminders.iter().rev() {
-                    user_reminders_data_mut.remove(*removal_index);
-                }
-
-                for new_reminder in add_reminders {
-                    for i in 0..user_reminders_data_mut.len() + 1 {
-                        if i == user_reminders_data_mut.len() {
-                            user_reminders_data_mut.push(new_reminder);
-                            break;
-                        }
-
-                        let reminder = &user_reminders_data_mut[i];
-
-                        if reminder.finish_time > new_reminder.finish_time {
-                            user_reminders_data_mut.insert(i, new_reminder);
-                            break;
-                        }
-                    }
-                }
-
-                if remove_reminders.len() != 0 {
-                    user_reminders_data.request_file_write().await;
+                    //If a deletion fails, abort the remind manager loop because else it will just keep spamming the same reminders.
+                    let a = db.query(format!("DELETE {reminder_id}")).await.unwrap().take::<Vec<Value>>(0).unwrap();
                 }
             }
-
-            for user_id in remove_users.iter() {
-                set_of_reminding_users.remove(user_id);
-            }
-
-            if remove_users.len() != 0 {
-                reminders_data.request_file_write().await;
-            }
-
             *remind_manager.wait_until.lock().await = next_wait_until;
         }
     });

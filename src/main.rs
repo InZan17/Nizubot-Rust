@@ -133,7 +133,7 @@ async fn main() {
                 let tokens = tokens::get_other_tokens();
                 Ok(Data {
                     cotd_manager: Arc::new(CotdManager::new(db.clone())),
-                    remind_manager: Arc::new(RemindManager::new(storage_manager.clone())),
+                    remind_manager: Arc::new(RemindManager::new(db.clone())),
                     detector_manager: Arc::new(DetectorManager::new(db.clone())),
                     reaction_manager: Arc::new(ReactionManager::new(db.clone())),
                     currency_manager: Arc::new(

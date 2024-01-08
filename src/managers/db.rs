@@ -16,6 +16,8 @@ pub struct Record {
     id: Thing,
 }
 
+//TODO: Every query, when it returns something you should always use take() or take_errors() to make sure no errors happened
+
 pub trait IsConnected {
     /// Returns an error if it isnt connected and an Ok if it is connected.
     /// The reason it returns a result is because then we can use the ? thing.
