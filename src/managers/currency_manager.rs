@@ -28,8 +28,7 @@ pub struct CurrenciesInfo {
 }
 
 pub struct CurrencyManager {
-    pub storage_manager: Arc<StorageManager>,
-    pub currency_info: Arc<DataHolder<CurrenciesInfo>>,
+    pub currency_info: RwLock<CurrenciesInfo>,
     pub list_currency_embed: RwLock<CreateEmbed>,
     token: String,
 }
@@ -41,14 +40,9 @@ const SECONDS_IN_WEEK: u64 = SECONDS_IN_DAY * 7;
 const API_LINK: &str = "https://openexchangerates.org/api/";
 
 impl CurrencyManager {
-    pub async fn new(storage_manager: Arc<StorageManager>, token: String) -> Self {
-        let currency_info = storage_manager
-            .get_data_or_default(vec!["currecy_info"], CurrenciesInfo::default())
-            .await;
-
+    pub async fn new(token: String) -> Self {
         let self_manager = Self {
-            storage_manager,
-            currency_info,
+            currency_info: RwLock::new(CurrenciesInfo::default()),
             list_currency_embed: RwLock::new(CreateEmbed::default()),
             token,
         };
@@ -59,7 +53,7 @@ impl CurrencyManager {
     }
 
     pub async fn update_embed(&self) {
-        let currency_info = self.currency_info.get_data().await;
+        let currency_info = self.currency_info.read().await;
         let mut current_embed = self.list_currency_embed.write().await;
 
         let mut new_embed = CreateEmbed::default();
@@ -131,7 +125,7 @@ impl CurrencyManager {
     pub async fn update_data(&self) -> Result<(), Error> {
         let currency_info = &self.currency_info;
 
-        let currency_info_read = currency_info.get_data().await;
+        let currency_info_read = currency_info.read().await;
 
         if currency_info_read.rates_last_updated >= get_seconds() - SECONDS_IN_HOUR {
             if currency_info_read.names_last_updated >= get_seconds() - SECONDS_IN_WEEK {
@@ -141,7 +135,7 @@ impl CurrencyManager {
 
         drop(currency_info_read);
 
-        let mut currency_info_mut = currency_info.get_data_mut().await;
+        let mut currency_info_mut = currency_info.write().await;
 
         if currency_info_mut.rates_last_updated < get_seconds() - SECONDS_IN_HOUR {
             let new_rates = self.get_rates().await;
@@ -149,7 +143,6 @@ impl CurrencyManager {
                 Ok(new_rates) => {
                     currency_info_mut.rates = new_rates;
                     currency_info_mut.rates_last_updated = get_seconds();
-                    currency_info.request_file_write().await;
                 }
                 Err(err) => return Err(err),
             }
@@ -161,7 +154,6 @@ impl CurrencyManager {
                 Ok(new_names) => {
                     currency_info_mut.names = new_names;
                     currency_info_mut.names_last_updated = get_seconds();
-                    currency_info.request_file_write().await;
 
                     drop(currency_info_mut); //we drop it for the update_embed method
                     self.update_embed().await;
@@ -179,15 +171,11 @@ impl CurrencyManager {
         from: &String,
         to: &String,
     ) -> Result<(f64, u64), Error> {
-        let storage_manager = &self.storage_manager;
-
-        let currencies_info = storage_manager
-            .get_data_or_default(vec!["currecy_info"], CurrenciesInfo::default())
-            .await;
-
         self.update_data().await?;
 
-        let currencies_info_read = currencies_info.get_data().await;
+        let currency_info = &self.currency_info;
+
+        let currencies_info_read = currency_info.read().await;
 
         let Some(from_rate) = currencies_info_read
             .rates
@@ -211,13 +199,9 @@ impl CurrencyManager {
     }
 
     pub async fn get_full_name(&self, currency: &String) -> Option<String> {
-        let storage_manager = &self.storage_manager;
+        let currency_info = &self.currency_info;
 
-        let currencies_info = storage_manager
-            .get_data_or_default(vec!["currecy_info"], CurrenciesInfo::default())
-            .await;
-
-        let currencies_info_read = currencies_info.get_data().await;
+        let currencies_info_read = currency_info.read().await;
 
         currencies_info_read
             .names

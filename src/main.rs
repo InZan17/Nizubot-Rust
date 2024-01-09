@@ -138,7 +138,6 @@ async fn main() {
                     reaction_manager: Arc::new(ReactionManager::new(db.clone())),
                     currency_manager: Arc::new(
                         CurrencyManager::new(
-                            storage_manager.clone(),
                             tokens.openexchangerates_token.unwrap_or("".to_string()),
                         )
                         .await,
