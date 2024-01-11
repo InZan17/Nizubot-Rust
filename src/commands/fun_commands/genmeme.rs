@@ -39,7 +39,7 @@ pub async fn brick(
 
     let brick_gif_file = brick::gen_brick_gif(storage_manager, &user).await?;
 
-    let brick_file = fs::File::open(brick_gif_file).await?;
+    let brick_file = fs::File::open(storage_manager.get_full_directory(&brick_gif_file)).await?;
 
     ctx.send(|m| {
         m.attachment(AttachmentType::File { file: &brick_file, filename: "brick.gif".to_string()})
