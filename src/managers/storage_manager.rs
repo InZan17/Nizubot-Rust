@@ -47,7 +47,7 @@ pub fn storage_manager_loop(_arc_ctx: Arc<Context>, storage_manager: Arc<Storage
 }
 
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum DataType {
     String(String),
     Bytes(Vec<u8>)
