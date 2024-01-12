@@ -4,7 +4,7 @@ use std::{
     fs::{self, File},
     io::{BufReader, Write},
     path::Path,
-    sync::Arc, time::Duration,
+    sync::Arc, time::Duration, borrow::Borrow,
 };
 
 use poise::{
@@ -31,13 +31,14 @@ pub fn storage_manager_loop(_arc_ctx: Arc<Context>, storage_manager: Arc<Storage
 }
 
 
+#[derive(Clone)]
 pub enum DataType {
     String(String),
     Bytes(Vec<u8>)
 }
 pub struct DataHolder {
     path: String,
-    data: DataType,
+    data: Arc<RwLock<DataType>>,
 }
 
 impl DataType {
@@ -92,6 +93,7 @@ impl StorageManager {
     pub async fn load_mem_or(self: &Arc<Self>, key: &str, data: DataType, duration: Duration) -> Arc<RwLock<DataType>> {
         let Some(mem_data) = self.load_mem(key).await else {
             let data = Arc::new(RwLock::new(data));
+            self.save_mem(key, data.clone(), duration).await;
             return data
         };
 
@@ -103,7 +105,7 @@ impl StorageManager {
         write.remove(key);
     }
 
-    pub async fn save_disk(self: &Arc<Self>, path: &str, data: DataType) -> Result<String, Error> {
+    pub async fn save_disk(self: &Arc<Self>, path: &str, data: &DataType) -> Result<String, Error> {
 
         let path = self.get_full_directory(path);
 
@@ -141,6 +143,7 @@ impl StorageManager {
 
     pub async fn load_disk_or(self: &Arc<Self>, path: &str, to_string: bool, data: DataType) -> Result<DataType, Error> {
         let Some(data) = self.load_disk(path, to_string).await? else {
+            self.save_disk(path, &data);
             return Ok(data)
         };
         Ok(data)
@@ -158,11 +161,81 @@ impl StorageManager {
         return Ok(path)
     }
 
-    pub fn get_full_directory(&self, path: &str) -> String {
-        return format!("{}/{}", self.storage_path, path);
+    pub async fn save(self: &Arc<Self>, path: &str, data_holder: &DataHolder, duration: Duration) -> Result<String, Error> {
+        let read = data_holder.data.read().await;
+        let result = self.save_disk(path, &read).await;
+
+        let duration = if result.is_err() {
+            // we do this to make sure we arent loosing data.
+            Duration::MAX
+        } else {
+            duration
+        };
+
+        self.save_mem(path, data_holder.data.clone(), duration).await;
+        
+        result
     }
 
-    pub fn get_full_file_path(&self, path: &str, extension: &str) -> String {
-        return format!("{}/{}.{}", self.storage_path, path, extension);
+    pub async fn load(self: &Arc<Self>, path: &str, to_string: bool, duration: Duration) -> Result<Option<DataHolder>, Error> {
+
+        if let Some(data) = self.load_mem(path).await {
+            return Ok(Some(DataHolder {
+                path: path.to_string(),
+                data,
+            }))
+        }
+
+        let option = self.load_disk(path, to_string).await?;
+
+        if let Some(data) = option {
+            let data = Arc::new(RwLock::new(data));
+            self.save_mem(path, data.clone(), duration);
+            return Ok(Some(DataHolder {
+                path: path.to_string(),
+                data,
+            }))
+        }
+
+        Ok(None)
+    }
+
+    pub async fn load_or(self: &Arc<Self>, path: &str, to_string: bool, data: DataType, duration: Duration) -> (DataHolder, Result<(), Error>) {
+        
+        let mut data_holder = None;
+        let mut error = Ok(());
+
+        let res = self.load(path, to_string, duration).await;
+
+        match res {
+            Ok(data) => {
+                data_holder = data;
+            },
+            Err(err) => error = Err(err),
+        }
+
+        if data_holder.is_none() {
+            let arc_data = Arc::new(RwLock::new(data));
+
+            let data = DataHolder {
+                path: path.to_string(),
+                data: arc_data,
+            };
+
+            self.save(path, &data, duration).await;
+
+            data_holder = Some(data);
+        }
+
+        (data_holder.unwrap(), error)
+    }
+
+    pub async fn delete(self: &Arc<Self>, path: &str) -> Result<String, Error> {
+        self.delete_mem(path).await;
+        self.delete_disk(path).await
+    }
+
+    pub fn get_full_directory(&self, path: &str) -> String {
+        return format!("{}/{}", self.storage_path, path);
     }
 }
