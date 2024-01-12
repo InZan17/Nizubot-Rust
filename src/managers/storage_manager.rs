@@ -4,7 +4,7 @@ use std::{
     fs::{self, File},
     io::{BufReader, Write},
     path::Path,
-    sync::Arc, time::Duration, borrow::Borrow,
+    sync::Arc, time::{Duration, UNIX_EPOCH, SystemTime}, borrow::Borrow,
 };
 
 use poise::{
@@ -25,7 +25,23 @@ impl DataDirectories {
 pub fn storage_manager_loop(_arc_ctx: Arc<Context>, storage_manager: Arc<StorageManager>) {
     tokio::spawn(async move {
         loop {
-            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+
+            let mut removals = vec![];
+
+            let copied = storage_manager.datas.read().await.clone();
+            
+            for (key, data) in copied.iter() {
+                if data.0 < get_seconds() {
+                    removals.push(key);
+                }
+            }
+
+            let mut write = storage_manager.datas.write().await;
+
+            for key in removals {
+                write.remove(key);
+            }
         }
     });
 }
@@ -59,7 +75,7 @@ impl DataType {
 
 pub struct StorageManager {
     pub storage_path: String,
-    datas: RwLock<HashMap<String, (Duration, Arc<RwLock<DataType>>)>>,
+    datas: RwLock<HashMap<String, (u64, Arc<RwLock<DataType>>)>>,
 }
 
 impl StorageManager {
@@ -81,7 +97,7 @@ impl StorageManager {
 
     pub async fn save_mem(self: &Arc<Self>, key: &str, data: Arc<RwLock<DataType>>, duration: Duration) {
         let mut write = self.datas.write().await;
-        write.insert(key.into(), (duration, data));
+        write.insert(key.into(), (duration_to_timestamp(&duration), data));
     }
 
     pub async fn load_mem(self: &Arc<Self>, key: &str) -> Option<Arc<RwLock<DataType>>> {
@@ -238,4 +254,17 @@ impl StorageManager {
     pub fn get_full_directory(&self, path: &str) -> String {
         return format!("{}/{}", self.storage_path, path);
     }
+}
+
+pub fn duration_to_timestamp(duration: &Duration) -> u64 {
+    duration.as_secs().saturating_add(get_seconds())
+}
+
+fn get_seconds() -> u64 {
+    let start = SystemTime::now();
+    let since_the_epoch = start
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards. Oopsie.");
+
+    since_the_epoch.as_secs()
 }

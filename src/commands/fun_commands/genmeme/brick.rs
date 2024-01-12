@@ -34,12 +34,12 @@ pub async fn gen_brick_gif(
         //TODO: do something with error/
         storage_manager.save_disk(
             &user_pfp_file, 
-            DataType::Bytes(avatar_bytes.as_slice().to_vec())
+            &DataType::Bytes(avatar_bytes.as_slice().to_vec())
         ).await?;
 
         storage_manager.save_disk(
             &saved_user_pfp_file, 
-            DataType::String(avatar_url.clone())
+            &DataType::String(avatar_url.clone())
         ).await?;
     }
 
@@ -63,7 +63,7 @@ pub async fn gen_brick_gif(
 
         storage_manager.save_disk(
             &saved_user_brick_file,
-            DataType::String(avatar_url.clone())
+            &DataType::String(avatar_url.clone())
         ).await?;
     }
 
