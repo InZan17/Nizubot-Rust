@@ -58,17 +58,24 @@ pub struct DataHolder {
 }
 
 impl DataType {
-    fn bytes(&self) -> &[u8] {
+    fn as_bytes(&self) -> &[u8] {
         match self {
             DataType::String(str) => str.as_ref(),
             DataType::Bytes(bytes) => bytes.as_ref(),
         }
     }
 
-    pub fn get_string(self) -> String {
+    pub fn string(&self) -> Option<&String> {
         match self {
-            DataType::String(string) => string,
-            DataType::Bytes(bytes) => panic!("IT WASNT A STRING!!!"),
+            DataType::String(string) => Some(string),
+            DataType::Bytes(bytes) => None,
+        }
+    }
+
+    pub fn bytes(&self) -> Option<&Vec<u8>> {
+        match self {
+            DataType::String(string) => None,
+            DataType::Bytes(bytes) => Some(bytes),
         }
     }
 }
@@ -130,7 +137,7 @@ impl StorageManager {
         }
 
         let mut file = tokio::fs::File::create(&path).await?;
-        file.write_all(data.bytes()).await?;
+        file.write_all(data.as_bytes()).await?;
 
         Ok(path)
     }

@@ -15,15 +15,15 @@ pub async fn gen_brick_gif(
     let saved_user_pfp_file = format!("saved_{}_pfp.txt",user.id);
     let saved_user_brick_file = format!("saved_{}_brick.txt",user.id);
 
-    let saved_normal_pfp = storage_manager.load_disk_or(&saved_user_pfp_file, true, DataType::String("".to_string())).await?.get_string();
-    let saved_brick_pfp = storage_manager.load_disk_or(&saved_user_brick_file, true, DataType::String("".to_string())).await?.get_string();
+    let saved_normal_pfp = storage_manager.load_disk_or(&saved_user_pfp_file, true, DataType::String("".to_string())).await?.string().unwrap();
+    let saved_brick_pfp = storage_manager.load_disk_or(&saved_user_brick_file, true, DataType::String("".to_string())).await?.string().unwrap();
 
     let brick_gif_file = format!("{}_brick.gif",user.id);
     let user_pfp_file = format!("{}_pfp.png", user.id); //File extension can be wrong. Doesn't matter tho since ffmpeg will pick up the right one afterwards hopefully.
 
     let brick_gif = "generate_materials/brick.gif".to_string();
 
-    if saved_normal_pfp != avatar_url || !Path::new(&user_pfp_file).exists()
+    if *saved_normal_pfp != avatar_url || !Path::new(&user_pfp_file).exists()
     {
         let resp = reqwest::get(&avatar_url).await?;
         if !resp.status().is_success() {
@@ -43,7 +43,7 @@ pub async fn gen_brick_gif(
         ).await?;
     }
 
-    if saved_brick_pfp != avatar_url || !Path::new(&brick_gif_file).exists() {
+    if *saved_brick_pfp != avatar_url || !Path::new(&brick_gif_file).exists() {
         let mut process = tokio::process::Command::new("ffmpeg");
 
         process.args(&["-i", &brick_gif]);
