@@ -53,6 +53,11 @@ impl CotdManager {
         Self { db }
     }
 
+    /// Gets the current color of the current day.
+    ///
+    /// Equivalent of calling self.get_day_color(self.get_current_day())
+    ///
+    /// Errors will happen if there's no connection between the bot and database or if connection to COLOR_API fails or if that day hasn't happened yet.
     pub async fn get_current_color(&self) -> Result<ColorInfo, Error> {
         let current_day = self.get_current_day();
         return self.get_day_color(current_day).await;
@@ -67,13 +72,18 @@ impl CotdManager {
         since_the_epoch.as_secs() / SECONDS_IN_A_DAY
     }
 
+    /// Gets the color of a certain day.
+    ///
+    /// Errors will happen if there's no connection between the bot and database or if connection to COLOR_API fails or if that day hasn't happened yet.
     pub async fn get_day_color(&self, day: u64) -> Result<ColorInfo, Error> {
-        if day > self.get_current_day() {
+        let is_future_day = day > self.get_current_day();
+        if is_future_day {
             return Err("We have not reached that day yet.".into());
         }
 
+        // TODO: put this in a function
         let table_id = format!("cotd:{day}");
-
+        // this too
         let day_color: Vec<ColorInfo> = self
             .db
             .query(format!("SELECT * FROM {table_id};"))
@@ -88,10 +98,11 @@ impl CotdManager {
             return Ok(day_color[0].clone());
         }
 
+        // Since we will be generating colors every day even if no one runs a command
+        // Let the looped code do that. And if the current day color doesnt exist the return an error.
         match self.generate_color().await {
             Ok(color_info) => {
                 let color_info_string = serde_json::to_string(&color_info)?;
-                //TODO: maybe find a better solution to using a mutex to prevent race conditions when reading/writing to database.
                 let mut res = self
                     .db
                     .query(format!(
@@ -112,14 +123,18 @@ impl CotdManager {
         }
     }
 
+    /// Generates a pseudo random color.
+    ///
+    /// Will error if it cannot connect to COLOR_API since it's used to get the name of the color.
     pub async fn generate_color(&self) -> Result<ColorInfo, Error> {
         const TWO_POW_24: u32 = 16777216;
 
         let random_color =
             poise::serenity_prelude::Colour::from(thread_rng().gen_range(0..TWO_POW_24));
 
-        let Ok(resp) = reqwest::get(format!("{COLOR_API}?values={}", random_color.hex())).await
-        else {
+        let url = format!("{COLOR_API}?values={}", random_color.hex());
+
+        let Ok(resp) = reqwest::get(url).await else {
             //TODO: return error info
             return Err("Got no response from the Api.".into());
         };
@@ -135,12 +150,16 @@ impl CotdManager {
         Ok(color_info)
     }
 
+    /// Updates the color of a given role.
+    ///
+    /// Will error if it cannot update the role or if getting the current color fails.
     pub async fn update_role(
         &self,
         http: impl AsRef<Http>,
         role: Role,
         name: &String,
     ) -> Result<(), Error> {
+        //TODO: Perhaps get the color info from a function parameter. That way we dont have to constantly do a database request every time.
         match self.get_current_color().await {
             Err(err) => return Err(err),
             Ok(color_info) => {
@@ -161,7 +180,9 @@ impl CotdManager {
         }
     }
 }
-
+/// Loop that controls the cotd manager.
+///
+/// Controls things such as: the color of all cotd roles.
 pub fn cotd_manager_loop(
     arc_ctx: Arc<Context>,
     db: Arc<Surreal<Client>>,
@@ -187,6 +208,8 @@ pub fn cotd_manager_loop(
                 .take(0)
                 .unwrap();
 
+            //TODO: Make it so it only updates when all the cotd roles updates successfully.
+            // One way to check is if the length of cotd_roles_data is 0
             last_updated_day = current_day;
 
             for cotd_role_data_query in cotd_roles_data.iter() {
@@ -200,6 +223,7 @@ pub fn cotd_manager_loop(
 
                 let role;
 
+                //TODO: Put this in a seperate function
                 if let Some(guild) = arc_ctx.cache.guild(guild_id) {
                     role = guild
                         .roles
@@ -216,6 +240,7 @@ pub fn cotd_manager_loop(
                                 .cloned();
                         }
                         Err(err) => {
+                            //TODO: check if error is internet fault or user fault.
                             println!("{}", err.to_string());
                             continue;
                         }
@@ -228,6 +253,7 @@ pub fn cotd_manager_loop(
                         .update_role(&arc_ctx, role, &cotd_role_data.name)
                         .await;
 
+                    // TODO: Put query in seperate function
                     db.query(format!("UPDATE {table_id} MERGE {{ cotd_role: {{ day:{current_day} }} }} WHERE cotd_role;")).await;
                 } else {
                     //TODO: role doesnt exist. Notify server error log and remove the role.

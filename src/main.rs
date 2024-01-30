@@ -89,7 +89,10 @@ async fn event_handler(
                 .reaction_add_event(ctx, add_reaction, framework.bot_id)
                 .await;
         }
-        Event::ReactionRemoveAll { channel_id, removed_from_message_id } => {
+        Event::ReactionRemoveAll {
+            channel_id,
+            removed_from_message_id,
+        } => {
             //TODO: REmove all reaction roles from the message.
         }
         Event::ReactionRemove { removed_reaction } => {

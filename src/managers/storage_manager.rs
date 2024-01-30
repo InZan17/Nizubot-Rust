@@ -1,17 +1,19 @@
 use std::{
     any::{Any, TypeId},
+    borrow::Borrow,
     collections::HashMap,
     fs::{self, File},
     io::{BufReader, Write},
     path::Path,
-    sync::Arc, time::{Duration, UNIX_EPOCH, SystemTime}, borrow::Borrow,
+    sync::Arc,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use poise::{
     futures_util::lock::Mutex,
     serenity_prelude::{Context, RwLock},
 };
-use tokio::{io::{AsyncWriteExt, AsyncReadExt}};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::{give_up_serialize::GiveUpSerialize, Error};
 
@@ -30,7 +32,7 @@ pub fn storage_manager_loop(_arc_ctx: Arc<Context>, storage_manager: Arc<Storage
             let mut removals = vec![];
 
             let copied = storage_manager.datas.read().await.clone();
-            
+
             for (key, data) in copied.iter() {
                 if data.0 < get_seconds() {
                     removals.push(key);
@@ -46,11 +48,10 @@ pub fn storage_manager_loop(_arc_ctx: Arc<Context>, storage_manager: Arc<Storage
     });
 }
 
-
 #[derive(Clone, Debug)]
 pub enum DataType {
     String(String),
-    Bytes(Vec<u8>)
+    Bytes(Vec<u8>),
 }
 pub struct DataHolder {
     path: String,
@@ -86,7 +87,6 @@ pub struct StorageManager {
 }
 
 impl StorageManager {
-
     pub async fn new(storage_path: impl Into<String>) -> Self {
         let storage_path = storage_path.into();
         let path = Path::new(&storage_path);
@@ -102,7 +102,12 @@ impl StorageManager {
         }
     }
 
-    pub async fn save_mem(self: &Arc<Self>, key: &str, data: Arc<RwLock<DataType>>, duration: Duration) {
+    pub async fn save_mem(
+        self: &Arc<Self>,
+        key: &str,
+        data: Arc<RwLock<DataType>>,
+        duration: Duration,
+    ) {
         let mut write = self.datas.write().await;
         write.insert(key.into(), (duration_to_timestamp(&duration), data));
     }
@@ -113,11 +118,16 @@ impl StorageManager {
         Some(data.clone())
     }
 
-    pub async fn load_mem_or(self: &Arc<Self>, key: &str, data: DataType, duration: Duration) -> Arc<RwLock<DataType>> {
+    pub async fn load_mem_or(
+        self: &Arc<Self>,
+        key: &str,
+        data: DataType,
+        duration: Duration,
+    ) -> Arc<RwLock<DataType>> {
         let Some(mem_data) = self.load_mem(key).await else {
             let data = Arc::new(RwLock::new(data));
             self.save_mem(key, data.clone(), duration).await;
-            return data
+            return data;
         };
 
         mem_data
@@ -129,7 +139,6 @@ impl StorageManager {
     }
 
     pub async fn save_disk(self: &Arc<Self>, path: &str, data: &DataType) -> Result<String, Error> {
-
         let path = self.get_full_directory(path);
 
         if let Some(path) = Path::new(&path).parent() {
@@ -142,12 +151,15 @@ impl StorageManager {
         Ok(path)
     }
 
-    pub async fn load_disk(self: &Arc<Self>, path: &str, to_string: bool) -> Result<Option<DataType>, Error> {
-
+    pub async fn load_disk(
+        self: &Arc<Self>,
+        path: &str,
+        to_string: bool,
+    ) -> Result<Option<DataType>, Error> {
         let path = self.get_full_directory(path);
 
         if !Path::new(&path).exists() {
-            return Ok(None)
+            return Ok(None);
         }
 
         let mut file = tokio::fs::File::open(path).await?;
@@ -158,16 +170,21 @@ impl StorageManager {
 
         if to_string {
             let convert = std::str::from_utf8(&buffer)?;
-            return Ok(Some(DataType::String(convert.to_owned())))
+            return Ok(Some(DataType::String(convert.to_owned())));
         } else {
-            return Ok(Some(DataType::Bytes(buffer)))
+            return Ok(Some(DataType::Bytes(buffer)));
         }
     }
 
-    pub async fn load_disk_or(self: &Arc<Self>, path: &str, to_string: bool, data: DataType) -> Result<DataType, Error> {
+    pub async fn load_disk_or(
+        self: &Arc<Self>,
+        path: &str,
+        to_string: bool,
+        data: DataType,
+    ) -> Result<DataType, Error> {
         let Some(data) = self.load_disk(path, to_string).await? else {
             self.save_disk(path, &data);
-            return Ok(data)
+            return Ok(data);
         };
         Ok(data)
     }
@@ -177,14 +194,19 @@ impl StorageManager {
         let path_path = Path::new(&path);
 
         if !path_path.exists() {
-            return Ok(path)
+            return Ok(path);
         }
 
         tokio::fs::remove_file(&path).await?;
-        return Ok(path)
+        return Ok(path);
     }
 
-    pub async fn save(self: &Arc<Self>, path: &str, data_holder: &DataHolder, duration: Duration) -> Result<String, Error> {
+    pub async fn save(
+        self: &Arc<Self>,
+        path: &str,
+        data_holder: &DataHolder,
+        duration: Duration,
+    ) -> Result<String, Error> {
         let read = data_holder.data.read().await;
         let result = self.save_disk(path, &read).await;
 
@@ -195,18 +217,23 @@ impl StorageManager {
             duration
         };
 
-        self.save_mem(path, data_holder.data.clone(), duration).await;
-        
+        self.save_mem(path, data_holder.data.clone(), duration)
+            .await;
+
         result
     }
 
-    pub async fn load(self: &Arc<Self>, path: &str, to_string: bool, duration: Duration) -> Result<Option<DataHolder>, Error> {
-
+    pub async fn load(
+        self: &Arc<Self>,
+        path: &str,
+        to_string: bool,
+        duration: Duration,
+    ) -> Result<Option<DataHolder>, Error> {
         if let Some(data) = self.load_mem(path).await {
             return Ok(Some(DataHolder {
                 path: path.to_string(),
                 data,
-            }))
+            }));
         }
 
         let option = self.load_disk(path, to_string).await?;
@@ -217,14 +244,19 @@ impl StorageManager {
             return Ok(Some(DataHolder {
                 path: path.to_string(),
                 data,
-            }))
+            }));
         }
 
         Ok(None)
     }
 
-    pub async fn load_or(self: &Arc<Self>, path: &str, to_string: bool, data: DataType, duration: Duration) -> (DataHolder, Result<(), Error>) {
-        
+    pub async fn load_or(
+        self: &Arc<Self>,
+        path: &str,
+        to_string: bool,
+        data: DataType,
+        duration: Duration,
+    ) -> (DataHolder, Result<(), Error>) {
         let mut data_holder = None;
         let mut error = Ok(());
 
@@ -233,7 +265,7 @@ impl StorageManager {
         match res {
             Ok(data) => {
                 data_holder = data;
-            },
+            }
             Err(err) => error = Err(err),
         }
 

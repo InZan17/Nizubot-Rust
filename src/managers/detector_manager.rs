@@ -3,11 +3,14 @@ use std::{sync::Arc, vec};
 
 use poise::serenity_prelude::{self, Message, MessageAction};
 use serde::{Deserialize, Serialize};
-use surrealdb::{Surreal, engine::remote::ws::Client};
+use surrealdb::{engine::remote::ws::Client, Surreal};
 
 use crate::{Context, Error};
 
-use super::{storage_manager::{self, StorageManager}, db::IsConnected};
+use super::{
+    db::IsConnected,
+    storage_manager::{self, StorageManager},
+};
 
 #[derive(Serialize, Deserialize, Clone, poise::ChoiceParameter)]
 pub enum DetectType {
@@ -74,11 +77,14 @@ impl DetectorManager {
             table_id = format!("guild:{id_as_string}");
         }
 
-        let detectors_option: Option<Vec<DetectorInfo>> = db.query(format!("SELECT message_detectors FROM {table_id} WHERE message_detectors")).await?.take(0)?;
+        let detectors_option: Option<Vec<DetectorInfo>> = db
+            .query(format!(
+                "SELECT message_detectors FROM {table_id} WHERE message_detectors"
+            ))
+            .await?
+            .take(0)?;
 
-        
-
-        if let Some(detectors) = detectors_option{
+        if let Some(detectors) = detectors_option {
             if detectors.len() >= 10 {
                 return Err("You can only have a max amount of 10 message detectors.".into());
             }
@@ -93,7 +99,10 @@ impl DetectorManager {
 
         let detector_info_json = serde_json::to_string(&detector_info)?;
 
-        db.query(format!("UPDATE {table_id} SET message_detectors += {detector_info_json}")).await?;
+        db.query(format!(
+            "UPDATE {table_id} SET message_detectors += {detector_info_json}"
+        ))
+        .await?;
 
         return Ok(());
     }
@@ -118,8 +127,12 @@ impl DetectorManager {
             table_id = format!("guild:{id_as_string}");
         }
 
-        let detectors_option: Option<Vec<DetectorInfo>> = db.query(format!("SELECT VALUE message_detectors FROM {table_id} WHERE message_detectors")).await?.take(0)?;
-
+        let detectors_option: Option<Vec<DetectorInfo>> = db
+            .query(format!(
+                "SELECT VALUE message_detectors FROM {table_id} WHERE message_detectors"
+            ))
+            .await?
+            .take(0)?;
 
         if let Some(detectors) = detectors_option {
             if detectors.len() <= index {
@@ -129,7 +142,10 @@ impl DetectorManager {
             return Err("Index isn't valid.".into());
         }
 
-        db.query(format!("UPDATE {table_id} SET message_detectors = array::remove(message_detectors, {index});")).await?;
+        db.query(format!(
+            "UPDATE {table_id} SET message_detectors = array::remove(message_detectors, {index});"
+        ))
+        .await?;
 
         return Ok(());
     }
@@ -153,7 +169,12 @@ impl DetectorManager {
             table_id = format!("guild:{id_as_string}");
         }
 
-        let detectors_option: Option<Vec<DetectorInfo>> = db.query(format!("SELECT VALUE message_detectors FROM {table_id} WHERE message_detectors")).await?.take(0)?;
+        let detectors_option: Option<Vec<DetectorInfo>> = db
+            .query(format!(
+                "SELECT VALUE message_detectors FROM {table_id} WHERE message_detectors"
+            ))
+            .await?
+            .take(0)?;
 
         return Ok(detectors_option.unwrap_or(vec![]));
     }
@@ -170,7 +191,7 @@ impl DetectorManager {
         let db = &self.db;
 
         db.is_connected().await?;
-        
+
         let table_id;
 
         if let Some(guild_id) = message.guild_id {
@@ -181,10 +202,15 @@ impl DetectorManager {
             table_id = format!("user:{id_as_string}");
         }
 
-        let detectors_option: Option<Vec<DetectorInfo>> = db.query(format!("SELECT VALUE message_detectors FROM {table_id} WHERE message_detectors")).await?.take(0)?;
+        let detectors_option: Option<Vec<DetectorInfo>> = db
+            .query(format!(
+                "SELECT VALUE message_detectors FROM {table_id} WHERE message_detectors"
+            ))
+            .await?
+            .take(0)?;
 
         let Some(detectors) = detectors_option else {
-            return Ok(())
+            return Ok(());
         };
 
         for detector_info in detectors.iter() {
