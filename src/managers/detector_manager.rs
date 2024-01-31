@@ -25,6 +25,7 @@ pub enum DetectType {
 }
 
 impl DetectType {
+    /// Returns a string that can be used in a sentence.
     pub fn to_sentence(&self) -> &str {
         match self {
             DetectType::StartsWith => "starts with",
@@ -37,10 +38,14 @@ impl DetectType {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct DetectorInfo {
+    /// The string to detect.
+    pub key: String,
+    /// Response to when it detects the key.
+    pub response: String,
+    /// How to detect the key.
     #[serde(alias = "detectionType", alias = "detect_type")]
     pub detect_type: DetectType,
-    pub key: String,
-    pub response: String,
+    /// If the detector should be case sensitive.
     #[serde(alias = "caseSensitive", alias = "case_sensitive")]
     pub case_sensitive: bool,
 }
@@ -54,12 +59,17 @@ impl DetectorManager {
         Self { db }
     }
 
+    /// Adds a detector to a guild / user dm.
+    ///
+    /// Will error if database isn't connected or communication doesn't work.
+    /// May also error if unable to parse response or if database returns an error.
     pub async fn add_message_detect(
         &self,
         detect_type: DetectType,
         key: String,
         response: String,
         case_sensitive: bool,
+        // TODO: Merge guild_or_user_id and is_dms into an enum.
         guild_or_user_id: u64,
         is_dms: bool,
     ) -> Result<(), Error> {
@@ -70,13 +80,14 @@ impl DetectorManager {
         let id_as_string = guild_or_user_id.to_string();
 
         let table_id;
-
+        //TODO: Once this is an enum: put in a seperate function.
         if is_dms {
             table_id = format!("user:{id_as_string}");
         } else {
             table_id = format!("guild:{id_as_string}");
         }
 
+        //TODO: Put all queries in a seperate function.
         let detectors_option: Option<Vec<DetectorInfo>> = db
             .query(format!(
                 "SELECT message_detectors FROM {table_id} WHERE message_detectors"
@@ -99,6 +110,7 @@ impl DetectorManager {
 
         let detector_info_json = serde_json::to_string(&detector_info)?;
 
+        //TODO: put query in seperate function.
         db.query(format!(
             "UPDATE {table_id} SET message_detectors += {detector_info_json}"
         ))
@@ -107,9 +119,14 @@ impl DetectorManager {
         return Ok(());
     }
 
+    /// Removes a detector to a guild / user dm.
+    ///
+    /// Will error if database isn't connected or communication doesn't work.
+    /// May also error if unable to parse response or if database returns an error.
     pub async fn remove_message_detect(
         &self,
         index: usize,
+        // TODO: Merge guild_or_user_id and is_dms into an enum.
         guild_or_user_id: u64,
         is_dms: bool,
     ) -> Result<(), Error> {
@@ -150,6 +167,10 @@ impl DetectorManager {
         return Ok(());
     }
 
+    /// Gets all detectors from a guild / user dm.
+    ///
+    /// Will error if database isn't connected or communication doesn't work.
+    /// May also error if unable to parse response or if database returns an error.
     pub async fn get_message_detects(
         &self,
         guild_or_user_id: u64,
@@ -179,6 +200,12 @@ impl DetectorManager {
         return Ok(detectors_option.unwrap_or(vec![]));
     }
 
+    /// Responds to message if it matches a detector.
+    /// Will not do anything if the message author is a bot.
+    ///
+    /// Will error if database isn't connected or communication doesn't work.
+    /// May also error if unable to parse response or if database returns an error.
+    /// Will also error if sending the message to the channel doesn't work.
     pub async fn on_message(
         &self,
         ctx: &serenity_prelude::Context,
