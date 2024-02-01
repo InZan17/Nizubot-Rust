@@ -266,13 +266,15 @@ impl DetectorManager {
                 }
             };
 
-            if should_send {
-                message
-                    .channel_id
-                    .send_message(ctx, |m| m.content(&detector_info.response))
-                    .await?;
-                break;
+            if !should_send {
+                continue;
             }
+
+            message
+                .channel_id
+                .send_message(ctx, |m| m.content(&detector_info.response))
+                .await?;
+            break;
         }
 
         return Ok(());

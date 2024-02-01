@@ -17,6 +17,9 @@ impl ReactionManager {
         Self { db }
     }
 
+    /// Adds a reaction event to a message and makes it so anyone that react to the reaction gets a role.
+    ///
+    /// Errors if communication with db doesn't work or if a role/emoji is already registered for that message.
     pub async fn add_reaction(
         &self,
         emoji: ReactionType,
@@ -44,6 +47,7 @@ impl ReactionManager {
                 );
             }
 
+            // Check if role is already registered on the same message.
             for (other_emoji, other_role_id) in message_reaction_roles.iter() {
                 if *other_role_id != role_id {
                     continue;
@@ -52,6 +56,7 @@ impl ReactionManager {
                 let emoji_string = if other_emoji.chars().all(char::is_numeric) {
                     format!("<:custom:{other_emoji}>")
                 } else {
+                    // Actual emojis are stored encoded so we decode it.
                     percent_decode_str(other_emoji)
                         .decode_utf8_lossy()
                         .to_string()
@@ -63,6 +68,8 @@ impl ReactionManager {
             }
         };
 
+        // TODO: if emoji is unicode the get_emoji_id will return the actual unicode character.
+        // We never decode it anywhere. So when getting the emoji_string variable a few lines up, do we really need to decode str?
         let emoji_id = get_emoji_id(&emoji);
 
         // I have to use merge here because if I try doing ["🧀"] like I do on the other queries then inside the database it will be "'🧀'" instead of "🧀"
@@ -71,6 +78,9 @@ impl ReactionManager {
         Ok(())
     }
 
+    /// Removes a reaction event to a message.
+    ///
+    /// Errors if communication with db doesn't work or if there's no emoji registered for that message.
     pub async fn remove_reaction(
         &self,
         emoji: ReactionType,
@@ -85,6 +95,7 @@ impl ReactionManager {
 
         let emoji_id = get_emoji_id(&emoji);
 
+        //TODO: put queries in seperate function.
         let role_id: Option<u64> = db
             .query(format!(
                 "SELECT VALUE messages.{message_id}.reaction_roles['{emoji_id}'] from {table_id};"
@@ -104,6 +115,10 @@ impl ReactionManager {
         Ok(role_id)
     }
 
+    /// Runs whenever a user reacts to a message.
+    /// Will check for if the reaction has a registered role to it and then add that role to user.
+    ///
+    /// Errors if communication to db doesn't work or if adding role to user doesn't work.
     pub async fn reaction_add_event(
         &self,
         ctx: &Context,
@@ -132,6 +147,7 @@ impl ReactionManager {
 
         let emoji_id = get_emoji_id(&reaction.emoji);
 
+        // TODO: try caching the results to not do as many calls to the db.
         let role_id: Option<u64> = db
             .query(format!(
                 "SELECT VALUE messages.{message_id}.reaction_roles['{emoji_id}'] from {table_id};"
@@ -150,6 +166,10 @@ impl ReactionManager {
         Ok(())
     }
 
+    /// Runs whenever a user unreacts to a message.
+    /// Will check for if the reaction has a registered role to it and then remove that role from user.
+    ///
+    /// Errors if communication to db doesn't work or if removing role from user doesn't work.
     pub async fn reaction_remove_event(
         &self,
         ctx: &Context,
@@ -190,7 +210,7 @@ impl ReactionManager {
                 "UPDATE {table_id} SET messages.{message_id}.reaction_roles['{emoji_id}'] = NONE;"
             ))
             .await?;
-            return Err("Bot reaction has been removed. This also removes the ability to get roles from the reaction.".into());
+            return Err(format!("Bot reaction has been removed. This will unregister the role {role_id} to the reaction {emoji_id}.").into());
         }
 
         let mut member = guild_id.member(&ctx, user_id).await?;
@@ -201,6 +221,8 @@ impl ReactionManager {
     }
 }
 
+/// Returns the id of a custom emoji, not including its name.
+/// If it's an unicode emoji it will return the unicode emoji.
 fn get_emoji_id(emoji: &ReactionType) -> String {
     match emoji {
         ReactionType::Custom {
