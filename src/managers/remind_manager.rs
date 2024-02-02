@@ -36,7 +36,7 @@ pub struct RemindInfo {
     pub channel_id: u64,
     pub guild_id: Option<u64>,
     pub user_id: u64,
-    // id will be Some() when retrieved from surrealdb. Otherwise None.
+    /// id will be Some() when retrieved from surrealdb. Otherwise None.
     #[serde(skip_serializing)]
     pub id: Option<Thing>,
     pub message_id: Option<u64>,
@@ -52,6 +52,16 @@ impl RemindManager {
         }
     }
 
+    /// Adds reminder
+    ///
+    /// guild_id is an Option because if the reminder is in dms then guild_id isn't required.
+    ///
+    /// Will error if unable to communicate with db or if callback errors.
+    /// Will also error if there's too many reminders.
+    ///
+    /// Max total reminders = 50
+    ///
+    /// Max reminders per guild = 10
     pub async fn add_reminder<'a, F, Fut>(
         &self,
         guild_id: Option<u64>,
@@ -60,6 +70,7 @@ impl RemindManager {
         duration: u64,
         looping: bool,
         message: Option<String>,
+        /// Callback that returns the message id of the message bot should reply to.
         message_id_callback: F,
     ) -> Result<(), Error>
     where
@@ -72,6 +83,7 @@ impl RemindManager {
 
         let user_table_id = format!("user:{user_id}");
 
+        //TODO: Put in seperate function
         let user_reminders: Vec<RemindInfo> = db
             .query(format!(
                 "
@@ -128,6 +140,7 @@ impl RemindManager {
 
         let remind_info_json = serde_json::to_string(&remind_info)?;
 
+        // TODO: Put this logic and query in a seperate function
         let guild_relate_statement = if let Some(guild_id) = guild_id {
             let guild_table_id = format!("guild:{guild_id}");
             format!(
@@ -165,6 +178,11 @@ impl RemindManager {
         return Ok(());
     }
 
+    /// Removes reminder
+    ///
+    /// If guild_id is None it will remove a reminder from dms. Else it will remove a reminder from the guild.
+    ///
+    /// Will error if unable to communicate with db or if callback errors.
     pub async fn remove_reminder(
         &self,
         user_id: u64,
@@ -177,6 +195,7 @@ impl RemindManager {
 
         let table_id = format!("user:{user_id}");
 
+        //TODO: put in funtion
         let mut reminders: Vec<RemindInfo> = db
             .query(format!(
                 "
@@ -222,6 +241,11 @@ impl RemindManager {
         return Ok(Some(removed_reminder));
     }
 
+    /// Lists reminders
+    ///
+    /// If guild_id is None it will list reminders from dms. Else it will list reminders from the guild.
+    ///
+    /// Will error if unable to communicate with db or if callback errors.
     pub async fn list_reminders(
         &self,
         user_id: u64,
@@ -233,6 +257,7 @@ impl RemindManager {
 
         let table_id = format!("user:{user_id}");
 
+        //TODO put in function
         let reminders: Vec<RemindInfo> = db
             .query(format!(
                 "
@@ -269,6 +294,7 @@ fn get_seconds() -> u64 {
     since_the_epoch.as_secs()
 }
 
+/// Main loop for checking if it's time for any reminders to be reminded.
 pub fn remind_manager_loop(arc_ctx: Arc<Context>, remind_manager: Arc<RemindManager>) {
     tokio::spawn(async move {
         let db = &remind_manager.db;
@@ -432,6 +458,7 @@ pub fn remind_manager_loop(arc_ctx: Arc<Context>, remind_manager: Arc<RemindMana
     });
 }
 
+/// Checks if a serenity error is due to internet issues (true) or discord issue for example bot role perms, missing guild or channel (false)
 fn should_keep(error: poise::serenity_prelude::Error) -> bool {
     match error {
         poise::serenity_prelude::Error::Http(http) => match *http {
