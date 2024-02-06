@@ -70,7 +70,7 @@ impl RemindManager {
         duration: u64,
         looping: bool,
         message: Option<String>,
-        /// Callback that returns the message id of the message bot should reply to.
+        // Callback that returns the message id of the message bot should reply to.
         message_id_callback: F,
     ) -> Result<(), Error>
     where
