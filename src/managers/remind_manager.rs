@@ -355,6 +355,17 @@ pub fn remind_manager_loop(arc_ctx: Arc<Context>, remind_manager: Arc<RemindMana
                     message_ending = ".".to_string()
                 }
 
+                //TODO: Put this in a loop.
+
+                //First we try to send the reminder message. 
+                //If it fails we check if it's a discord permission issue. 
+                //If it is we remove the reminder from database and put something on the users log.
+                //If removing it from database doesn't work then I guess we'll let it slide.
+                //If it isn't a discord permission issue then we'll continue the loop of sending the message.
+                //If message sent successfully we delete from database (in a loop).
+                //If database removal fails we redo the loop until it succeeds. 
+                //All reminders will be halted and if restarted there will be a double reminder for someone.
+
                 let time_difference = current_time - reminder_info.finish_time;
 
                 let message_refrence_opt;
