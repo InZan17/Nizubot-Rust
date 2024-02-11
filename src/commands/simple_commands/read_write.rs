@@ -39,7 +39,6 @@ pub async fn write(ctx: Context<'_>, #[description = "Write."] write: String) ->
 
     let data_struct = StoredData { content: write };
     let data_json = serde_json::to_string(&data_struct)?;
-    println!("{data_json}");
 
     data.db
         .query(format!("UPDATE stored_data:1 CONTENT {data_json};"))
