@@ -1,5 +1,3 @@
-use std::{future::IntoFuture, time::Duration};
-
 use reqwest::{Client, RequestBuilder};
 use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::Value;
@@ -14,7 +12,7 @@ pub struct SurrealClient {
     sign_in_info: SurrealDbSignInInfo,
 }
 
-trait OptionOrVec {
+pub trait OptionOrVec {
     fn is_option() -> bool;
 }
 
@@ -36,16 +34,33 @@ pub struct DbResponse {
     pub time: String,
 }
 
+#[derive(Deserialize)]
+pub struct DbError {
+    pub code: u16,
+    pub details: String,
+    pub description: String,
+    pub information: String,
+}
+
 pub struct Responses(Vec<DbResponse>);
 
 impl Responses {
+    /// Takes and parses response from Vec.
+    ///
+    /// Returns error if failed to deserialize or if response isn't OK.
     pub fn take<T: OptionOrVec + DeserializeOwned>(&self, index: usize) -> Result<T, Error> {
-        //TODO check if status is OK
         if index >= self.0.len() {
             return Err("Index too high.".into());
         }
 
         let response = &self.0[index];
+
+        if response.status != "OK".to_string() {
+            let Some(result) = response.result.as_str() else {
+                return Err("Database response status isn't OK.".into());
+            };
+            return Err(format!("Database response status isn't OK. {}", result).into());
+        }
 
         let deserialize_value = if T::is_option() {
             value_option_fixer(&response.result)?
@@ -86,16 +101,43 @@ impl SurrealClient {
         let query: String = query.into();
         let builder = self.create_builder().body(query.clone());
 
-        //TODO: all errors gets sent to the discord slash command. Make sure all errors are safe to show
-        let built_request = builder.build()?;
-        let result = self.client.execute(built_request).await?;
+        let built_request = match builder.build() {
+            Ok(request) => request,
+            Err(err) => {
+                println!("{err}");
+                return Err("Failed to build request to database.".into());
+            }
+        };
+        let response = match self.client.execute(built_request).await {
+            Ok(response) => response,
+            Err(err) => {
+                println!("{err}");
+                return Err("Failed to execute request to database.".into());
+            }
+        };
 
-        if !result.status().is_success() {
+        if !response.status().is_success() {
             println!("Failed query: {}", query);
-            return Err("error occured not succes :(".into()); //TODO: fix
+            match response.json::<DbError>().await {
+                Ok(ok_err) => {
+                    println!("{}", ok_err.information);
+                    return Err(format!(
+                        "Database failed to understand query. {}, {}",
+                        ok_err.details, ok_err.description
+                    )
+                    .into());
+                }
+                Err(err) => {
+                    return Err(format!(
+                        "Database failed to understand query. Failed to parse error. {}",
+                        err
+                    )
+                    .into())
+                }
+            }
         }
 
-        let db_responses = result.json::<Vec<DbResponse>>().await?;
+        let db_responses = response.json::<Vec<DbResponse>>().await?;
 
         Ok(Responses(db_responses))
     }
