@@ -1,9 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    managers::db::{IsConnected, Record},
-    Context, Error,
-};
+use crate::{Context, Error};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct StoredData {
@@ -15,9 +12,11 @@ struct StoredData {
 pub async fn read(ctx: Context<'_>) -> Result<(), Error> {
     let data = ctx.data();
 
-    data.db.is_connected().await?;
-
-    let opt: Option<StoredData> = data.db.select(("stored_data", 1)).await?;
+    let opt: Option<StoredData> = data
+        .db
+        .query("SELECT * FROM stored_data:1")
+        .await?
+        .take(0)?;
 
     let content = if let Some(stored_data) = opt {
         stored_data.content
@@ -38,11 +37,12 @@ pub async fn read(ctx: Context<'_>) -> Result<(), Error> {
 pub async fn write(ctx: Context<'_>, #[description = "Write."] write: String) -> Result<(), Error> {
     let data = ctx.data();
 
-    data.db.is_connected().await?;
+    let data_struct = StoredData { content: write };
+    let data_json = serde_json::to_string(&data_struct)?;
+    println!("{data_json}");
 
     data.db
-        .update::<Option<Record>>(("stored_data", 1))
-        .content(StoredData { content: write })
+        .query(format!("UPDATE stored_data:1 CONTENT {data_json};"))
         .await?;
 
     ctx.say(format!("Data written!")).await?;

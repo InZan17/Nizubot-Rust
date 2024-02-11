@@ -1,63 +1,126 @@
 use std::{future::IntoFuture, time::Duration};
 
-use serde::Deserialize;
-use surrealdb::{
-    engine::remote::ws::{Client, Ws},
-    opt::auth::Database,
-    sql::Thing,
-    Surreal,
+use reqwest::{Client, RequestBuilder};
+use serde::{de::DeserializeOwned, Deserialize};
+use serde_json::Value;
+
+use crate::{
+    tokens::{self, SurrealDbSignInInfo},
+    Error,
 };
 
-use crate::{tokens, Error};
-
-#[derive(Debug, Deserialize)]
-pub struct Record {
-    #[allow(dead_code)]
-    id: Thing,
+pub struct SurrealClient {
+    client: Client,
+    sign_in_info: SurrealDbSignInInfo,
 }
 
-//TODO: Every query, when it returns something you should always use take() or take_errors() to make sure no errors happened
-
-pub trait IsConnected {
-    /// Returns an error if it isnt connected and an Ok if it is connected.
-    /// The reason it returns a result is because then we can use the ? thing.
-    async fn is_connected(&self) -> Result<(), Error>;
+trait OptionOrVec {
+    fn is_option() -> bool;
 }
 
-impl IsConnected for Surreal<Client> {
-    async fn is_connected(&self) -> Result<(), Error> {
-        let future = IntoFuture::into_future(self.version());
-        let res_res = tokio::time::timeout(Duration::from_millis(100), future).await;
-        let Ok(res) = res_res else {
-            return Err(Error::from("Not connected to database."));
-        };
-
-        res?;
-
-        Ok(())
+impl<T> OptionOrVec for Option<T> {
+    fn is_option() -> bool {
+        true
+    }
+}
+impl<T> OptionOrVec for Vec<T> {
+    fn is_option() -> bool {
+        false
     }
 }
 
-pub async fn new_db() -> Surreal<Client> {
+#[derive(Deserialize)]
+pub struct DbResponse {
+    pub result: Value,
+    pub status: String,
+    pub time: String,
+}
+
+pub struct Responses(Vec<DbResponse>);
+
+impl Responses {
+    pub fn take<T: OptionOrVec + DeserializeOwned>(&self, index: usize) -> Result<T, Error> {
+        //TODO check if status is OK
+        if index >= self.0.len() {
+            return Err("Index too high.".into());
+        }
+
+        let response = &self.0[index];
+
+        let deserialize_value = if T::is_option() {
+            value_option_fixer(&response.result)?
+        } else {
+            &response.result
+        };
+
+        let deserialized = serde_json::from_value::<T>(deserialize_value.clone())?;
+
+        Ok(deserialized)
+    }
+}
+
+impl SurrealClient {
+    pub fn new(sign_in_info: SurrealDbSignInInfo) -> Self {
+        let client = reqwest::Client::new();
+        Self {
+            client,
+            sign_in_info,
+        }
+    }
+
+    /// Creates the RequestBuilder with the url, auth and headers already setup.
+    pub fn create_builder(&self) -> RequestBuilder {
+        let sign_in = &self.sign_in_info;
+        self.client
+            .post(format!("{}/sql", &sign_in.address))
+            .basic_auth(&sign_in.username, Some(&sign_in.password))
+            .header("Accept", "application/json")
+            .header("NS", &sign_in.namespace)
+            .header("DB", &sign_in.database)
+    }
+
+    /// Sends query to database and returns the result.
+    ///
+    /// Errors if database is offline or if address is invalid.
+    pub async fn query<S: Into<String>>(&self, query: S) -> Result<Responses, Error> {
+        let query: String = query.into();
+        let builder = self.create_builder().body(query.clone());
+
+        //TODO: all errors gets sent to the discord slash command. Make sure all errors are safe to show
+        let built_request = builder.build()?;
+        let result = self.client.execute(built_request).await?;
+
+        if !result.status().is_success() {
+            println!("Failed query: {}", query);
+            return Err("error occured not succes :(".into()); //TODO: fix
+        }
+
+        let db_responses = result.json::<Vec<DbResponse>>().await?;
+
+        Ok(Responses(db_responses))
+    }
+}
+
+pub async fn new_db() -> SurrealClient {
     let surreal_login_info = tokens::get_surreal_signin_info();
 
-    let db = Surreal::new::<Ws>(surreal_login_info.address).await.expect("Couldn't connect to SurrealDB. Please make sure you got internet or that the database is up.");
+    SurrealClient::new(surreal_login_info)
+}
 
-    let a = db
-        .use_ns(&surreal_login_info.namespace)
-        .use_db(&surreal_login_info.database)
-        .await
-        .expect("Failed to set ns and db.");
+/// Returns value that can be deserialized using Option<T>.
+/// Only does something if value is an array.
+///
+/// Errors if array has more than 1 element.
+pub fn value_option_fixer(value: &Value) -> Result<&Value, Error> {
+    let Some(array) = value.as_array() else {
+        return Ok(value);
+    };
 
-    let a = db
-        .signin(Database {
-            username: &surreal_login_info.username,
-            password: &surreal_login_info.password,
-            namespace: &surreal_login_info.namespace,
-            database: &surreal_login_info.database,
-        })
-        .await
-        .expect("Failed to sign in.");
-
-    db
+    if array.len() == 1 {
+        return Ok(&array[0]);
+    } else if array.len() == 0 {
+        return Ok(&Value::Null);
+    } else {
+        return Err("Couldn't parse Vec into Option because it has more than 1 elements.".into());
+    }
 }

@@ -1,10 +1,7 @@
 use std::vec;
 
 use crate::{
-    managers::{
-        cotd_manager::{CotdRoleData, CotdRoleDataQuery},
-        db::IsConnected,
-    },
+    managers::cotd_manager::{CotdRoleData, CotdRoleDataQuery},
     Context, Error,
 };
 use poise::serenity_prelude::{Role, RoleId};
@@ -32,8 +29,6 @@ pub async fn create(
     let name = name.unwrap_or("<cotd>".to_owned());
 
     let data = ctx.data();
-
-    data.db.is_connected().await?;
 
     let guild = ctx.guild().unwrap();
 
@@ -116,8 +111,6 @@ pub async fn remove(
     #[description = "If you wanna delete the role from the guild or not. (Default: False)"] delete: Option<bool>,
 ) -> Result<(), Error> {
     let data = ctx.data();
-
-    data.db.is_connected().await?;
 
     let guild = ctx.guild().unwrap();
 

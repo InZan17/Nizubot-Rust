@@ -13,18 +13,14 @@ use poise::serenity_prelude::{
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use surrealdb::{engine::remote::ws::Client, sql::Thing, Surreal};
 use tokio::sync::Mutex;
 
 use crate::Error;
 
-use super::{
-    db::IsConnected,
-    storage_manager::{self, DataHolder, StorageManager},
-};
+use super::db::SurrealClient;
 
 pub struct RemindManager {
-    db: Arc<Surreal<Client>>,
+    db: Arc<SurrealClient>,
     pub wait_until: Mutex<u64>,
 }
 
@@ -38,14 +34,14 @@ pub struct RemindInfo {
     pub user_id: u64,
     /// id will be Some() when retrieved from surrealdb. Otherwise None.
     #[serde(skip_serializing)]
-    pub id: Option<Thing>,
+    pub id: Option<String>,
     pub message_id: Option<u64>,
     pub message: Option<String>,
     pub looping: bool,
 }
 
 impl RemindManager {
-    pub fn new(db: Arc<Surreal<Client>>) -> Self {
+    pub fn new(db: Arc<SurrealClient>) -> Self {
         RemindManager {
             db,
             wait_until: Mutex::new(0),
@@ -78,8 +74,6 @@ impl RemindManager {
         Fut: Future<Output = Result<u64, Error>>,
     {
         let db = &self.db;
-
-        db.is_connected().await?;
 
         let user_table_id = format!("user:{user_id}");
 
@@ -191,8 +185,6 @@ impl RemindManager {
     ) -> Result<Option<RemindInfo>, Error> {
         let db = &self.db;
 
-        db.is_connected().await?;
-
         let table_id = format!("user:{user_id}");
 
         //TODO: put in funtion
@@ -252,8 +244,6 @@ impl RemindManager {
         guild_id: Option<u64>,
     ) -> Result<Vec<RemindInfo>, Error> {
         let db = &self.db;
-
-        db.is_connected().await?;
 
         let table_id = format!("user:{user_id}");
 
@@ -357,13 +347,13 @@ pub fn remind_manager_loop(arc_ctx: Arc<Context>, remind_manager: Arc<RemindMana
 
                 //TODO: Put this in a loop.
 
-                //First we try to send the reminder message. 
-                //If it fails we check if it's a discord permission issue. 
+                //First we try to send the reminder message.
+                //If it fails we check if it's a discord permission issue.
                 //If it is we remove the reminder from database and put something on the users log.
                 //If removing it from database doesn't work then I guess we'll let it slide.
                 //If it isn't a discord permission issue then we'll continue the loop of sending the message.
                 //If message sent successfully we delete from database (in a loop).
-                //If database removal fails we redo the loop until it succeeds. 
+                //If database removal fails we redo the loop until it succeeds.
                 //All reminders will be halted and if restarted there will be a double reminder for someone.
 
                 let time_difference = current_time - reminder_info.finish_time;

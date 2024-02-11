@@ -3,12 +3,11 @@ use std::{sync::Arc, vec};
 
 use poise::serenity_prelude::{self, Message, MessageAction};
 use serde::{Deserialize, Serialize};
-use surrealdb::{engine::remote::ws::Client, Surreal};
 
 use crate::{Context, Error};
 
 use super::{
-    db::IsConnected,
+    db::SurrealClient,
     storage_manager::{self, StorageManager},
 };
 
@@ -51,11 +50,11 @@ pub struct DetectorInfo {
 }
 
 pub struct DetectorManager {
-    pub db: Arc<Surreal<Client>>,
+    pub db: Arc<SurrealClient>,
 }
 
 impl DetectorManager {
-    pub fn new(db: Arc<Surreal<Client>>) -> Self {
+    pub fn new(db: Arc<SurrealClient>) -> Self {
         Self { db }
     }
 
@@ -74,8 +73,6 @@ impl DetectorManager {
         is_dms: bool,
     ) -> Result<(), Error> {
         let db = &self.db;
-
-        db.is_connected().await?;
 
         let id_as_string = guild_or_user_id.to_string();
 
@@ -132,8 +129,6 @@ impl DetectorManager {
     ) -> Result<(), Error> {
         let db = &self.db;
 
-        db.is_connected().await?;
-
         let id_as_string = guild_or_user_id.to_string();
 
         let table_id;
@@ -178,8 +173,6 @@ impl DetectorManager {
     ) -> Result<Vec<DetectorInfo>, Error> {
         let db = &self.db;
 
-        db.is_connected().await?;
-
         let id_as_string = guild_or_user_id.to_string();
 
         let table_id;
@@ -216,8 +209,6 @@ impl DetectorManager {
         }
 
         let db = &self.db;
-
-        db.is_connected().await?;
 
         let table_id;
 

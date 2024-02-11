@@ -5,16 +5,17 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use crate::managers::db::Record;
 use poise::serenity_prelude::{Context, Http, Role};
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
-use surrealdb::{engine::remote::ws::Client, sql::Thing, Surreal};
 use tokio::sync::{Mutex, RwLock};
 
 use crate::Error;
 
-use super::storage_manager::{DataDirectories, StorageManager};
+use super::{
+    db::SurrealClient,
+    storage_manager::{DataDirectories, StorageManager},
+};
 
 pub const SECONDS_IN_A_DAY: u64 = 86400;
 const COLOR_API: &str = "https://api.color.pizza/v1/";
@@ -34,11 +35,11 @@ pub struct CotdRoleData {
 #[derive(Serialize, Deserialize)]
 pub struct CotdRoleDataQuery {
     pub cotd_role: CotdRoleData,
-    pub id: Thing,
+    pub id: String,
 }
 
 pub struct CotdManager {
-    db: Arc<Surreal<Client>>,
+    db: Arc<SurrealClient>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -49,7 +50,7 @@ pub struct ColorInfo {
 }
 
 impl CotdManager {
-    pub fn new(db: Arc<Surreal<Client>>) -> Self {
+    pub fn new(db: Arc<SurrealClient>) -> Self {
         Self { db }
     }
 
@@ -185,7 +186,7 @@ impl CotdManager {
 /// Controls things such as: the color of all cotd roles.
 pub fn cotd_manager_loop(
     arc_ctx: Arc<Context>,
-    db: Arc<Surreal<Client>>,
+    db: Arc<SurrealClient>,
     cotd_manager: Arc<CotdManager>,
 ) {
     tokio::spawn(async move {
@@ -214,7 +215,7 @@ pub fn cotd_manager_loop(
 
             for cotd_role_data_query in cotd_roles_data.iter() {
                 let table_id = &cotd_role_data_query.id;
-                let guild_id = table_id.id.to_string().parse::<u64>().unwrap();
+                let guild_id = table_id.split(' ').last().unwrap().parse::<u64>().unwrap(); //TODO fix too many unwraps
                 let cotd_role_data = &cotd_role_data_query.cotd_role;
 
                 if cotd_role_data.day == current_day {

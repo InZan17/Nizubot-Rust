@@ -15,6 +15,7 @@ use std::sync::{
 use managers::{
     cotd_manager::{cotd_manager_loop, CotdManager},
     currency_manager::CurrencyManager,
+    db::SurrealClient,
     remind_manager::{remind_manager_loop, RemindManager},
     storage_manager::{storage_manager_loop, StorageManager},
 };
@@ -22,11 +23,6 @@ use poise::{
     framework,
     serenity_prelude::{self as serenity},
     Event, ReplyHandle,
-};
-use surrealdb::{
-    engine::remote::ws::{Client, Ws, Wss},
-    opt::auth::Root,
-    Surreal,
 };
 
 use crate::managers::{detector_manager::DetectorManager, reaction_manager::ReactionManager};
@@ -39,7 +35,7 @@ pub struct Data {
     detector_manager: Arc<DetectorManager>,
     reaction_manager: Arc<ReactionManager>,
     currency_manager: Arc<CurrencyManager>,
-    db: Arc<Surreal<Client>>,
+    db: Arc<SurrealClient>,
 } // User data, which is stored and accessible in all command invocations
 pub struct Handler {} // User data, which is stored and accessible in all command invocations
 pub type Error = Box<dyn std::error::Error + Send + Sync>;

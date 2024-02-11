@@ -2,18 +2,17 @@ use std::{collections::HashMap, sync::Arc};
 
 use percent_encoding::{percent_decode_str, utf8_percent_encode, NON_ALPHANUMERIC};
 use poise::serenity_prelude::{Context, Member, Reaction, ReactionType, RoleId, UserId};
-use surrealdb::{engine::remote::ws::Client, Surreal};
 
 use crate::Error;
 
-use super::{db::IsConnected, storage_manager::StorageManager};
+use super::db::SurrealClient;
 
 pub struct ReactionManager {
-    pub db: Arc<Surreal<Client>>,
+    pub db: Arc<SurrealClient>,
 }
 
 impl ReactionManager {
-    pub fn new(db: Arc<Surreal<Client>>) -> Self {
+    pub fn new(db: Arc<SurrealClient>) -> Self {
         Self { db }
     }
 
@@ -28,8 +27,6 @@ impl ReactionManager {
         message_id: u64,
     ) -> Result<(), Error> {
         let db = &self.db;
-
-        db.is_connected().await?;
 
         let table_id = format!("guild:{guild_id}");
 
@@ -89,8 +86,6 @@ impl ReactionManager {
     ) -> Result<u64, Error> {
         let db = &self.db;
 
-        db.is_connected().await?;
-
         let table_id = format!("guild:{guild_id}");
 
         let emoji_id = get_emoji_id(&emoji);
@@ -138,8 +133,6 @@ impl ReactionManager {
         }
 
         let db = &self.db;
-
-        db.is_connected().await?;
 
         let message_id = reaction.message_id;
 
@@ -191,8 +184,6 @@ impl ReactionManager {
         let emoji_id = get_emoji_id(&reaction.emoji);
 
         let db = &self.db;
-
-        db.is_connected().await?;
 
         let role_id: Option<u64> = db
             .query(format!(
