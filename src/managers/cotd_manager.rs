@@ -99,7 +99,7 @@ impl CotdManager {
             return Ok(day_color[0].clone());
         }
 
-        // Since we will be generating colors every day even if no one runs a command
+        // TODO: Since we will be generating colors every day even if no one runs a command
         // Let the looped code do that. And if the current day color doesnt exist the return an error.
         match self.generate_color().await {
             Ok(color_info) => {
@@ -135,14 +135,14 @@ impl CotdManager {
 
         let url = format!("{COLOR_API}?values={}", random_color.hex());
 
-        let Ok(resp) = reqwest::get(url).await else {
-            //TODO: return error info
-            return Err("Got no response from the Api.".into());
+        let resp = match reqwest::get(url).await {
+            Ok(resp) => resp,
+            Err(err) => return Err(format!("Got no response from the Api. {err}").into()),
         };
 
-        let Ok(parsed) = resp.json::<ColorResponse>().await else {
-            //TODO: return error info
-            return Err("Couldn't parse Api response.".into());
+        let parsed = match resp.json::<ColorResponse>().await {
+            Ok(parsed) => parsed,
+            Err(err) => return Err(format!("Couldn't parse Api response. {err}").into()),
         };
 
         let mut color_info = parsed.colors[0].clone();
@@ -153,31 +153,25 @@ impl CotdManager {
 
     /// Updates the color of a given role.
     ///
-    /// Will error if it cannot update the role or if getting the current color fails.
+    /// Will error if it cannot update the role.
     pub async fn update_role(
         &self,
         http: impl AsRef<Http>,
         role: Role,
         name: &String,
+        current_color: ColorInfo,
     ) -> Result<(), Error> {
-        //TODO: Perhaps get the color info from a function parameter. That way we dont have to constantly do a database request every time.
-        match self.get_current_color().await {
-            Err(err) => return Err(err),
-            Ok(color_info) => {
-                let res = role
-                    .edit(http, |r| {
-                        let color =
-                            u64::from_str_radix(color_info.hex.clone().as_str(), 16).unwrap();
-                        r.name(name.replace("<cotd>", &color_info.name))
-                            .colour(color)
-                    })
-                    .await;
+        let res = role
+            .edit(http, |r| {
+                let color = u64::from_str_radix(current_color.hex.clone().as_str(), 16).unwrap();
+                r.name(name.replace("<cotd>", &current_color.name))
+                    .colour(color)
+            })
+            .await;
 
-                match res {
-                    Ok(_) => return Ok(()),
-                    Err(err) => return Err(Box::new(err)),
-                }
-            }
+        match res {
+            Ok(_) => return Ok(()),
+            Err(err) => return Err(Box::new(err)),
         }
     }
 }
@@ -200,7 +194,7 @@ pub fn cotd_manager_loop(
                 continue;
             }
 
-            //TODO: convert all cotd code to use surrealdb instead.
+            //TODO: put request in a seperate funciton
             // Gets the id and cotd_role from every guild where cotd_role exists
             let cotd_roles_data: Vec<CotdRoleDataQuery> = db
                 .query("SELECT id, cotd_role FROM guild WHERE cotd_role;")
@@ -209,13 +203,16 @@ pub fn cotd_manager_loop(
                 .take(0)
                 .unwrap();
 
+            let Ok(current_color) = cotd_manager.get_current_color().await else {
+                continue;
+            };
+
             //TODO: Make it so it only updates when all the cotd roles updates successfully.
-            // One way to check is if the length of cotd_roles_data is 0
             last_updated_day = current_day;
 
             for cotd_role_data_query in cotd_roles_data.iter() {
                 let table_id = &cotd_role_data_query.id;
-                let guild_id = table_id.split(' ').last().unwrap().parse::<u64>().unwrap(); //TODO fix too many unwraps
+                let guild_id = table_id.split(':').last().unwrap().parse::<u64>().unwrap(); //TODO fix too many unwraps
                 let cotd_role_data = &cotd_role_data_query.cotd_role;
 
                 if cotd_role_data.day == current_day {
@@ -251,7 +248,7 @@ pub fn cotd_manager_loop(
                 if let Some(role) = role {
                     //TODO: Do something if there's an error.
                     let result = cotd_manager
-                        .update_role(&arc_ctx, role, &cotd_role_data.name)
+                        .update_role(&arc_ctx, role, &cotd_role_data.name, current_color)
                         .await;
 
                     // TODO: Put query in seperate function
