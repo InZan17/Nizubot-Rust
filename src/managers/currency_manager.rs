@@ -8,7 +8,7 @@ use poise::serenity_prelude::CreateEmbed;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
-use crate::Error;
+use crate::{utils::get_seconds, Error};
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct CurrencyRates {
@@ -220,14 +220,4 @@ impl CurrencyManager {
             .get(&currency.to_ascii_uppercase())
             .cloned()
     }
-}
-
-// TODO put this function and all the duplicates of it in a special place.
-fn get_seconds() -> u64 {
-    let start = SystemTime::now();
-    let since_the_epoch = start
-        .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards. Oopsie.");
-
-    since_the_epoch.as_secs()
 }

@@ -29,7 +29,6 @@ const BRICK_TITLES: [&str; 6] = [
 /// Generate a gif of some user throwing a brick.
 #[poise::command(slash_command)]
 pub async fn brick(
-    // TODO: Make a cooldown per user
     ctx: Context<'_>,
     #[description = "The user to throw the brick."] user: Option<User>,
 ) -> Result<(), Error> {

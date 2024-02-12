@@ -32,24 +32,10 @@ pub async fn create(
 
     let guild = ctx.guild().unwrap();
 
-    let guild_id = guild.id.as_u64().clone();
+    let cotd_role_data = data.db.get_guild_cotd_role(&guild.id).await?;
 
-    let table_id = format!("guild:{guild_id}");
-
-    let cotd_role_data_vec: Vec<CotdRoleDataQuery> = data
-        .db
-        .query(format!(
-            "SELECT id, cotd_role FROM {table_id} WHERE cotd_role;"
-        ))
-        .await?
-        .take(0)?;
-
-    if cotd_role_data_vec.len() > 1 {
-        return Err("Multiple guilds with same id??".into());
-    }
-
-    if cotd_role_data_vec.len() == 1 {
-        let role_id = cotd_role_data_vec[0].cotd_role.id;
+    if let Some(cotd_role_data) = cotd_role_data {
+        let role_id = cotd_role_data.cotd_role.id;
         let guild_roles = &guild.roles;
         if guild_roles.contains_key(&RoleId(role_id)) {
             ctx.send(|m| {
@@ -74,7 +60,11 @@ pub async fn create(
     let day = cotd_manager.get_current_day();
     let role_id = cotd_role.id.as_u64().clone();
 
-    let res = cotd_manager.update_role(ctx, cotd_role, &name).await;
+    let current_color = cotd_manager.get_current_color().await?;
+
+    let res = cotd_manager
+        .update_role(ctx, cotd_role, &name, &current_color)
+        .await;
 
     if let Err(err) = res {
         ctx.send(|m| {
@@ -89,12 +79,8 @@ pub async fn create(
         name,
     };
 
-    let cotd_role_data_string = serde_json::to_string(&cotd_role_info)?;
-
     data.db
-        .query(format!(
-            "UPDATE {table_id} SET cotd_role = {cotd_role_data_string};"
-        ))
+        .update_guild_cotd_role(&Some(cotd_role_info), &guild.id)
         .await?;
 
     ctx.send(|m| {
@@ -114,32 +100,16 @@ pub async fn remove(
 
     let guild = ctx.guild().unwrap();
 
-    let guild_id = guild.id.as_u64().clone();
+    let cotd_role_data = data.db.get_guild_cotd_role(&guild.id).await?;
 
-    let table_id = format!("guild:{guild_id}");
-
-    let cotd_role_data_vec: Vec<CotdRoleDataQuery> = data
-        .db
-        .query(format!(
-            "SELECT id, cotd_role FROM {table_id} WHERE cotd_role;"
-        ))
-        .await?
-        .take(0)?;
-
-    if cotd_role_data_vec.len() > 1 {
-        return Err("Multiple guilds with same id??".into());
-    }
-
-    if cotd_role_data_vec.len() == 0 {
+    let Some(cotd_role_data) = cotd_role_data else {
         ctx.send(|m| m.content("This guild does not have a COTD role."))
             .await?;
         return Ok(());
-    }
-    let role_id = cotd_role_data_vec[0].cotd_role.id;
+    };
+    let role_id = cotd_role_data.cotd_role.id;
 
-    data.db
-        .query(format!("UPDATE {table_id} SET cotd_role = NONE;"))
-        .await?;
+    data.db.update_guild_cotd_role(&None, &guild.id).await?;
 
     if delete.unwrap_or(false) {
         let res = ctx.guild().unwrap().delete_role(ctx, RoleId(role_id)).await;

@@ -3,7 +3,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use crate::{managers::remind_manager::RemindInfo, Context, Error};
+use crate::{managers::remind_manager::RemindInfo, utils::get_seconds, Context, Error};
 
 /// Command for reminders.
 #[poise::command(
@@ -247,13 +247,4 @@ fn convert_prefix_to_multiplier(prefix: char) -> Option<f64> {
         'y' => Some(31556926.),
         _ => None,
     }
-}
-
-fn get_seconds() -> u64 {
-    let start = SystemTime::now();
-    let since_the_epoch = start
-        .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards. Oopsie.");
-
-    since_the_epoch.as_secs()
 }

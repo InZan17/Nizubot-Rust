@@ -1,3 +1,4 @@
+use poise::serenity_prelude::GuildId;
 use reqwest::{Client, RequestBuilder};
 use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::Value;
@@ -6,6 +7,8 @@ use crate::{
     tokens::{self, SurrealDbSignInInfo},
     Error,
 };
+
+use super::cotd_manager::{CotdRoleData, CotdRoleDataQuery};
 
 pub struct SurrealClient {
     client: Client,
@@ -164,5 +167,38 @@ pub fn value_option_fixer(value: &Value) -> Result<&Value, Error> {
         return Ok(&Value::Null);
     } else {
         return Err("Couldn't parse Vec into Option because it has more than 1 elements.".into());
+    }
+}
+
+impl SurrealClient {
+    pub async fn get_guild_cotd_role(
+        &self,
+        guild_id: &GuildId,
+    ) -> Result<Option<CotdRoleDataQuery>, crate::Error> {
+        //TODO: remove ID from select and test it.
+        let cotd_role_data: Option<CotdRoleDataQuery> = self
+            .query(format!(
+                "SELECT id, cotd_role FROM guild:{guild_id} WHERE cotd_role;"
+            ))
+            .await?
+            .take(0)?;
+
+        Ok(cotd_role_data)
+    }
+
+    pub async fn update_guild_cotd_role(
+        &self,
+        cotd_role_data: &Option<CotdRoleData>,
+        guild_id: &GuildId,
+    ) -> Result<(), crate::Error> {
+        let cotd_role_data_string = serde_json::to_string(&cotd_role_data)?;
+
+        let cotd_role_data = self
+            .query(format!(
+                "UPDATE guild:{guild_id} SET cotd_role = {cotd_role_data_string};"
+            ))
+            .await?;
+
+        Ok(())
     }
 }

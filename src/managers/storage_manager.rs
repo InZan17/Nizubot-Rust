@@ -15,7 +15,7 @@ use poise::{
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use crate::{give_up_serialize::GiveUpSerialize, Error};
+use crate::{give_up_serialize::GiveUpSerialize, utils::get_seconds, Error};
 
 pub struct DataDirectories {}
 impl DataDirectories {
@@ -297,13 +297,4 @@ impl StorageManager {
 
 pub fn duration_to_timestamp(duration: &Duration) -> u64 {
     duration.as_secs().saturating_add(get_seconds())
-}
-
-fn get_seconds() -> u64 {
-    let start = SystemTime::now();
-    let since_the_epoch = start
-        .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards. Oopsie.");
-
-    since_the_epoch.as_secs()
 }

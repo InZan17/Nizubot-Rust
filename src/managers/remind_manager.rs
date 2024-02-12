@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::Mutex;
 
-use crate::Error;
+use crate::{utils::get_seconds, Error};
 
 use super::db::SurrealClient;
 
@@ -273,15 +273,6 @@ impl RemindManager {
 
         Ok(specific_reminders)
     }
-}
-
-fn get_seconds() -> u64 {
-    let start = SystemTime::now();
-    let since_the_epoch = start
-        .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards. Oopsie.");
-
-    since_the_epoch.as_secs()
 }
 
 /// Main loop for checking if it's time for any reminders to be reminded.

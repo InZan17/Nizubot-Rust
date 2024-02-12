@@ -223,8 +223,6 @@ pub async fn caption(
     process.arg(&generated_file);
     process.arg("-y");
 
-    //TODO: Make ffmpeg not write to disk and make everything be in ram.
-
     let mut spawned = process.spawn()?;
     let exit = spawned.wait().await?;
 

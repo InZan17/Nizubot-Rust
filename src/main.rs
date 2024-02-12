@@ -6,6 +6,7 @@ mod commands;
 pub mod give_up_serialize;
 mod managers;
 mod tokens;
+pub mod utils;
 
 use std::sync::{
     atomic::{AtomicBool, Ordering},

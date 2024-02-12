@@ -47,7 +47,6 @@ pub async fn gen_brick_gif(
         }
 
         let avatar_bytes = resp.bytes().await?;
-        //TODO: do something with error/
         storage_manager
             .save_disk(
                 &user_pfp_file,

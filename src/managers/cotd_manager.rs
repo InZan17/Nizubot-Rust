@@ -159,7 +159,7 @@ impl CotdManager {
         http: impl AsRef<Http>,
         role: Role,
         name: &String,
-        current_color: ColorInfo,
+        current_color: &ColorInfo,
     ) -> Result<(), Error> {
         let res = role
             .edit(http, |r| {
@@ -248,7 +248,7 @@ pub fn cotd_manager_loop(
                 if let Some(role) = role {
                     //TODO: Do something if there's an error.
                     let result = cotd_manager
-                        .update_role(&arc_ctx, role, &cotd_role_data.name, current_color)
+                        .update_role(&arc_ctx, role, &cotd_role_data.name, &current_color)
                         .await;
 
                     // TODO: Put query in seperate function
