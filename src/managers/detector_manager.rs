@@ -4,7 +4,7 @@ use std::{sync::Arc, vec};
 use poise::serenity_prelude::{self, Message, MessageAction};
 use serde::{Deserialize, Serialize};
 
-use crate::{Context, Error};
+use crate::{utils::IdType, Context, Error};
 
 use super::{
     db::SurrealClient,
@@ -68,29 +68,11 @@ impl DetectorManager {
         key: String,
         response: String,
         case_sensitive: bool,
-        // TODO: Merge guild_or_user_id and is_dms into an enum.
-        guild_or_user_id: u64,
-        is_dms: bool,
+        id: IdType,
     ) -> Result<(), Error> {
         let db = &self.db;
 
-        let id_as_string = guild_or_user_id.to_string();
-
-        let table_id;
-        //TODO: Once this is an enum: put in a seperate function.
-        if is_dms {
-            table_id = format!("user:{id_as_string}");
-        } else {
-            table_id = format!("guild:{id_as_string}");
-        }
-
-        //TODO: Put all queries in a seperate function.
-        let detectors_option: Option<Vec<DetectorInfo>> = db
-            .query(format!(
-                "SELECT message_detectors FROM {table_id} WHERE message_detectors"
-            ))
-            .await?
-            .take(0)?;
+        let detectors_option = db.get_all_message_detectors(&id).await?;
 
         if let Some(detectors) = detectors_option {
             if detectors.len() >= 10 {
@@ -105,15 +87,9 @@ impl DetectorManager {
             case_sensitive,
         };
 
-        let detector_info_json = serde_json::to_string(&detector_info)?;
+        db.add_message_detector(&id, &detector_info).await?;
 
-        //TODO: put query in seperate function.
-        db.query(format!(
-            "UPDATE {table_id} SET message_detectors += {detector_info_json}"
-        ))
-        .await?;
-
-        return Ok(());
+        Ok(())
     }
 
     /// Removes a detector to a guild / user dm.
@@ -166,29 +142,10 @@ impl DetectorManager {
     ///
     /// Will error if database isn't connected or communication doesn't work.
     /// May also error if unable to parse response or if database returns an error.
-    pub async fn get_message_detects(
-        &self,
-        guild_or_user_id: u64,
-        is_dms: bool,
-    ) -> Result<Vec<DetectorInfo>, Error> {
+    pub async fn get_message_detects(&self, id: IdType) -> Result<Vec<DetectorInfo>, Error> {
         let db = &self.db;
 
-        let id_as_string = guild_or_user_id.to_string();
-
-        let table_id;
-
-        if is_dms {
-            table_id = format!("user:{id_as_string}");
-        } else {
-            table_id = format!("guild:{id_as_string}");
-        }
-
-        let detectors_option: Option<Vec<DetectorInfo>> = db
-            .query(format!(
-                "SELECT VALUE message_detectors FROM {table_id} WHERE message_detectors"
-            ))
-            .await?
-            .take(0)?;
+        let detectors_option = db.get_all_message_detectors(&id).await?;
 
         return Ok(detectors_option.unwrap_or(vec![]));
     }
@@ -210,22 +167,15 @@ impl DetectorManager {
 
         let db = &self.db;
 
-        let table_id;
+        let id;
 
         if let Some(guild_id) = message.guild_id {
-            let id_as_string = guild_id.to_string();
-            table_id = format!("guild:{id_as_string}");
+            id = IdType::GuildId(guild_id);
         } else {
-            let id_as_string = message.author.id.to_string();
-            table_id = format!("user:{id_as_string}");
+            id = IdType::UserId(message.author.id);
         }
 
-        let detectors_option: Option<Vec<DetectorInfo>> = db
-            .query(format!(
-                "SELECT VALUE message_detectors FROM {table_id} WHERE message_detectors"
-            ))
-            .await?
-            .take(0)?;
+        let detectors_option = db.get_all_message_detectors(&id).await?;
 
         let Some(detectors) = detectors_option else {
             return Ok(());

@@ -1,22 +1,13 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{Context, Error};
-
-#[derive(Debug, Serialize, Deserialize)]
-struct StoredData {
-    pub content: String,
-}
+use crate::{managers::db::StoredData, Context, Error};
 
 /// Read!
 #[poise::command(slash_command)]
 pub async fn read(ctx: Context<'_>) -> Result<(), Error> {
     let data = ctx.data();
 
-    let opt: Option<StoredData> = data
-        .db
-        .query("SELECT * FROM stored_data:1")
-        .await?
-        .take(0)?;
+    let opt = data.db.get_single_data().await?;
 
     let content = if let Some(stored_data) = opt {
         stored_data.content
@@ -38,11 +29,8 @@ pub async fn write(ctx: Context<'_>, #[description = "Write."] write: String) ->
     let data = ctx.data();
 
     let data_struct = StoredData { content: write };
-    let data_json = serde_json::to_string(&data_struct)?;
 
-    data.db
-        .query(format!("UPDATE stored_data:1 CONTENT {data_json};"))
-        .await?;
+    data.db.update_single_data(&data_struct).await?;
 
     ctx.say(format!("Data written!")).await?;
     Ok(())

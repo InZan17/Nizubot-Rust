@@ -1,14 +1,18 @@
 use poise::serenity_prelude::GuildId;
 use reqwest::{Client, RequestBuilder};
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
     tokens::{self, SurrealDbSignInInfo},
+    utils::IdType,
     Error,
 };
 
-use super::cotd_manager::{CotdRoleData, CotdRoleDataQuery};
+use super::{
+    cotd_manager::{ColorInfo, CotdRoleData, CotdRoleDataQuery},
+    detector_manager::DetectorInfo,
+};
 
 pub struct SurrealClient {
     client: Client,
@@ -170,12 +174,32 @@ pub fn value_option_fixer(value: &Value) -> Result<&Value, Error> {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct StoredData {
+    pub content: String,
+}
+
 impl SurrealClient {
+    pub async fn get_single_data(&self) -> Result<Option<StoredData>, crate::Error> {
+        let stored_data: Option<StoredData> =
+            self.query("SELECT * FROM stored_data:1").await?.take(0)?;
+
+        Ok(stored_data)
+    }
+
+    pub async fn update_single_data(&self, data: &StoredData) -> Result<(), crate::Error> {
+        let data_json = serde_json::to_string(data)?;
+        self.query(format!("UPDATE stored_data:1 CONTENT {data_json};"))
+            .await?;
+
+        Ok(())
+    }
+
     pub async fn get_guild_cotd_role(
         &self,
         guild_id: &GuildId,
     ) -> Result<Option<CotdRoleDataQuery>, crate::Error> {
-        //TODO: remove ID from select and test it.
+        //id is needed in the query because another function uses it and I dont wanna make another struct.
         let cotd_role_data: Option<CotdRoleDataQuery> = self
             .query(format!(
                 "SELECT id, cotd_role FROM guild:{guild_id} WHERE cotd_role;"
@@ -184,6 +208,16 @@ impl SurrealClient {
             .take(0)?;
 
         Ok(cotd_role_data)
+    }
+
+    /// Gets the id and cotd_role from every guild where cotd_role exists
+    pub async fn get_all_guild_cotd_role(&self) -> Result<Vec<CotdRoleDataQuery>, crate::Error> {
+        let cotd_roles_data: Vec<CotdRoleDataQuery> = self
+            .query(format!("SELECT id, cotd_role FROM guild WHERE cotd_role;"))
+            .await?
+            .take(0)?;
+
+        Ok(cotd_roles_data)
     }
 
     pub async fn update_guild_cotd_role(
@@ -198,6 +232,65 @@ impl SurrealClient {
                 "UPDATE guild:{guild_id} SET cotd_role = {cotd_role_data_string};"
             ))
             .await?;
+
+        Ok(())
+    }
+
+    pub async fn mark_cotd_role_updated(
+        &self,
+        guild_id: &GuildId,
+        current_day: u64,
+    ) -> Result<(), Error> {
+        self.query(format!("UPDATE guild:{guild_id} MERGE {{ cotd_role: {{ day:{current_day} }} }} WHERE cotd_role;")).await?;
+        Ok(())
+    }
+
+    pub async fn get_cotd(&self, day: u64) -> Result<Option<ColorInfo>, Error> {
+        let day_color: Option<ColorInfo> = self
+            .query(format!("SELECT * FROM cotd:{day};"))
+            .await?
+            .take(0)?;
+
+        Ok(day_color)
+    }
+
+    pub async fn update_cotd(&self, day: u64, color: &ColorInfo) -> Result<(), Error> {
+        let color_json = serde_json::to_string(color)?;
+        let res = self
+            .query(format!("CREATE cotd:{day} CONTENT {color_json};"))
+            .await?;
+        Ok(())
+    }
+
+    pub async fn get_all_message_detectors(
+        &self,
+        id: &IdType,
+    ) -> Result<Option<Vec<DetectorInfo>>, Error> {
+        let table_id = id.into_db_table();
+
+        let res = self
+            .query(format!(
+                "SELECT message_detectors FROM {table_id} WHERE message_detectors"
+            ))
+            .await?
+            .take(0)?;
+
+        Ok(res)
+    }
+
+    pub async fn add_message_detector(
+        &self,
+        id: &IdType,
+        detect_info: &DetectorInfo,
+    ) -> Result<(), Error> {
+        let table_id = id.into_db_table();
+
+        let detect_info_json = serde_json::to_string(&detect_info)?;
+
+        self.query(format!(
+            "UPDATE {table_id} SET message_detectors += {detect_info_json}"
+        ))
+        .await?;
 
         Ok(())
     }

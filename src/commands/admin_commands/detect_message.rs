@@ -2,6 +2,7 @@ use std::vec;
 
 use crate::{
     managers::{detector_manager::DetectType, storage_manager::DataDirectories},
+    utils::IdType,
     Context, Error,
 };
 use poise::serenity_prelude::{Role, RoleId};
@@ -29,15 +30,12 @@ pub async fn add(
 ) -> Result<(), Error> {
     let case_sensitive = case_sensitive.unwrap_or(false);
 
-    let guild_or_user_id;
-    let is_dms;
+    let id;
 
     if let Some(guild_id) = ctx.guild_id() {
-        guild_or_user_id = *guild_id.as_u64();
-        is_dms = false;
+        id = IdType::GuildId(guild_id);
     } else {
-        guild_or_user_id = *ctx.author().id.as_u64();
-        is_dms = true;
+        id = IdType::UserId(ctx.author().id);
     }
 
     let res = ctx
@@ -48,8 +46,7 @@ pub async fn add(
             key.clone(),
             response,
             case_sensitive,
-            guild_or_user_id,
-            is_dms,
+            id,
         )
         .await;
 
@@ -120,22 +117,15 @@ pub async fn remove(
 /// List all message detectors in this guild.
 #[poise::command(slash_command)]
 pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
-    let guild_or_user_id;
-    let is_dms;
+    let id;
 
     if let Some(guild_id) = ctx.guild_id() {
-        guild_or_user_id = *guild_id.as_u64();
-        is_dms = false;
+        id = IdType::GuildId(guild_id);
     } else {
-        guild_or_user_id = *ctx.author().id.as_u64();
-        is_dms = true;
+        id = IdType::UserId(ctx.author().id);
     }
 
-    let detectors = ctx
-        .data()
-        .detector_manager
-        .get_message_detects(guild_or_user_id, is_dms)
-        .await?;
+    let detectors = ctx.data().detector_manager.get_message_detects(id).await?;
 
     ctx.send(|m| {
         m.embed(|e| {

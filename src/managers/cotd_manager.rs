@@ -2,10 +2,11 @@ use std::{
     collections::HashMap,
     fmt::format,
     sync::Arc,
+    thread::current,
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use poise::serenity_prelude::{Context, Http, Role};
+use poise::serenity_prelude::{Context, GuildId, Http, Role};
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, RwLock};
@@ -82,42 +83,17 @@ impl CotdManager {
             return Err("We have not reached that day yet.".into());
         }
 
-        // TODO: put this in a function
-        let table_id = format!("cotd:{day}");
-        // this too
-        let day_color: Vec<ColorInfo> = self
-            .db
-            .query(format!("SELECT * FROM {table_id};"))
-            .await?
-            .take(0)?;
+        let color = self.db.get_cotd(day).await?;
 
-        if day_color.len() > 1 {
-            return Err(format!("{table_id} returns more than 1 color.").into());
-        }
-
-        if day_color.len() == 1 {
-            return Ok(day_color[0].clone());
+        if let Some(color) = color {
+            return Ok(color);
         }
 
         // TODO: Since we will be generating colors every day even if no one runs a command
         // Let the looped code do that. And if the current day color doesnt exist the return an error.
         match self.generate_color().await {
             Ok(color_info) => {
-                let color_info_string = serde_json::to_string(&color_info)?;
-                let mut res = self
-                    .db
-                    .query(format!(
-                        "
-                    CREATE {table_id} CONTENT {color_info_string}; 
-                    SELECT * FROM ONLY {table_id};
-                "
-                    ))
-                    .await?;
-
-                let Some(color_info) = res.take(1)? else {
-                    return Err("Couldn't generate color. Problems with database and stuff.".into());
-                };
-
+                self.db.update_cotd(day, &color_info).await?;
                 return Ok(color_info);
             }
             Err(err) => return Err(err),
@@ -194,14 +170,11 @@ pub fn cotd_manager_loop(
                 continue;
             }
 
-            //TODO: put request in a seperate funciton
-            // Gets the id and cotd_role from every guild where cotd_role exists
-            let cotd_roles_data: Vec<CotdRoleDataQuery> = db
-                .query("SELECT id, cotd_role FROM guild WHERE cotd_role;")
-                .await
-                .unwrap()
-                .take(0)
-                .unwrap();
+            let cotd_roles_data_result = db.get_all_guild_cotd_role().await;
+
+            let Ok(cotd_roles_data) = cotd_roles_data_result else {
+                continue;
+            };
 
             let Ok(current_color) = cotd_manager.get_current_color().await else {
                 continue;
@@ -251,8 +224,9 @@ pub fn cotd_manager_loop(
                         .update_role(&arc_ctx, role, &cotd_role_data.name, &current_color)
                         .await;
 
-                    // TODO: Put query in seperate function
-                    db.query(format!("UPDATE {table_id} MERGE {{ cotd_role: {{ day:{current_day} }} }} WHERE cotd_role;")).await;
+                    // TODO: do somethign if theres an error.
+                    db.mark_cotd_role_updated(&GuildId(guild_id), current_day)
+                        .await;
                 } else {
                     //TODO: role doesnt exist. Notify server error log and remove the role.
                 }
