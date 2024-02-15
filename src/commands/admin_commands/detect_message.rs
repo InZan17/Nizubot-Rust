@@ -78,21 +78,18 @@ pub async fn remove(
     ctx: Context<'_>,
     #[description = "Which detector you wanna remove."] index: u8,
 ) -> Result<(), Error> {
-    let guild_or_user_id;
-    let is_dms;
+    let id;
 
     if let Some(guild_id) = ctx.guild_id() {
-        guild_or_user_id = *guild_id.as_u64();
-        is_dms = false;
+        id = IdType::GuildId(guild_id);
     } else {
-        guild_or_user_id = *ctx.author().id.as_u64();
-        is_dms = true;
+        id = IdType::UserId(ctx.author().id);
     }
 
     let res = ctx
         .data()
         .detector_manager
-        .remove_message_detect(index as usize, guild_or_user_id, is_dms)
+        .remove_message_detect(index as usize, id)
         .await;
 
     if let Err(err) = res {

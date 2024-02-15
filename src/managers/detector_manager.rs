@@ -100,27 +100,13 @@ impl DetectorManager {
         &self,
         index: usize,
         // TODO: Merge guild_or_user_id and is_dms into an enum.
-        guild_or_user_id: u64,
-        is_dms: bool,
+        id: IdType,
     ) -> Result<(), Error> {
         let db = &self.db;
 
-        let id_as_string = guild_or_user_id.to_string();
+        //TODO: Instead of doing 2 database calls, make it 1.
 
-        let table_id;
-
-        if is_dms {
-            table_id = format!("user:{id_as_string}");
-        } else {
-            table_id = format!("guild:{id_as_string}");
-        }
-
-        let detectors_option: Option<Vec<DetectorInfo>> = db
-            .query(format!(
-                "SELECT VALUE message_detectors FROM {table_id} WHERE message_detectors"
-            ))
-            .await?
-            .take(0)?;
+        let detectors_option = db.get_all_message_detectors(&id).await?;
 
         if let Some(detectors) = detectors_option {
             if detectors.len() <= index {
@@ -130,10 +116,7 @@ impl DetectorManager {
             return Err("Index isn't valid.".into());
         }
 
-        db.query(format!(
-            "UPDATE {table_id} SET message_detectors = array::remove(message_detectors, {index});"
-        ))
-        .await?;
+        db.remove_message_detector(&id, index).await?;
 
         return Ok(());
     }

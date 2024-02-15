@@ -1,7 +1,9 @@
 use std::{collections::HashMap, sync::Arc};
 
 use percent_encoding::{percent_decode_str, utf8_percent_encode, NON_ALPHANUMERIC};
-use poise::serenity_prelude::{Context, Member, Reaction, ReactionType, RoleId, UserId};
+use poise::serenity_prelude::{
+    Context, GuildId, Member, MessageId, Reaction, ReactionType, RoleId, UserId,
+};
 
 use crate::Error;
 
@@ -22,20 +24,15 @@ impl ReactionManager {
     pub async fn add_reaction(
         &self,
         emoji: ReactionType,
-        role_id: u64,
-        guild_id: u64,
-        message_id: u64,
+        role_id: RoleId,
+        guild_id: GuildId,
+        message_id: MessageId,
     ) -> Result<(), Error> {
         let db = &self.db;
 
-        let table_id = format!("guild:{guild_id}");
-
-        let message_reaction_roles_option: Option<HashMap<String, u64>> = db
-            .query(format!(
-                "SELECT VALUE messages.{message_id}.reaction_roles from {table_id};"
-            ))
-            .await?
-            .take(0)?;
+        let message_reaction_roles_option = db
+            .get_message_reaction_roles(&guild_id, &message_id)
+            .await?;
 
         if let Some(message_reaction_roles) = message_reaction_roles_option {
             if let Some(role_id) = message_reaction_roles.get(&get_emoji_id(&emoji)) {
@@ -69,9 +66,8 @@ impl ReactionManager {
         // We never decode it anywhere. So when getting the emoji_string variable a few lines up, do we really need to decode str?
         let emoji_id = get_emoji_id(&emoji);
 
-        // I have to use merge here because if I try doing ["🧀"] like I do on the other queries then inside the database it will be "'🧀'" instead of "🧀"
-        db.query(format!("UPDATE {table_id} MERGE {{ \"messages\": {{ {message_id}: {{ \"reaction_roles\": {{ \"{emoji_id}\": {role_id} }} }} }} }};")).await?;
-
+        db.set_message_reaction_role(&guild_id, &message_id, &emoji_id, Some(&role_id))
+            .await?;
         Ok(())
     }
 
@@ -81,31 +77,23 @@ impl ReactionManager {
     pub async fn remove_reaction(
         &self,
         emoji: ReactionType,
-        guild_id: u64,
-        message_id: u64,
-    ) -> Result<u64, Error> {
+        guild_id: GuildId,
+        message_id: MessageId,
+    ) -> Result<RoleId, Error> {
         let db = &self.db;
-
-        let table_id = format!("guild:{guild_id}");
 
         let emoji_id = get_emoji_id(&emoji);
 
-        //TODO: put queries in seperate function.
-        let role_id: Option<u64> = db
-            .query(format!(
-                "SELECT VALUE messages.{message_id}.reaction_roles['{emoji_id}'] from {table_id};"
-            ))
-            .await?
-            .take(0)?;
+        let role_id = db
+            .get_role_from_message_reaction(&guild_id, &message_id, &emoji_id)
+            .await?;
 
         let Some(role_id) = role_id else {
             return Err("This message doesn't have this reaction.".into());
         };
 
-        db.query(format!(
-            "UPDATE {table_id} SET messages.{message_id}.reaction_roles['{emoji_id}'] = NONE;"
-        ))
-        .await?;
+        db.set_message_reaction_role(&guild_id, &message_id, &emoji_id, None)
+            .await?;
 
         Ok(role_id)
     }
@@ -136,17 +124,12 @@ impl ReactionManager {
 
         let message_id = reaction.message_id;
 
-        let table_id = format!("guild:{guild_id}");
-
         let emoji_id = get_emoji_id(&reaction.emoji);
 
         // TODO: try caching the results to not do as many calls to the db.
-        let role_id: Option<u64> = db
-            .query(format!(
-                "SELECT VALUE messages.{message_id}.reaction_roles['{emoji_id}'] from {table_id};"
-            ))
-            .await?
-            .take(0)?;
+        let role_id = db
+            .get_role_from_message_reaction(&guild_id, &message_id, &emoji_id)
+            .await?;
 
         let Some(role_id) = role_id else {
             return Ok(());
@@ -154,7 +137,7 @@ impl ReactionManager {
 
         let mut member = guild_id.member(&ctx, user_id).await?;
 
-        member.add_role(&ctx, RoleId(role_id)).await?;
+        member.add_role(&ctx, role_id).await?;
 
         Ok(())
     }
@@ -185,28 +168,23 @@ impl ReactionManager {
 
         let db = &self.db;
 
-        let role_id: Option<u64> = db
-            .query(format!(
-                "SELECT VALUE messages.{message_id}.reaction_roles['{emoji_id}'] from {table_id};"
-            ))
-            .await?
-            .take(0)?;
+        let role_id = db
+            .get_role_from_message_reaction(&guild_id, &message_id, &emoji_id)
+            .await?;
 
         let Some(role_id) = role_id else {
             return Ok(());
         };
 
         if user_id == bot_id {
-            db.query(format!(
-                "UPDATE {table_id} SET messages.{message_id}.reaction_roles['{emoji_id}'] = NONE;"
-            ))
-            .await?;
+            db.set_message_reaction_role(&guild_id, &message_id, &emoji_id, None)
+                .await?;
             return Err(format!("Bot reaction has been removed. This will unregister the role {role_id} to the reaction {emoji_id}.").into());
         }
 
         let mut member = guild_id.member(&ctx, user_id).await?;
 
-        member.remove_role(&ctx, RoleId(role_id)).await?;
+        member.remove_role(&ctx, role_id).await?;
 
         Ok(())
     }

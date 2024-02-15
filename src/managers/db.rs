@@ -1,4 +1,6 @@
-use poise::serenity_prelude::GuildId;
+use std::collections::HashMap;
+
+use poise::serenity_prelude::{GuildId, MessageId, RoleId};
 use reqwest::{Client, RequestBuilder};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
@@ -107,6 +109,7 @@ impl SurrealClient {
     pub async fn query<S: Into<String>>(&self, query: S) -> Result<Responses, Error> {
         let query: String = query.into();
         let builder = self.create_builder().body(query.clone());
+        println!("querying: {query}");
 
         let built_request = match builder.build() {
             Ok(request) => request,
@@ -293,5 +296,64 @@ impl SurrealClient {
         .await?;
 
         Ok(())
+    }
+
+    pub async fn remove_message_detector(&self, id: &IdType, index: usize) -> Result<(), Error> {
+        let table_id = id.into_db_table();
+
+        self.query(format!(
+            "UPDATE {table_id} SET message_detectors = array::remove(message_detectors, {index});"
+        ))
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn get_message_reaction_roles(
+        &self,
+        guild_id: &GuildId,
+        message_id: &MessageId,
+    ) -> Result<Option<HashMap<String, RoleId>>, Error> {
+        let res = self
+            .query(format!(
+                "SELECT VALUE messages.{message_id}.reaction_roles from guild:{guild_id};"
+            ))
+            .await?
+            .take(0)?;
+
+        Ok(res)
+    }
+
+    pub async fn set_message_reaction_role(
+        &self,
+        guild_id: &GuildId,
+        message_id: &MessageId,
+        emoji_id: &str,
+        role_id: Option<&RoleId>,
+    ) -> Result<(), Error> {
+        let role_id_format = if let Some(role_id) = role_id {
+            format!("{role_id}")
+        } else {
+            "NONE".to_owned()
+        };
+        // I have to use merge here because if I try doing ["🧀"] like I do on the other queries then inside the database it will be "'🧀'" instead of "🧀"
+        self.query(format!("UPDATE guild:{guild_id} MERGE {{ \"messages\": {{ {message_id}: {{ \"reaction_roles\": {{ \"{emoji_id}\": {role_id_format} }} }} }} }};")).await?;
+        Ok(())
+    }
+
+    pub async fn get_role_from_message_reaction(
+        &self,
+        guild_id: &GuildId,
+        message_id: &MessageId,
+        emoji_id: &str,
+    ) -> Result<Option<RoleId>, Error> {
+        let role_id = self
+            .query(format!(
+                "SELECT VALUE messages.{message_id}.reaction_roles['{emoji_id}'] from guild:{guild_id};"
+            ))
+            .await?
+            .take(0)?;
+
+        Ok(role_id)
     }
 }

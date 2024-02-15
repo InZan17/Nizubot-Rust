@@ -37,7 +37,7 @@ pub async fn add(
 
     ctx.data()
         .reaction_manager
-        .add_reaction(emoji, role.id.0, guild_id.0, message_id.0)
+        .add_reaction(emoji, role.id, guild_id, message_id)
         .await?;
 
     ctx.send(|m| {
@@ -65,7 +65,7 @@ pub async fn remove(
     let removed_role = ctx
         .data()
         .reaction_manager
-        .remove_reaction(emoji, guild_id.0, message_id.0)
+        .remove_reaction(emoji, guild_id, message_id)
         .await?;
 
     ctx.send(|m| {
