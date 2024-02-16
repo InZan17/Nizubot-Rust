@@ -99,7 +99,6 @@ impl DetectorManager {
     pub async fn remove_message_detect(
         &self,
         index: usize,
-        // TODO: Merge guild_or_user_id and is_dms into an enum.
         id: IdType,
     ) -> Result<(), Error> {
         let db = &self.db;

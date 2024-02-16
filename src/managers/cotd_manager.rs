@@ -206,6 +206,7 @@ pub fn cotd_manager_loop(
                         }
                         Err(err) => {
                             //TODO: check if error is internet fault or user fault.
+                            //If it happened to be that the bot got kicked from the guild: yea idk
                             println!("{}", err.to_string());
                             continue;
                         }
