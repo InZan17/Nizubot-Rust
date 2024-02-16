@@ -6,7 +6,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use poise::serenity_prelude::{Context, GuildId, Http, Role};
+use poise::serenity_prelude::{Context, GuildId, Http, Role, RoleId};
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, RwLock};
@@ -30,7 +30,7 @@ struct ColorResponse {
 pub struct CotdRoleData {
     pub name: String,
     pub day: u64,
-    pub id: u64,
+    pub id: RoleId,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -198,7 +198,7 @@ pub fn cotd_manager_loop(
                 if let Some(guild) = arc_ctx.cache.guild(guild_id) {
                     role = guild
                         .roles
-                        .get(&poise::serenity_prelude::RoleId(cotd_role_data.id))
+                        .get(&cotd_role_data.id)
                         .cloned();
                 } else {
                     let guild_res = arc_ctx.http.get_guild(guild_id).await;
@@ -207,7 +207,7 @@ pub fn cotd_manager_loop(
                         Ok(guild) => {
                             role = guild
                                 .roles
-                                .get(&poise::serenity_prelude::RoleId(cotd_role_data.id))
+                                .get(&cotd_role_data.id)
                                 .cloned();
                         }
                         Err(err) => {

@@ -29,13 +29,13 @@ pub struct RemindInfo {
     pub original_time: u64,
     pub request_time: u64,
     pub finish_time: u64,
-    pub channel_id: u64,
-    pub guild_id: Option<u64>,
-    pub user_id: u64,
+    pub channel_id: ChannelId,
+    pub guild_id: Option<GuildId>,
+    pub user_id: UserId,
     /// id will be Some() when retrieved from surrealdb. Otherwise None.
     #[serde(skip_serializing)]
     pub id: Option<String>,
-    pub message_id: Option<u64>,
+    pub message_id: Option<MessageId>,
     pub message: Option<String>,
     pub looping: bool,
 }
@@ -60,8 +60,8 @@ impl RemindManager {
     /// Max reminders per guild = 10
     pub async fn add_reminder<'a, F, Fut>(
         &self,
-        guild_id: Option<u64>,
-        channel_id: u64,
+        guild_id: Option<GuildId>,
+        channel_id: ChannelId,
         user_id: UserId,
         duration: u64,
         looping: bool,
@@ -71,7 +71,7 @@ impl RemindManager {
     ) -> Result<(), Error>
     where
         F: FnOnce() -> Fut,
-        Fut: Future<Output = Result<u64, Error>>,
+        Fut: Future<Output = Result<MessageId, Error>>,
     {
         let db = &self.db;
 
@@ -126,7 +126,7 @@ impl RemindManager {
             channel_id,
             guild_id,
             id: None,
-            user_id: *user_id.as_u64(),
+            user_id,
             message_id: Some(message_id_callback().await?),
             message,
             looping,
@@ -179,8 +179,8 @@ impl RemindManager {
     /// Will error if unable to communicate with db or if callback errors.
     pub async fn remove_reminder(
         &self,
-        user_id: u64,
-        guild_id: Option<u64>,
+        user_id: UserId,
+        guild_id: Option<GuildId>,
         removal_index: usize,
     ) -> Result<Option<RemindInfo>, Error> {
         let db = &self.db;
@@ -240,8 +240,8 @@ impl RemindManager {
     /// Will error if unable to communicate with db or if callback errors.
     pub async fn list_reminders(
         &self,
-        user_id: u64,
-        guild_id: Option<u64>,
+        user_id: UserId,
+        guild_id: Option<GuildId>,
     ) -> Result<Vec<RemindInfo>, Error> {
         let db = &self.db;
 
@@ -326,7 +326,7 @@ pub fn remind_manager_loop(arc_ctx: Arc<Context>, remind_manager: Arc<RemindMana
                     continue;
                 };
 
-                let channel_id = ChannelId(reminder_info.channel_id);
+                let channel_id = reminder_info.channel_id;
 
                 let message_ending;
 
@@ -353,9 +353,9 @@ pub fn remind_manager_loop(arc_ctx: Arc<Context>, remind_manager: Arc<RemindMana
 
                 if let Some(message_id) = reminder_info.message_id {
                     let mut message_refrence =
-                        MessageReference::from((channel_id, MessageId(message_id)));
+                        MessageReference::from((channel_id, message_id));
                     if let Some(guild_id) = reminder_info.guild_id {
-                        message_refrence.guild_id = Some(GuildId(guild_id));
+                        message_refrence.guild_id = Some(guild_id);
                     }
                     message_refrence_opt = Some(message_refrence);
                 } else {

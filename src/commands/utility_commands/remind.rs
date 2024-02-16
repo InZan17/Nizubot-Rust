@@ -58,15 +58,9 @@ pub async fn add(
         message_ending = ".".to_string()
     }
 
-    let guild_id;
+    let guild_id = ctx.guild_id();
 
-    if let Some(id) = ctx.guild_id() {
-        guild_id = Some(*id.as_u64());
-    } else {
-        guild_id = None;
-    }
-
-    let channel_id = *ctx.channel_id().as_u64();
+    let channel_id = ctx.channel_id();
 
     let add_result = ctx
         .data()
@@ -105,7 +99,7 @@ pub async fn add(
                         .await?;
                 }
 
-                let message_id = handle.message().await?.id.as_u64().clone();
+                let message_id = handle.message().await?.id.clone();
                 return Ok(message_id)
             }
         )
@@ -132,15 +126,9 @@ pub async fn remove(
     ctx: Context<'_>,
     #[description = "Which reminder to remove. (See reminders with /remind list)"] index: u8,
 ) -> Result<(), Error> {
-    let guild_id;
+    let guild_id = ctx.guild_id();
 
-    if let Some(id) = ctx.guild_id() {
-        guild_id = Some(*id.as_u64());
-    } else {
-        guild_id = None;
-    }
-
-    let user_id = *ctx.author().id.as_u64();
+    let user_id = ctx.author().id;
 
     let removed_reminder = ctx
         .data()
@@ -179,14 +167,10 @@ pub async fn remove(
 #[poise::command(slash_command)]
 pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
     let remind_manager = &ctx.data().remind_manager;
-    let guild_id;
-    if let Some(the_guild_id) = ctx.guild_id() {
-        guild_id = Some(*the_guild_id.as_u64())
-    } else {
-        guild_id = None
-    }
 
-    let user_id = ctx.author().id.0;
+    let guild_id = ctx.guild_id();
+    let user_id = ctx.author().id;
+    
     let reminders = remind_manager.list_reminders(user_id, guild_id).await?;
 
     ctx.send(|m| {

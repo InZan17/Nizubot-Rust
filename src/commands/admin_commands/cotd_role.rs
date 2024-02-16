@@ -37,7 +37,7 @@ pub async fn create(
     if let Some(cotd_role_data) = cotd_role_data {
         let role_id = cotd_role_data.cotd_role.id;
         let guild_roles = &guild.roles;
-        if guild_roles.contains_key(&RoleId(role_id)) {
+        if guild_roles.contains_key(&role_id) {
             ctx.send(|m| {
                 m.content(format!("You already have a COTD role! <@&{role_id}>",))
                     .ephemeral(true)
@@ -58,7 +58,7 @@ pub async fn create(
     let cotd_manager = &ctx.data().cotd_manager;
 
     let day = cotd_manager.get_current_day();
-    let role_id = cotd_role.id.as_u64().clone();
+    let role_id = cotd_role.id.clone();
 
     let current_color = cotd_manager.get_current_color().await?;
 
@@ -112,7 +112,7 @@ pub async fn remove(
     data.db.update_guild_cotd_role(&None, &guild.id).await?;
 
     if delete.unwrap_or(false) {
-        let res = ctx.guild().unwrap().delete_role(ctx, RoleId(role_id)).await;
+        let res = ctx.guild().unwrap().delete_role(ctx, role_id).await;
         if let Err(err) = res {
             ctx.send(|m| {
                 m.content(format!(
