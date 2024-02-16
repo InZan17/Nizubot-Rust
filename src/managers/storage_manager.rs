@@ -24,6 +24,8 @@ impl DataDirectories {
     }
 }
 
+//TODO simple docs for the functions
+
 pub fn storage_manager_loop(_arc_ctx: Arc<Context>, storage_manager: Arc<StorageManager>) {
     tokio::spawn(async move {
         loop {
@@ -54,8 +56,8 @@ pub enum DataType {
     Bytes(Vec<u8>),
 }
 pub struct DataHolder {
-    path: String,
-    data: Arc<RwLock<DataType>>,
+    pub path: String,
+    pub data: Arc<RwLock<DataType>>,
 }
 
 impl DataType {
@@ -74,6 +76,20 @@ impl DataType {
     }
 
     pub fn bytes(&self) -> Option<&Vec<u8>> {
+        match self {
+            DataType::String(string) => None,
+            DataType::Bytes(bytes) => Some(bytes),
+        }
+    }
+
+    pub fn string_mut(&mut self) -> Option<&mut String> {
+        match self {
+            DataType::String(string) => Some(string),
+            DataType::Bytes(bytes) => None,
+        }
+    }
+
+    pub fn bytes_mut(&mut self) -> Option<&mut Vec<u8>> {
         match self {
             DataType::String(string) => None,
             DataType::Bytes(bytes) => Some(bytes),
@@ -164,14 +180,13 @@ impl StorageManager {
 
         let mut file = tokio::fs::File::open(path).await?;
 
-        let mut buffer = Vec::new();
-
-        let _len = file.read(&mut buffer).await?;
-
         if to_string {
-            let convert = std::str::from_utf8(&buffer)?;
-            return Ok(Some(DataType::String(convert.to_owned())));
+            let mut string = String::new();
+            file.read_to_string(&mut string).await?;
+            return Ok(Some(DataType::String(string)));
         } else {
+            let mut buffer = Vec::new();
+            let _len = file.read(&mut buffer).await?;
             return Ok(Some(DataType::Bytes(buffer)));
         }
     }
@@ -230,6 +245,7 @@ impl StorageManager {
         duration: Duration,
     ) -> Result<Option<DataHolder>, Error> {
         if let Some(data) = self.load_mem(path).await {
+            println!("using mem");
             return Ok(Some(DataHolder {
                 path: path.to_string(),
                 data,
@@ -239,13 +255,16 @@ impl StorageManager {
         let option = self.load_disk(path, to_string).await?;
 
         if let Some(data) = option {
+            println!("using disk");
             let data = Arc::new(RwLock::new(data));
-            self.save_mem(path, data.clone(), duration);
+            self.save_mem(path, data.clone(), duration).await;
             return Ok(Some(DataHolder {
                 path: path.to_string(),
                 data,
             }));
         }
+
+        println!("using none");
 
         Ok(None)
     }
@@ -256,33 +275,23 @@ impl StorageManager {
         to_string: bool,
         data: DataType,
         duration: Duration,
-    ) -> (DataHolder, Result<(), Error>) {
-        let mut data_holder = None;
-        let mut error = Ok(());
+    ) -> Result<DataHolder, Error> {
+        let res = self.load(path, to_string, duration).await?;
 
-        let res = self.load(path, to_string, duration).await;
+        if let Some(data_holder) = res {
+            return Ok(data_holder);
+        };
 
-        match res {
-            Ok(data) => {
-                data_holder = data;
-            }
-            Err(err) => error = Err(err),
-        }
+        let arc_data = Arc::new(RwLock::new(data));
 
-        if data_holder.is_none() {
-            let arc_data = Arc::new(RwLock::new(data));
+        let data = DataHolder {
+            path: path.to_string(),
+            data: arc_data,
+        };
 
-            let data = DataHolder {
-                path: path.to_string(),
-                data: arc_data,
-            };
+        self.save(path, &data, duration).await;
 
-            self.save(path, &data, duration).await;
-
-            data_holder = Some(data);
-        }
-
-        (data_holder.unwrap(), error)
+        Ok(data)
     }
 
     pub async fn delete(self: &Arc<Self>, path: &str) -> Result<String, Error> {

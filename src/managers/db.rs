@@ -110,7 +110,6 @@ impl SurrealClient {
     pub async fn query<S: Into<String>>(&self, query: S) -> Result<Responses, Error> {
         let query: String = query.into();
         let builder = self.create_builder().body(query.clone());
-        println!("querying: {query}");
 
         let built_request = match builder.build() {
             Ok(request) => request,

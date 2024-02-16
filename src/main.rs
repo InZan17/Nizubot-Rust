@@ -17,6 +17,7 @@ use managers::{
     cotd_manager::{cotd_manager_loop, CotdManager},
     currency_manager::CurrencyManager,
     db::SurrealClient,
+    log_manager::LogManager,
     remind_manager::{remind_manager_loop, RemindManager},
     storage_manager::{storage_manager_loop, StorageManager},
 };
@@ -36,6 +37,7 @@ pub struct Data {
     detector_manager: Arc<DetectorManager>,
     reaction_manager: Arc<ReactionManager>,
     currency_manager: Arc<CurrencyManager>,
+    log_manager: Arc<LogManager>,
     db: Arc<SurrealClient>,
 } // User data, which is stored and accessible in all command invocations
 pub struct Handler {} // User data, which is stored and accessible in all command invocations
@@ -143,6 +145,7 @@ async fn main() {
                         )
                         .await,
                     ),
+                    log_manager: Arc::new(LogManager::new(db.clone(), storage_manager.clone())),
                     storage_manager,
                     started_loops: AtomicBool::new(false),
                     db,
