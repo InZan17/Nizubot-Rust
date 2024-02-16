@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use poise::serenity_prelude::{GuildId, MessageId, RoleId};
+use poise::serenity_prelude::{GuildId, MessageId, RoleId, UserId};
 use reqwest::{Client, RequestBuilder};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
@@ -14,6 +14,7 @@ use crate::{
 use super::{
     cotd_manager::{ColorInfo, CotdRoleData, CotdRoleDataQuery},
     detector_manager::DetectorInfo,
+    remind_manager::RemindInfo,
 };
 
 pub struct SurrealClient {
@@ -355,5 +356,77 @@ impl SurrealClient {
             .take(0)?;
 
         Ok(role_id)
+    }
+
+    pub async fn list_user_reminders(&self, user_id: &UserId) -> Result<Vec<RemindInfo>, Error> {
+        let user_reminders: Vec<RemindInfo> = self
+            .query(format!(
+                "
+            LET $reminders = SELECT VALUE ->reminds->reminder FROM user:{user_id};
+
+            IF array::len($reminders) THEN
+                SELECT * FROM array::first($reminders) ORDER BY original_time;
+            ELSE
+                RETURN [];
+            END
+        "
+            ))
+            .await?
+            .take(1)?;
+
+        Ok(user_reminders)
+    }
+
+    pub async fn add_user_reminder(&self, remind_info: &RemindInfo) -> Result<(), Error> {
+        let remind_info_json = serde_json::to_string(&remind_info)?;
+
+        let user_id = remind_info.user_id;
+        let guild_relate_statement = if let Some(guild_id) = remind_info.guild_id {
+            format!(
+                "
+            UPDATE guild:{guild_id};
+            RELATE guild:{guild_id}->reminds->$reminder;
+            "
+            )
+        } else {
+            "RETURN;RETURN;".to_owned()
+        };
+
+        self.query(format!(
+            "
+        BEGIN TRANSACTION;
+
+        LET $reminder = (CREATE reminder CONTENT {remind_info_json});
+
+        UPDATE user:{user_id};
+        RELATE user:{user_id}->reminds->$reminder;
+
+        {guild_relate_statement}
+
+        COMMIT TRANSACTION;
+        "
+        ))
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn delete_table_id(&self, table_id: &String) -> Result<(), Error> {
+        self.query(format!("DELETE {table_id}"))
+            .await?
+            .take::<Vec<Value>>(0)?;
+        Ok(())
+    }
+
+    /// Returns a list of reminders that have finished and needs to be sent.
+    pub async fn get_pending_reminders(&self, current_time: u64) -> Result<Vec<RemindInfo>, Error> {
+        let reminders = self
+            .query(format!(
+                "SELECT * FROM reminder WHERE finish_time <= {current_time};"
+            ))
+            .await?
+            .take(0)?;
+
+        Ok(reminders)
     }
 }

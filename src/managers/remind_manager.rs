@@ -75,23 +75,8 @@ impl RemindManager {
     {
         let db = &self.db;
 
-        let user_table_id = format!("user:{user_id}");
-
         //TODO: Put in seperate function
-        let user_reminders: Vec<RemindInfo> = db
-            .query(format!(
-                "
-            LET $reminders = SELECT VALUE ->reminds->reminder FROM {user_table_id};
-
-            IF array::len($reminders) THEN
-                SELECT * FROM array::first($reminders) ORDER BY original_time;
-            ELSE
-                RETURN [];
-            END
-        "
-            ))
-            .await?
-            .take(1)?;
+        let user_reminders = db.list_user_reminders(&user_id).await?;
 
         if user_reminders.len() >= 50 {
             return Err(Error::from(
@@ -132,36 +117,7 @@ impl RemindManager {
             looping,
         };
 
-        let remind_info_json = serde_json::to_string(&remind_info)?;
-
-        // TODO: Put this logic and query in a seperate function
-        let guild_relate_statement = if let Some(guild_id) = guild_id {
-            let guild_table_id = format!("guild:{guild_id}");
-            format!(
-                "
-            UPDATE {guild_table_id};
-            RELATE {guild_table_id}->reminds->$reminder;
-            "
-            )
-        } else {
-            "RETURN;RETURN;".to_owned()
-        };
-
-        self.db
-            .query(format!(
-                "
-        BEGIN TRANSACTION;
-
-        LET $reminder = (CREATE reminder CONTENT {remind_info_json});
-
-        UPDATE {user_table_id};
-        RELATE {user_table_id}->reminds->$reminder;
-        {guild_relate_statement}
-
-        COMMIT TRANSACTION;
-        "
-            ))
-            .await?;
+        self.db.add_user_reminder(&remind_info).await?;
 
         //TODO: add remidner and also fix the index
 
@@ -185,23 +141,7 @@ impl RemindManager {
     ) -> Result<Option<RemindInfo>, Error> {
         let db = &self.db;
 
-        let table_id = format!("user:{user_id}");
-
-        //TODO: put in funtion
-        let mut reminders: Vec<RemindInfo> = db
-            .query(format!(
-                "
-            LET $reminders = SELECT VALUE ->reminds->reminder FROM {table_id};
-
-            IF array::len($reminders) THEN
-                SELECT * FROM array::first($reminders) ORDER BY original_time;
-            ELSE
-                RETURN [];
-            END
-        "
-            ))
-            .await?
-            .take(1)?;
+        let mut reminders = db.list_user_reminders(&user_id).await?;
 
         let mut reminders_index = 0;
         let mut reminders_guild_index = 0;
@@ -228,7 +168,7 @@ impl RemindManager {
             return Err("Reminder didn't have a database id.".into());
         };
 
-        db.query(format!("DELETE {reminder_id}")).await?;
+        db.delete_table_id(reminder_id).await?;
 
         return Ok(Some(removed_reminder));
     }
@@ -245,23 +185,7 @@ impl RemindManager {
     ) -> Result<Vec<RemindInfo>, Error> {
         let db = &self.db;
 
-        let table_id = format!("user:{user_id}");
-
-        //TODO put in function
-        let reminders: Vec<RemindInfo> = db
-            .query(format!(
-                "
-            LET $reminders = SELECT VALUE ->reminds->reminder FROM {table_id};
-
-            IF array::len($reminders) THEN
-                SELECT * FROM array::first($reminders) ORDER BY original_time;
-            ELSE
-                RETURN [];
-            END
-        "
-            ))
-            .await?
-            .take(1)?;
+        let reminders = db.list_user_reminders(&user_id).await?;
 
         let mut specific_reminders = vec![];
 
@@ -293,21 +217,9 @@ pub fn remind_manager_loop(arc_ctx: Arc<Context>, remind_manager: Arc<RemindMana
 
             let mut next_wait_until = u64::MAX;
 
-            let mut query_response = match db
-                .query(format!(
-                    "SELECT * FROM reminder WHERE finish_time <= {current_time};"
-                ))
-                .await
-            {
-                Ok(response) => response,
-                Err(err) => {
-                    panic!("{err}");
-                    //TODO; Do somethign with the error. Maybe use a log for the bot specifically.
-                    continue;
-                }
-            };
+            let result = db.get_pending_reminders(current_time).await;
 
-            let mut reminders: Vec<RemindInfo> = match query_response.take(0) {
+            let mut reminders = match result {
                 Ok(reminders) => reminders,
                 Err(err) => {
                     panic!("{err}");
@@ -388,11 +300,7 @@ pub fn remind_manager_loop(arc_ctx: Arc<Context>, remind_manager: Arc<RemindMana
                         } else {
                             //TODO: notify to the user/server log.
                             //If a deletion fails, abort the remind manager loop because else it will just keep spamming the same reminders.
-                            db.query(format!("DELETE {reminder_id}"))
-                                .await
-                                .unwrap()
-                                .take::<Vec<Value>>(0)
-                                .unwrap();
+                            db.delete_table_id(&reminder_id).await.unwrap();
                         }
                         continue;
                     }
@@ -436,12 +344,7 @@ pub fn remind_manager_loop(arc_ctx: Arc<Context>, remind_manager: Arc<RemindMana
                     }
 
                     //If a deletion fails, abort the remind manager loop because else it will just keep spamming the same reminders.
-                    let a = db
-                        .query(format!("DELETE {reminder_id}"))
-                        .await
-                        .unwrap()
-                        .take::<Vec<Value>>(0)
-                        .unwrap();
+                    let a = db.delete_table_id(reminder_id).await.unwrap();
                 }
             }
             *remind_manager.wait_until.lock().await = next_wait_until;
