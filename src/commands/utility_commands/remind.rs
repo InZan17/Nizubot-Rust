@@ -170,7 +170,7 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
 
     let guild_id = ctx.guild_id();
     let user_id = ctx.author().id;
-    
+
     let reminders = remind_manager.list_reminders(user_id, guild_id).await?;
 
     ctx.send(|m| {

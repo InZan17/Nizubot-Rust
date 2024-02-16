@@ -196,19 +196,13 @@ pub fn cotd_manager_loop(
 
                 //TODO: Put this in a seperate function
                 if let Some(guild) = arc_ctx.cache.guild(guild_id) {
-                    role = guild
-                        .roles
-                        .get(&cotd_role_data.id)
-                        .cloned();
+                    role = guild.roles.get(&cotd_role_data.id).cloned();
                 } else {
                     let guild_res = arc_ctx.http.get_guild(guild_id).await;
 
                     match guild_res {
                         Ok(guild) => {
-                            role = guild
-                                .roles
-                                .get(&cotd_role_data.id)
-                                .cloned();
+                            role = guild.roles.get(&cotd_role_data.id).cloned();
                         }
                         Err(err) => {
                             //TODO: check if error is internet fault or user fault.

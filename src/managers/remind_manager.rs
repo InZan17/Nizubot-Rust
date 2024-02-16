@@ -352,8 +352,7 @@ pub fn remind_manager_loop(arc_ctx: Arc<Context>, remind_manager: Arc<RemindMana
                 let message_refrence_opt;
 
                 if let Some(message_id) = reminder_info.message_id {
-                    let mut message_refrence =
-                        MessageReference::from((channel_id, message_id));
+                    let mut message_refrence = MessageReference::from((channel_id, message_id));
                     if let Some(guild_id) = reminder_info.guild_id {
                         message_refrence.guild_id = Some(guild_id);
                     }
