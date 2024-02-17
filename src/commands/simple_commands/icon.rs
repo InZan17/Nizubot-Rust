@@ -4,7 +4,7 @@ use poise::serenity_prelude::{Emoji, User};
 /// Get the icon of whatever you want!
 #[poise::command(
     slash_command,
-    subcommands("user", "server", "emoji"),
+    subcommands("user", "guild", "emoji"),
     subcommand_required
 )]
 pub async fn icon(_ctx: Context<'_>) -> Result<(), Error> {
@@ -34,9 +34,9 @@ pub async fn user(
     Ok(())
 }
 
-/// Get the icon of the server.
+/// Get the icon of the guild.
 #[poise::command(slash_command)]
-pub async fn server(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn guild(ctx: Context<'_>) -> Result<(), Error> {
     if let Some(guild) = &ctx.guild() {
         let name = &guild.name;
         if let Some(icon_url) = guild.icon_url() {

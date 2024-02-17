@@ -34,7 +34,7 @@ impl LogType {
     }
 }
 pub enum LogSource {
-    Server,
+    Guild,
     User,
     Custom(String),
 }
@@ -42,7 +42,7 @@ pub enum LogSource {
 impl LogSource {
     pub fn to_string(&self) -> String {
         match self {
-            LogSource::Server => "SERVER".to_string(),
+            LogSource::Guild => "GUILD".to_string(),
             LogSource::User => "USER".to_string(),
             LogSource::Custom(string) => string.to_owned(),
         }
