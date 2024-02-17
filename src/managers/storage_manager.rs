@@ -245,7 +245,6 @@ impl StorageManager {
         duration: Duration,
     ) -> Result<Option<DataHolder>, Error> {
         if let Some(data) = self.load_mem(path).await {
-            println!("using mem");
             return Ok(Some(DataHolder {
                 path: path.to_string(),
                 data,
@@ -255,7 +254,6 @@ impl StorageManager {
         let option = self.load_disk(path, to_string).await?;
 
         if let Some(data) = option {
-            println!("using disk");
             let data = Arc::new(RwLock::new(data));
             self.save_mem(path, data.clone(), duration).await;
             return Ok(Some(DataHolder {
@@ -263,8 +261,6 @@ impl StorageManager {
                 data,
             }));
         }
-
-        println!("using none");
 
         Ok(None)
     }
