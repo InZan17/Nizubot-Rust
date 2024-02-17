@@ -75,7 +75,11 @@ async fn event_handler(
                     data.cotd_manager.clone(),
                     data.log_manager.clone(),
                 );
-                remind_manager_loop(arc_ctx.clone(), data.remind_manager.clone());
+                remind_manager_loop(
+                    arc_ctx.clone(),
+                    data.remind_manager.clone(),
+                    data.log_manager.clone(),
+                );
                 data.started_loops.swap(true, Ordering::Relaxed);
             }
             // TODO: Look through all relevant data and check if its still valid.

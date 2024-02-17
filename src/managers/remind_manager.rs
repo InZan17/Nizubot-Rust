@@ -15,9 +15,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::Mutex;
 
-use crate::{utils::get_seconds, Error};
+use crate::{
+    managers::log_manager::{LogSource, LogType},
+    utils::{get_seconds, IdType},
+    Error,
+};
 
-use super::db::SurrealClient;
+use super::{db::SurrealClient, log_manager::LogManager};
 
 pub struct RemindManager {
     db: Arc<SurrealClient>,
@@ -200,7 +204,11 @@ impl RemindManager {
 }
 
 /// Main loop for checking if it's time for any reminders to be reminded.
-pub fn remind_manager_loop(arc_ctx: Arc<Context>, remind_manager: Arc<RemindManager>) {
+pub fn remind_manager_loop(
+    arc_ctx: Arc<Context>,
+    remind_manager: Arc<RemindManager>,
+    log_manager: Arc<LogManager>,
+) {
     tokio::spawn(async move {
         let db = &remind_manager.db;
 
@@ -273,8 +281,6 @@ pub fn remind_manager_loop(arc_ctx: Arc<Context>, remind_manager: Arc<RemindMana
                     message_refrence_opt = None;
                 }
 
-                println!("{}", message_refrence_opt.is_some());
-
                 if reminder_info.looping {
                     let wait_time = reminder_info.finish_time - reminder_info.request_time;
                     let missed_reminders =
@@ -295,7 +301,7 @@ pub fn remind_manager_loop(arc_ctx: Arc<Context>, remind_manager: Arc<RemindMana
                     };
 
                     if let Err(err) = res {
-                        if should_keep(err) {
+                        if should_keep(&err) {
                             next_wait_until = 0;
                         } else {
                             //TODO: notify to the user/server log.
@@ -335,11 +341,30 @@ pub fn remind_manager_loop(arc_ctx: Arc<Context>, remind_manager: Arc<RemindMana
                     };
 
                     if let Err(err) = res {
-                        if should_keep(err) {
+                        if should_keep(&err) {
                             next_wait_until = 0;
                             continue;
                         } else {
-                            //TODO: Notify to the user/server log
+                            let add_log = format!(
+                                "Failed to send reminder. Deleting reminder. Reason: {}",
+                                err.to_string()
+                            );
+                            if let Some(guild_id) = reminder_info.guild_id {
+                                let id = IdType::GuildId(guild_id);
+                                let _ = log_manager
+                                    .add_log(
+                                        &id,
+                                        add_log.clone(),
+                                        LogType::Error,
+                                        LogSource::Reminder,
+                                    )
+                                    .await;
+                            }
+
+                            let id = IdType::UserId(reminder_info.user_id);
+                            let _ = log_manager
+                                .add_log(&id, add_log, LogType::Error, LogSource::Reminder)
+                                .await;
                         }
                     }
 
@@ -353,9 +378,9 @@ pub fn remind_manager_loop(arc_ctx: Arc<Context>, remind_manager: Arc<RemindMana
 }
 
 /// Checks if a serenity error is due to internet issues (true) or discord issue for example bot role perms, missing guild or channel (false)
-fn should_keep(error: poise::serenity_prelude::Error) -> bool {
+fn should_keep(error: &poise::serenity_prelude::Error) -> bool {
     match error {
-        poise::serenity_prelude::Error::Http(http) => match *http {
+        poise::serenity_prelude::Error::Http(http) => match http.as_ref() {
             poise::serenity_prelude::HttpError::Request(req) => {
                 req.is_request() || req.is_timeout()
             }

@@ -39,6 +39,7 @@ pub enum LogSource {
     MessageDetector,
     ReactionRole,
     CotdRole,
+    Reminder,
     Custom(String),
 }
 
@@ -50,6 +51,7 @@ impl LogSource {
             LogSource::MessageDetector => "MESSAGE_DETECTOR".to_string(),
             LogSource::ReactionRole => "REACTION_ROLE".to_string(),
             LogSource::CotdRole => "COTD_ROLE".to_string(),
+            LogSource::Reminder => "REMINDER".to_string(),
             LogSource::Custom(string) => string.to_owned(),
         }
     }
@@ -126,8 +128,6 @@ impl LogManager {
                 //Same error. Adding (x2) to save space.
                 logs.insert_str(logs.len(), " (x2)");
             } else if let Some((error, number)) = last_error.rsplit_once(" ") {
-                println!("errrorr: {error}");
-                println!("compare: {add_str}");
                 // Check if removing the (xn) makes it match.
                 if add_str == error {
                     //Check if it ends with (xn) where n is a number
@@ -162,7 +162,6 @@ impl LogManager {
 }
 
 fn extract_number(s: &str) -> Option<u64> {
-    println!("{s}");
     if s.starts_with("(x") && s.ends_with(")") && s.len() > 3 {
         let only_number = &s[2..(s.len() - 1)];
         return only_number.parse::<u64>().ok();
