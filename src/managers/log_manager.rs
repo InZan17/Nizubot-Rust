@@ -36,6 +36,9 @@ impl LogType {
 pub enum LogSource {
     Guild,
     User,
+    MessageDetector,
+    ReactionRole,
+    CotdRole,
     Custom(String),
 }
 
@@ -44,6 +47,9 @@ impl LogSource {
         match self {
             LogSource::Guild => "GUILD".to_string(),
             LogSource::User => "USER".to_string(),
+            LogSource::MessageDetector => "MESSAGE_DETECTOR".to_string(),
+            LogSource::ReactionRole => "REACTION_ROLE".to_string(),
+            LogSource::CotdRole => "COTD_ROLE".to_string(),
             LogSource::Custom(string) => string.to_owned(),
         }
     }
@@ -107,26 +113,43 @@ impl LogManager {
         let mut write = data_holder.data.write().await;
         let logs = write.string_mut().unwrap();
 
-        //TODO: Change the prefix to be configurable.
-        logs.insert_str(
-            logs.len(),
-            &format!(
-                "\n[{}:{}] {add_log}",
-                log_type.to_string(),
-                log_source.to_string()
-            ),
+        let add_str = format!(
+            "[{}:{}] {add_log}",
+            log_type.to_string(),
+            log_source.to_string()
         );
+
+        // I'm sorry for the code
+        if let Some((rest, last_error)) = logs.rsplit_once("\n") {
+            //Check if previous error is the same.
+            if add_str == last_error {
+                //Same error. Adding (x2) to save space.
+                logs.insert_str(logs.len(), " (x2)");
+            } else if let Some((error, number)) = last_error.rsplit_once(" ") {
+                println!("errrorr: {error}");
+                println!("compare: {add_str}");
+                // Check if removing the (xn) makes it match.
+                if add_str == error {
+                    //Check if it ends with (xn) where n is a number
+                    if let Some(number) = extract_number(number) {
+                        *logs = format!("{rest}\n{add_str} (x{})", number + 1);
+                    } else {
+                        logs.insert_str(logs.len(), &format!("\n{add_str}"));
+                    }
+                } else {
+                    logs.insert_str(logs.len(), &format!("\n{add_str}"));
+                }
+            } else {
+                logs.insert_str(logs.len(), &format!("\n{add_str}"));
+            }
+        } else {
+            logs.insert_str(logs.len(), &format!("\n{add_str}"));
+        };
 
         drop(write);
 
         //if error it will still save in ram so idc.
         let _ = self.save_data_holder(id, &data_holder).await;
-
-        //TODO: make is to if the previous error is the same then it just adds a (x2) at the end to not clutter when database errors happen.
-        /*let Some((_, last_error)) = logs.rsplit_once("\n") else {
-            logs.insert_str(logs.len(), &add_log);
-            return Ok(());
-        };*/
 
         Ok(())
     }
@@ -136,4 +159,13 @@ impl LogManager {
 
         Ok(())
     }
+}
+
+fn extract_number(s: &str) -> Option<u64> {
+    println!("{s}");
+    if s.starts_with("(x") && s.ends_with(")") && s.len() > 3 {
+        let only_number = &s[2..(s.len() - 1)];
+        return only_number.parse::<u64>().ok();
+    }
+    None
 }
