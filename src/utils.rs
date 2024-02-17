@@ -23,4 +23,18 @@ impl IdType {
             IdType::GuildId(guild_id) => format!("guild:{guild_id}"),
         }
     }
+
+    pub fn get_u64(&self) -> u64 {
+        match self {
+            IdType::UserId(id) => id.0,
+            IdType::GuildId(id) => id.0,
+        }
+    }
+
+    pub fn is_user(&self) -> bool {
+        match self {
+            IdType::UserId(_) => true,
+            IdType::GuildId(_) => false,
+        }
+    }
 }
