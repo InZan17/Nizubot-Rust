@@ -11,10 +11,11 @@ use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, RwLock};
 
-use crate::Error;
+use crate::{utils::IdType, Error};
 
 use super::{
     db::SurrealClient,
+    log_manager::{LogManager, LogSource, LogType},
     storage_manager::{DataDirectories, StorageManager},
 };
 
@@ -158,6 +159,7 @@ pub fn cotd_manager_loop(
     arc_ctx: Arc<Context>,
     db: Arc<SurrealClient>,
     cotd_manager: Arc<CotdManager>,
+    log_manager: Arc<LogManager>,
 ) {
     tokio::spawn(async move {
         let mut last_updated_day = 0;
@@ -214,16 +216,38 @@ pub fn cotd_manager_loop(
                 }
 
                 if let Some(role) = role {
-                    //TODO: Do something if there's an error.
                     let result = cotd_manager
                         .update_role(&arc_ctx, role, &cotd_role_data.name, &current_color)
                         .await;
 
-                    // TODO: do somethign if theres an error.
+                    if let Err(err) = result {
+                        let _ = log_manager
+                            .add_log(
+                                &IdType::GuildId(GuildId(guild_id)),
+                                err.to_string(),
+                                LogType::Warning,
+                                LogSource::CotdRole,
+                            )
+                            .await;
+                        continue;
+                    }
+
                     db.mark_cotd_role_updated(&GuildId(guild_id), current_day)
                         .await;
                 } else {
-                    //TODO: role doesnt exist. Notify server error log and remove the role.
+                    let _ = log_manager
+                        .add_log(
+                            &IdType::GuildId(GuildId(guild_id)),
+                            format!(
+                                "Role {} ({}) doesn't exist. Unregistering role from cotd role.",
+                                cotd_role_data.name, cotd_role_data.id
+                            ),
+                            LogType::Error,
+                            LogSource::CotdRole,
+                        )
+                        .await;
+
+                    db.update_guild_cotd_role(&None, &GuildId(guild_id)).await;
                 }
             }
         }

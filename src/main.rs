@@ -17,7 +17,7 @@ use managers::{
     cotd_manager::{cotd_manager_loop, CotdManager},
     currency_manager::CurrencyManager,
     db::SurrealClient,
-    log_manager::LogManager,
+    log_manager::{LogManager, LogSource, LogType},
     remind_manager::{remind_manager_loop, RemindManager},
     storage_manager::{storage_manager_loop, StorageManager},
 };
@@ -26,6 +26,7 @@ use poise::{
     serenity_prelude::{self as serenity},
     Event, ReplyHandle,
 };
+use utils::IdType;
 
 use crate::managers::{detector_manager::DetectorManager, reaction_manager::ReactionManager};
 
@@ -68,7 +69,12 @@ async fn event_handler(
                 println!("Caches are ready! Starting all the managers.");
                 let arc_ctx = Arc::new(ctx.clone());
                 storage_manager_loop(arc_ctx.clone(), data.storage_manager.clone());
-                cotd_manager_loop(arc_ctx.clone(), data.db.clone(), data.cotd_manager.clone());
+                cotd_manager_loop(
+                    arc_ctx.clone(),
+                    data.db.clone(),
+                    data.cotd_manager.clone(),
+                    data.log_manager.clone(),
+                );
                 remind_manager_loop(arc_ctx.clone(), data.remind_manager.clone());
                 data.started_loops.swap(true, Ordering::Relaxed);
             }
@@ -80,14 +86,60 @@ async fn event_handler(
             // Also do these kinds of checks whenever communication to db hasnt worked.
         }
         Event::Message { new_message } => {
-            //TODO: notify errors to the user/server log
-            data.detector_manager.on_message(ctx, new_message).await;
+            if let Err(err) = data.detector_manager.on_message(ctx, new_message).await {
+                let id;
+
+                if let Some(guild_id) = new_message.guild_id {
+                    id = IdType::GuildId(guild_id)
+                } else {
+                    id = IdType::UserId(new_message.author.id)
+                }
+
+                let _ = data
+                    .log_manager
+                    .add_log(
+                        &id,
+                        format!(
+                            //TODO: Make all functions that return errors, return good errors.
+                            //If a database call fails inside a function dont just return the error.
+                            //Give an additional description to it so that we dont have to do it here.
+                            "Couldn't check for message detector responses. {}",
+                            err.to_string()
+                        ),
+                        LogType::Warning,
+                        LogSource::MessageDetector,
+                    )
+                    .await?;
+            }
         }
         Event::ReactionAdd { add_reaction } => {
-            //TODO: notify errors to the user/server log
-            data.reaction_manager
+            let res = data
+                .reaction_manager
                 .reaction_add_event(ctx, add_reaction, framework.bot_id)
                 .await;
+
+            if let Err(err) = res {
+                let id;
+
+                if let Some(guild_id) = add_reaction.guild_id {
+                    id = IdType::GuildId(guild_id)
+                } else {
+                    let Some(user_id) = add_reaction.user_id else {
+                        return Ok(());
+                    };
+                    id = IdType::UserId(user_id)
+                }
+
+                let _ = data
+                    .log_manager
+                    .add_log(
+                        &id,
+                        err.to_string(),
+                        LogType::Warning,
+                        LogSource::ReactionRole,
+                    )
+                    .await;
+            }
         }
         Event::ReactionRemoveAll {
             channel_id,
@@ -96,10 +148,33 @@ async fn event_handler(
             //TODO: REmove all reaction roles from the message.
         }
         Event::ReactionRemove { removed_reaction } => {
-            //TODO: notify errors to the user/server log
-            data.reaction_manager
+            let res = data
+                .reaction_manager
                 .reaction_remove_event(ctx, removed_reaction, framework.bot_id)
                 .await;
+
+            if let Err(err) = res {
+                let id;
+
+                if let Some(guild_id) = removed_reaction.guild_id {
+                    id = IdType::GuildId(guild_id)
+                } else {
+                    let Some(user_id) = removed_reaction.user_id else {
+                        return Ok(());
+                    };
+                    id = IdType::UserId(user_id)
+                }
+
+                let _ = data
+                    .log_manager
+                    .add_log(
+                        &id,
+                        err.to_string(),
+                        LogType::Warning,
+                        LogSource::ReactionRole,
+                    )
+                    .await;
+            }
         }
         _ => {}
     }
