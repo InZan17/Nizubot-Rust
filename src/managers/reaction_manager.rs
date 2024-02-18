@@ -50,11 +50,9 @@ impl ReactionManager {
                 let emoji_string = if other_emoji.chars().all(char::is_numeric) {
                     format!("<:custom:{other_emoji}>")
                 } else {
-                    // Actual emojis are stored encoded so we decode it.
-                    percent_decode_str(other_emoji)
-                        .decode_utf8_lossy()
-                        .to_string()
+                    other_emoji.clone()
                 };
+                println!("{other_emoji}, {emoji_string}");
                 return Err(format!(
                     "This role already has an emoji assigned to it. {emoji_string}"
                 )
@@ -62,8 +60,6 @@ impl ReactionManager {
             }
         };
 
-        // TODO: if emoji is unicode the get_emoji_id will return the actual unicode character.
-        // We never decode it anywhere. So when getting the emoji_string variable a few lines up, do we really need to decode str?
         let emoji_id = get_emoji_id(&emoji);
 
         db.set_message_reaction_role(&guild_id, &message_id, &emoji_id, Some(&role_id))

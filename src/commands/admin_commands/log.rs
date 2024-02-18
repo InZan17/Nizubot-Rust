@@ -5,10 +5,13 @@ use crate::{
 };
 use poise::serenity_prelude::{AttachmentType, Emoji, User};
 
-//TODO make these administrator only
-
 /// Logs for debugging.
-#[poise::command(slash_command, subcommands("get", "add", "clear"), subcommand_required)]
+#[poise::command(
+    slash_command,
+    subcommands("get", "add", "clear"),
+    subcommand_required,
+    default_member_permissions = "ADMINISTRATOR"
+)]
 pub async fn log(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }

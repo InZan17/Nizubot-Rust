@@ -60,7 +60,10 @@ pub async fn create(
     let day = cotd_manager.get_current_day();
     let role_id = cotd_role.id.clone();
 
-    let current_color = cotd_manager.get_current_color().await?;
+    let current_color = match cotd_manager.get_current_color().await {
+        Ok(ok) => ok,
+        Err(err) => return Err(err.to_string().into()),
+    };
 
     let res = cotd_manager
         .update_role(ctx, cotd_role, &name, &current_color)
@@ -68,7 +71,7 @@ pub async fn create(
 
     if let Err(err) = res {
         ctx.send(|m| {
-            m.content(format!("Sorry, it seems like I wasn't able to create the role properly. \n\nHere's the error:\n{err}")).ephemeral(true)
+            m.content(format!("Sorry, it seems like I wasn't able to create the role properly. \n\nHere's the error:\n{}", err.to_string())).ephemeral(true)
         }).await?;
         return Ok(());
     }

@@ -6,7 +6,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use poise::serenity_prelude::{Context, GuildId, Http, Role, RoleId};
+use poise::serenity_prelude::{self, Context, GuildId, Http, Role, RoleId};
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, RwLock};
@@ -50,6 +50,22 @@ pub struct ColorInfo {
     #[serde(alias = "color", alias = "hex")]
     pub hex: String,
 }
+//TODO: Make specific error types for each manager so that once the error is sent to the user it will be more clear.
+pub enum CotdError {
+    UnreachedDay,
+    Serenity(serenity_prelude::Error, String),
+    Other(Error, String),
+}
+
+impl CotdError {
+    pub fn to_string(&self) -> String {
+        match self {
+            CotdError::UnreachedDay => "We have not reached that day yet.".to_string(),
+            CotdError::Serenity(err, description) => format!("{description} {err}"),
+            CotdError::Other(err, description) => format!("{description} {err}"),
+        }
+    }
+}
 
 impl CotdManager {
     pub fn new(db: Arc<SurrealClient>) -> Self {
@@ -61,7 +77,7 @@ impl CotdManager {
     /// Equivalent of calling self.get_day_color(self.get_current_day())
     ///
     /// Errors will happen if there's no connection between the bot and database or if connection to COLOR_API fails or if that day hasn't happened yet.
-    pub async fn get_current_color(&self) -> Result<ColorInfo, Error> {
+    pub async fn get_current_color(&self) -> Result<ColorInfo, CotdError> {
         let current_day = self.get_current_day();
         return self.get_day_color(current_day).await;
     }
@@ -78,13 +94,21 @@ impl CotdManager {
     /// Gets the color of a certain day.
     ///
     /// Errors will happen if there's no connection between the bot and database or if connection to COLOR_API fails or if that day hasn't happened yet.
-    pub async fn get_day_color(&self, day: u64) -> Result<ColorInfo, Error> {
+    pub async fn get_day_color(&self, day: u64) -> Result<ColorInfo, CotdError> {
         let is_future_day = day > self.get_current_day();
         if is_future_day {
-            return Err("We have not reached that day yet.".into());
+            return Err(CotdError::UnreachedDay);
         }
 
-        let color = self.db.get_cotd(day).await?;
+        let color = match self.db.get_cotd(day).await {
+            Ok(ok) => ok,
+            Err(err) => {
+                return Err(CotdError::Other(
+                    err,
+                    "Couldn't get day color from database.".to_string(),
+                ))
+            }
+        };
 
         if let Some(color) = color {
             return Ok(color);
@@ -94,7 +118,12 @@ impl CotdManager {
         // Let the looped code do that. And if the current day color doesnt exist the return an error.
         match self.generate_color().await {
             Ok(color_info) => {
-                self.db.update_cotd(day, &color_info).await?;
+                if let Err(err) = self.db.update_cotd(day, &color_info).await {
+                    return Err(CotdError::Other(
+                        err,
+                        "Couldn't update day color from database.".to_string(),
+                    ));
+                };
                 return Ok(color_info);
             }
             Err(err) => return Err(err),
@@ -104,7 +133,7 @@ impl CotdManager {
     /// Generates a pseudo random color.
     ///
     /// Will error if it cannot connect to COLOR_API since it's used to get the name of the color.
-    pub async fn generate_color(&self) -> Result<ColorInfo, Error> {
+    pub async fn generate_color(&self) -> Result<ColorInfo, CotdError> {
         const TWO_POW_24: u32 = 16777216;
 
         let random_color =
@@ -114,12 +143,23 @@ impl CotdManager {
 
         let resp = match reqwest::get(url).await {
             Ok(resp) => resp,
-            Err(err) => return Err(format!("Got no response from the Api. {err}").into()),
+            Err(err) => {
+                return Err(CotdError::Other(
+                    err.into(),
+                    "Couldn't generate color name. Got no response from color api.".to_string(),
+                ))
+            }
         };
 
         let parsed = match resp.json::<ColorResponse>().await {
             Ok(parsed) => parsed,
-            Err(err) => return Err(format!("Couldn't parse Api response. {err}").into()),
+            Err(err) => {
+                return Err(CotdError::Other(
+                    err.into(),
+                    "Couldn't generate color name. Couldn't parse response from color api."
+                        .to_string(),
+                ))
+            }
         };
 
         let mut color_info = parsed.colors[0].clone();
@@ -137,7 +177,7 @@ impl CotdManager {
         role: Role,
         name: &String,
         current_color: &ColorInfo,
-    ) -> Result<(), Error> {
+    ) -> Result<(), CotdError> {
         let res = role
             .edit(http, |r| {
                 let color = u64::from_str_radix(current_color.hex.clone().as_str(), 16).unwrap();
@@ -148,7 +188,12 @@ impl CotdManager {
 
         match res {
             Ok(_) => return Ok(()),
-            Err(err) => return Err(Box::new(err)),
+            Err(err) => {
+                return Err(CotdError::Serenity(
+                    err,
+                    "Couldn't update cotd role.".to_string(),
+                ))
+            }
         }
     }
 }
@@ -208,7 +253,8 @@ pub fn cotd_manager_loop(
                         }
                         Err(err) => {
                             //TODO: check if error is internet fault or user fault.
-                            //If it happened to be that the bot got kicked from the guild: yea idk
+                            //If it happened to be that the bot got kicked from the guild: unregister role
+                            //If its internet fault: set last_updated_day to 0.
                             println!("{}", err.to_string());
                             continue;
                         }
@@ -221,6 +267,7 @@ pub fn cotd_manager_loop(
                         .await;
 
                     if let Err(err) = result {
+                        //TODO: If its internet fault: set last_updated_day to 0.
                         let _ = log_manager
                             .add_log(
                                 &IdType::GuildId(GuildId(guild_id)),

@@ -79,7 +79,6 @@ impl RemindManager {
     {
         let db = &self.db;
 
-        //TODO: Put in seperate function
         let user_reminders = db.list_user_reminders(&user_id).await?;
 
         if user_reminders.len() >= 50 {
@@ -122,8 +121,6 @@ impl RemindManager {
         };
 
         self.db.add_user_reminder(&remind_info).await?;
-
-        //TODO: add remidner and also fix the index
 
         let mut mut_wait_until = self.wait_until.lock().await;
         *mut_wait_until = mut_wait_until.min(finish_time);
