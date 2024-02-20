@@ -53,7 +53,8 @@ pub async fn add(
     if let Err(err) = res {
         ctx.send(|m| {
             m.ephemeral(true).content(format!(
-                "Sorry, I wasn't able to add that detector.\n\n{err}"
+                "Sorry, I wasn't able to add that detector.\n\n{}",
+                err.to_string()
             ))
         })
         .await?;
@@ -95,7 +96,8 @@ pub async fn remove(
     if let Err(err) = res {
         ctx.send(|m| {
             m.ephemeral(true).content(format!(
-                "Sorry, I wasn't able to delete that detector.\n\n{err}"
+                "Sorry, I wasn't able to delete that detector.\n\n{}",
+                err.to_string()
             ))
         })
         .await?;
@@ -122,7 +124,19 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
         id = IdType::UserId(ctx.author().id);
     }
 
-    let detectors = ctx.data().detector_manager.get_message_detects(id).await?;
+    let detectors = match ctx.data().detector_manager.get_message_detects(id).await {
+        Ok(ok) => ok,
+        Err(err) => {
+            ctx.send(|m| {
+                m.ephemeral(true).content(format!(
+                    "Sorry, I wasn't able to list the detectors.\n\n{}",
+                    err.to_string()
+                ))
+            })
+            .await?;
+            return Ok(());
+        }
+    };
 
     ctx.send(|m| {
         m.embed(|e| {

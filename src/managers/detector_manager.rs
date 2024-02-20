@@ -49,6 +49,27 @@ pub struct DetectorInfo {
     pub case_sensitive: bool,
 }
 
+pub enum DetectorError {
+    Max10Detectors,
+    InvalidIndex,
+    Database(Error, String),
+    Serenity(serenity_prelude::Error, String),
+}
+
+impl DetectorError {
+    pub fn to_string(&self) -> String {
+        match self {
+            DetectorError::Max10Detectors => {
+                "You can only have a max amount of 10 message detectors.".to_string()
+            }
+            DetectorError::InvalidIndex => "Index isn't valid.".to_string(),
+            DetectorError::Database(err, description) => format!("{description} {err}"),
+
+            DetectorError::Serenity(err, description) => format!("{description} {err}"),
+        }
+    }
+}
+
 pub struct DetectorManager {
     pub db: Arc<SurrealClient>,
 }
@@ -69,14 +90,22 @@ impl DetectorManager {
         response: String,
         case_sensitive: bool,
         id: IdType,
-    ) -> Result<(), Error> {
+    ) -> Result<(), DetectorError> {
         let db = &self.db;
 
-        let detectors_option = db.get_all_message_detectors(&id).await?;
+        let detectors_option = match db.get_all_message_detectors(&id).await {
+            Ok(ok) => ok,
+            Err(err) => {
+                return Err(DetectorError::Database(
+                    err,
+                    "Couldn't fetch detectors from guild.".to_string(),
+                ))
+            }
+        };
 
         if let Some(detectors) = detectors_option {
             if detectors.len() >= 10 {
-                return Err("You can only have a max amount of 10 message detectors.".into());
+                return Err(DetectorError::Max10Detectors);
             }
         }
 
@@ -87,7 +116,12 @@ impl DetectorManager {
             case_sensitive,
         };
 
-        db.add_message_detector(&id, &detector_info).await?;
+        if let Err(err) = db.add_message_detector(&id, &detector_info).await {
+            return Err(DetectorError::Database(
+                err,
+                "Couldn't add detector to guild.".to_string(),
+            ));
+        }
 
         Ok(())
     }
@@ -100,22 +134,15 @@ impl DetectorManager {
         &self,
         index: usize,
         id: IdType,
-    ) -> Result<(), Error> {
+    ) -> Result<(), DetectorError> {
         let db = &self.db;
 
-        //TODO: Instead of doing 2 database calls, make it 1.
-
-        let detectors_option = db.get_all_message_detectors(&id).await?;
-
-        if let Some(detectors) = detectors_option {
-            if detectors.len() <= index {
-                return Err("Index isn't valid.".into());
-            }
-        } else {
-            return Err("Index isn't valid.".into());
+        if let Err(err) = db.remove_message_detector(&id, index).await {
+            return Err(DetectorError::Database(
+                err,
+                "Couldn't remove detector from guild.".to_string(),
+            ));
         }
-
-        db.remove_message_detector(&id, index).await?;
 
         return Ok(());
     }
@@ -124,12 +151,21 @@ impl DetectorManager {
     ///
     /// Will error if database isn't connected or communication doesn't work.
     /// May also error if unable to parse response or if database returns an error.
-    pub async fn get_message_detects(&self, id: IdType) -> Result<Vec<DetectorInfo>, Error> {
+    pub async fn get_message_detects(
+        &self,
+        id: IdType,
+    ) -> Result<Vec<DetectorInfo>, DetectorError> {
         let db = &self.db;
 
-        let detectors_option = db.get_all_message_detectors(&id).await?;
-
-        return Ok(detectors_option.unwrap_or(vec![]));
+        match db.get_all_message_detectors(&id).await {
+            Ok(detectors_option) => return Ok(detectors_option.unwrap_or(vec![])),
+            Err(err) => {
+                return Err(DetectorError::Database(
+                    err,
+                    "Failed to get message detectors.".to_string(),
+                ))
+            }
+        };
     }
 
     /// Responds to message if it matches a detector.
@@ -142,7 +178,7 @@ impl DetectorManager {
         &self,
         ctx: &serenity_prelude::Context,
         message: &Message,
-    ) -> Result<(), Error> {
+    ) -> Result<(), DetectorError> {
         if message.author.bot {
             return Ok(());
         }
@@ -157,7 +193,15 @@ impl DetectorManager {
             id = IdType::UserId(message.author.id);
         }
 
-        let detectors_option = db.get_all_message_detectors(&id).await?;
+        let detectors_option = match db.get_all_message_detectors(&id).await {
+            Ok(ok) => ok,
+            Err(err) => {
+                return Err(DetectorError::Database(
+                    err,
+                    "Failed to get message detectors.".to_string(),
+                ))
+            }
+        };
 
         let Some(detectors) = detectors_option else {
             return Ok(());
@@ -193,10 +237,17 @@ impl DetectorManager {
                 continue;
             }
 
-            message
+            let res = message
                 .channel_id
                 .send_message(ctx, |m| m.content(&detector_info.response))
-                .await?;
+                .await;
+
+            if let Err(err) = res {
+                return Err(DetectorError::Serenity(
+                    err,
+                    "Couldn't send detector response.".to_string(),
+                ));
+            }
             break;
         }
 

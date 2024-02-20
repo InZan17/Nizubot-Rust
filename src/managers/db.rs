@@ -82,6 +82,31 @@ impl Responses {
 
         Ok(deserialized)
     }
+
+    pub fn take_err(&self, index: usize) -> Option<Error> {
+        if index >= self.0.len() {
+            return Some("Index too high.".into());
+        }
+
+        let response = &self.0[index];
+
+        if response.status != "OK".to_string() {
+            let Some(result) = response.result.as_str() else {
+                return Some("Database response status isn't OK.".into());
+            };
+            return Some(remove_prefix(result.to_string(), "An error occurred: ").into());
+        }
+
+        None
+    }
+}
+
+fn remove_prefix(mut string: String, prefix: &str) -> String {
+    if string.starts_with(prefix) {
+        let prefix_length = prefix.len();
+        string.replace_range(0..prefix_length, "");
+    }
+    string
 }
 
 impl SurrealClient {
@@ -268,7 +293,7 @@ impl SurrealClient {
 
         let res = self
             .query(format!(
-                "SELECT message_detectors FROM {table_id} WHERE message_detectors"
+                "SELECT VALUE message_detectors FROM {table_id} WHERE message_detectors"
             ))
             .await?
             .take(0)?;
@@ -296,10 +321,24 @@ impl SurrealClient {
     pub async fn remove_message_detector(&self, id: &IdType, index: usize) -> Result<(), Error> {
         let table_id = id.into_db_table();
 
-        self.query(format!(
-            "UPDATE {table_id} SET message_detectors = array::remove(message_detectors, {index});"
+        let err = self
+            .query(format!(
+            "LET $detectors = (SELECT VALUE message_detectors FROM {table_id} WHERE message_detectors);
+
+            IF array::len($detectors) == 0 {{
+                THROW \"Index isn't valid.\";
+            }} ELSE IF array::len($detectors[0]) <= {index} {{
+                RETURN \"Index isn't valid.\";
+            }} ELSE {{
+                RETURN (UPDATE {table_id} SET message_detectors = array::remove(message_detectors, {index}));
+            }};"
         ))
-        .await?;
+            .await?
+            .take_err(1);
+
+        if let Some(err) = err {
+            return Err(err);
+        }
 
         Ok(())
     }
