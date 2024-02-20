@@ -2,27 +2,15 @@ use std::fs;
 
 use serde::Deserialize;
 
-pub const DISCORD_TOKEN_PATH: &str = "./token";
-pub const SURREALDB_SIGNIN_INFO_PATH: &str = "./surrealdb_signin.json";
-pub const OPENEXCHANGERATES_KEY_PATH: &str = "./openExchangeRatesApiKey";
+pub const BOT_SETTTINGS_FILE: &str = "./bot_settings.json";
 
-pub struct Tokens {
-    pub openexchangerates_token: Option<String>,
-}
-
-pub fn get_other_tokens() -> Tokens {
-    let openexchangerates_token = fs::read_to_string(OPENEXCHANGERATES_KEY_PATH);
-    if let Err(err) = &openexchangerates_token {
-        println!("Couldn't read file 'openExchangeRatesApiKey'. The /currency command will not work.\n{}", err.to_string())
-    }
-
-    Tokens {
-        openexchangerates_token: openexchangerates_token.ok(),
-    }
-}
-
-pub fn get_discord_token() -> String {
-    fs::read_to_string(DISCORD_TOKEN_PATH).expect("Cannot find token file.")
+#[derive(Debug, Deserialize)]
+pub struct BotSettings {
+    pub discord_token: String,
+    pub open_exchange_rates_token: String,
+    pub logs_directory: String,
+    pub temp_data_directory: String,
+    pub surrealdb: SurrealDbSignInInfo,
 }
 
 #[derive(Debug, Deserialize)]
@@ -34,8 +22,8 @@ pub struct SurrealDbSignInInfo {
     pub password: String,
 }
 
-pub fn get_surreal_signin_info() -> SurrealDbSignInInfo {
+pub fn get_bot_settings() -> BotSettings {
     let json_data =
-        fs::read_to_string(SURREALDB_SIGNIN_INFO_PATH).expect("Cannot find surrealdb_signin.json.");
-    serde_json::from_str(&json_data).expect("Cannot deserialize surrealdb_signin.json.")
+        fs::read_to_string(BOT_SETTTINGS_FILE).expect("Couldn't read bot settings file.");
+    serde_json::from_str(&json_data).expect("Couldn't deserialize bot settings file.")
 }

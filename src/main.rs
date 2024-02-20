@@ -188,12 +188,14 @@ async fn event_handler(
 async fn main() {
     println!("Starting bot...");
 
-    let db = Arc::new(managers::db::new_db().await);
+    let bot_settings = tokens::get_bot_settings();
 
-    let storage_manager = Arc::new(StorageManager::new("./data").await);
+    let db = Arc::new(SurrealClient::new(bot_settings.surrealdb));
+
+    let storage_manager = Arc::new(StorageManager::new(bot_settings.temp_data_directory).await);
 
     let framework = poise::Framework::builder()
-        .token(tokens::get_discord_token())
+        .token(bot_settings.discord_token)
         .intents(
             serenity::GatewayIntents::GUILDS
                 | serenity::GatewayIntents::GUILD_MESSAGES
@@ -212,17 +214,13 @@ async fn main() {
             Box::pin(async move {
                 println!("Registering commands...");
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                let tokens = tokens::get_other_tokens();
                 Ok(Data {
                     cotd_manager: Arc::new(CotdManager::new(db.clone())),
                     remind_manager: Arc::new(RemindManager::new(db.clone())),
                     detector_manager: Arc::new(DetectorManager::new(db.clone())),
                     reaction_manager: Arc::new(ReactionManager::new(db.clone())),
                     currency_manager: Arc::new(
-                        CurrencyManager::new(
-                            tokens.openexchangerates_token.unwrap_or("".to_string()),
-                        )
-                        .await,
+                        CurrencyManager::new(bot_settings.open_exchange_rates_token).await,
                     ),
                     log_manager: Arc::new(LogManager::new(db.clone(), storage_manager.clone())),
                     storage_manager,

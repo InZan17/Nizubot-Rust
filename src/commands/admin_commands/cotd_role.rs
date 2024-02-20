@@ -66,7 +66,7 @@ pub async fn create(
     };
 
     let res = cotd_manager
-        .update_role(ctx, cotd_role, &name, &current_color)
+        .update_role(ctx, guild.id, cotd_role.id, &name, &current_color)
         .await;
 
     if let Err(err) = res {

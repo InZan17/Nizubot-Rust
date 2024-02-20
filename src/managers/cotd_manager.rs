@@ -6,12 +6,12 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use poise::serenity_prelude::{self, Context, GuildId, Http, Role, RoleId};
+use poise::serenity_prelude::{self, guild, Context, GuildId, Http, Role, RoleId};
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, RwLock};
 
-use crate::{utils::IdType, Error};
+use crate::{managers::remind_manager::is_user_fault, utils::IdType, Error};
 
 use super::{
     db::SurrealClient,
@@ -65,6 +65,14 @@ impl CotdError {
             CotdError::Other(err, description) => format!("{description} {err}"),
         }
     }
+
+    pub fn is_user_fault(&self) -> bool {
+        match self {
+            CotdError::UnreachedDay => false,
+            CotdError::Serenity(err, _) => is_user_fault(err),
+            CotdError::Other(_, _) => false,
+        }
+    }
 }
 
 impl CotdManager {
@@ -114,11 +122,9 @@ impl CotdManager {
             return Ok(color);
         }
 
-        // TODO: Since we will be generating colors every day even if no one runs a command
-        // Let the looped code do that. And if the current day color doesnt exist the return an error.
         match self.generate_color().await {
             Ok(color_info) => {
-                if let Err(err) = self.db.update_cotd(day, &color_info).await {
+                if let Err(err) = self.db.get_or_update_cotd(day, &color_info).await {
                     return Err(CotdError::Other(
                         err,
                         "Couldn't update day color from database.".to_string(),
@@ -174,12 +180,13 @@ impl CotdManager {
     pub async fn update_role(
         &self,
         http: impl AsRef<Http>,
-        role: Role,
+        guild_id: GuildId,
+        role_id: RoleId,
         name: &String,
         current_color: &ColorInfo,
     ) -> Result<(), CotdError> {
-        let res = role
-            .edit(http, |r| {
+        let res = guild_id
+            .edit_role(http, role_id, |r| {
                 let color = u64::from_str_radix(current_color.hex.clone().as_str(), 16).unwrap();
                 r.name(name.replace("<cotd>", &current_color.name))
                     .colour(color)
@@ -208,6 +215,7 @@ pub fn cotd_manager_loop(
 ) {
     tokio::spawn(async move {
         let mut last_updated_day = 0;
+        let mut cotd_is_late = false;
         loop {
             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
@@ -220,83 +228,86 @@ pub fn cotd_manager_loop(
             let cotd_roles_data_result = db.get_all_guild_cotd_role().await;
 
             let Ok(cotd_roles_data) = cotd_roles_data_result else {
+                //We dont got any guilds ids. Cannot do anything right now.
+                //Once we got access to it again, apologize to all guilds in their logs.
+                cotd_is_late = true;
                 continue;
             };
 
-            let Ok(current_color) = cotd_manager.get_current_color().await else {
-                continue;
-            };
+            let current_color_res = cotd_manager.get_current_color().await;
 
-            //TODO: Make it so it only updates when all the cotd roles updates successfully.
-            last_updated_day = current_day;
+            let mut successful = true;
 
             for cotd_role_data_query in cotd_roles_data.iter() {
                 let table_id = &cotd_role_data_query.id;
-                let guild_id = table_id.split(':').last().unwrap().parse::<u64>().unwrap(); //TODO fix too many unwraps
+                let guild_id = GuildId(table_id.split(':').last().unwrap().parse::<u64>().unwrap()); //TODO fix too many unwraps
                 let cotd_role_data = &cotd_role_data_query.cotd_role;
 
                 if cotd_role_data.day == current_day {
                     continue;
                 }
 
-                let role;
-
-                //TODO: Put this in a seperate function
-                if let Some(guild) = arc_ctx.cache.guild(guild_id) {
-                    role = guild.roles.get(&cotd_role_data.id).cloned();
-                } else {
-                    let guild_res = arc_ctx.http.get_guild(guild_id).await;
-
-                    match guild_res {
-                        Ok(guild) => {
-                            role = guild.roles.get(&cotd_role_data.id).cloned();
-                        }
-                        Err(err) => {
-                            //TODO: check if error is internet fault or user fault.
-                            //If it happened to be that the bot got kicked from the guild: unregister role
-                            //If its internet fault: set last_updated_day to 0.
-                            println!("{}", err.to_string());
-                            continue;
-                        }
-                    }
+                if cotd_is_late {
+                    let _ = log_manager.add_log(
+                        &IdType::GuildId(guild_id),
+                        "The cotd role update was late due to issues talking to database. I apologize.".to_string(),
+                        LogType::Warning,
+                        LogSource::CotdRole,
+                    ).await;
                 }
 
-                if let Some(role) = role {
-                    let result = cotd_manager
-                        .update_role(&arc_ctx, role, &cotd_role_data.name, &current_color)
-                        .await;
-
-                    if let Err(err) = result {
-                        //TODO: If its internet fault: set last_updated_day to 0.
+                let current_color = match &current_color_res {
+                    Ok(ok) => ok,
+                    Err(err) => {
                         let _ = log_manager
                             .add_log(
-                                &IdType::GuildId(GuildId(guild_id)),
-                                err.to_string(),
+                                &IdType::GuildId(guild_id),
+                                format!("Couldn't update cotd role. {}", err.to_string()),
                                 LogType::Warning,
                                 LogSource::CotdRole,
                             )
                             .await;
+                        successful = false;
                         continue;
                     }
+                };
 
-                    db.mark_cotd_role_updated(&GuildId(guild_id), current_day)
-                        .await;
-                } else {
+                let result = cotd_manager
+                    .update_role(
+                        &arc_ctx,
+                        guild_id,
+                        cotd_role_data.id,
+                        &cotd_role_data.name,
+                        &current_color,
+                    )
+                    .await;
+
+                if let Err(err) = result {
                     let _ = log_manager
                         .add_log(
-                            &IdType::GuildId(GuildId(guild_id)),
-                            format!(
-                                "Role {} ({}) doesn't exist. Unregistering role from cotd role.",
-                                cotd_role_data.name, cotd_role_data.id
-                            ),
-                            LogType::Error,
+                            &IdType::GuildId(guild_id),
+                            err.to_string(),
+                            LogType::Warning,
                             LogSource::CotdRole,
                         )
                         .await;
 
-                    db.update_guild_cotd_role(&None, &GuildId(guild_id)).await;
+                    //TODO: Try to see if you can see what exactly errors. For example if it errored because the role is gone.
+                    if !err.is_user_fault() {
+                        successful = false;
+                    }
+
+                    continue;
                 }
+
+                db.mark_cotd_role_updated(&guild_id, current_day).await;
             }
+
+            if successful {
+                last_updated_day = current_day;
+            }
+
+            cotd_is_late = false;
         }
     });
 }

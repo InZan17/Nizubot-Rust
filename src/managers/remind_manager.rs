@@ -227,7 +227,7 @@ pub fn remind_manager_loop(
             let mut reminders = match result {
                 Ok(reminders) => reminders,
                 Err(err) => {
-                    panic!("{err}");
+                    println!("{err}");
                     //TODO; Do somethign with the error. Maybe use a log for the bot specifically.
                     continue;
                 }
@@ -298,12 +298,30 @@ pub fn remind_manager_loop(
                     };
 
                     if let Err(err) = res {
-                        if should_keep(&err) {
+                        if !is_user_fault(&err) {
                             next_wait_until = 0;
                         } else {
-                            //TODO: notify to the user/server log.
-                            //If a deletion fails, abort the remind manager loop because else it will just keep spamming the same reminders.
-                            db.delete_table_id(&reminder_id).await.unwrap();
+                            let add_log = format!(
+                                "Failed to send reminder. Deleting reminder. Reason: {}",
+                                err.to_string()
+                            );
+                            if let Some(guild_id) = reminder_info.guild_id {
+                                let id = IdType::GuildId(guild_id);
+                                let _ = log_manager
+                                    .add_log(
+                                        &id,
+                                        add_log.clone(),
+                                        LogType::Error,
+                                        LogSource::Reminder,
+                                    )
+                                    .await;
+                            }
+
+                            let id = IdType::UserId(reminder_info.user_id);
+                            let _ = log_manager
+                                .add_log(&id, add_log, LogType::Error, LogSource::Reminder)
+                                .await;
+                            let _ = db.delete_table_id(&reminder_id).await;
                         }
                         continue;
                     }
@@ -338,7 +356,7 @@ pub fn remind_manager_loop(
                     };
 
                     if let Err(err) = res {
-                        if should_keep(&err) {
+                        if !is_user_fault(&err) {
                             next_wait_until = 0;
                             continue;
                         } else {
@@ -374,8 +392,8 @@ pub fn remind_manager_loop(
     });
 }
 
-/// Checks if a serenity error is due to internet issues (true) or discord issue for example bot role perms, missing guild or channel (false)
-fn should_keep(error: &poise::serenity_prelude::Error) -> bool {
+/// Checks if a serenity error is due to internet issues (false) or discord issue for example bot role perms, missing guild or channel (true)
+pub fn is_user_fault(error: &poise::serenity_prelude::Error) -> bool {
     match error {
         poise::serenity_prelude::Error::Http(http) => match http.as_ref() {
             poise::serenity_prelude::HttpError::Request(req) => {

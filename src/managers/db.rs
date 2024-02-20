@@ -153,12 +153,6 @@ impl SurrealClient {
     }
 }
 
-pub async fn new_db() -> SurrealClient {
-    let surreal_login_info = tokens::get_surreal_signin_info();
-
-    SurrealClient::new(surreal_login_info)
-}
-
 /// Returns value that can be deserialized using Option<T>.
 /// Only does something if value is an array.
 ///
@@ -257,8 +251,9 @@ impl SurrealClient {
         Ok(day_color)
     }
 
-    pub async fn update_cotd(&self, day: u64, color: &ColorInfo) -> Result<(), Error> {
+    pub async fn get_or_update_cotd(&self, day: u64, color: &ColorInfo) -> Result<(), Error> {
         let color_json = serde_json::to_string(color)?;
+        //TODO: If the day already has a color: return that color.
         let res = self
             .query(format!("CREATE cotd:{day} CONTENT {color_json};"))
             .await?;

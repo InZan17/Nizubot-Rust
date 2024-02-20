@@ -26,3 +26,4 @@ data/
 openExchangeRatesApiKey
 .vscode/
 surrealdb_signin.json
+bot_settings.json
