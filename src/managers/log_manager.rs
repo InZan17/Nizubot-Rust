@@ -1,6 +1,12 @@
-use std::{borrow::BorrowMut, ops::Add, sync::Arc, time::Duration};
+use std::{
+    borrow::BorrowMut,
+    ops::Add,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
 
-use poise::serenity_prelude::UserId;
+use poise::serenity_prelude::{self, UserId};
 
 use crate::{
     managers::{cotd_manager::SECONDS_IN_A_DAY, storage_manager::DataType},
@@ -13,11 +19,16 @@ use super::{
     storage_manager::{DataHolder, StorageManager},
 };
 
+//TODO: Make log manager use its own solution to writing files.
 pub struct LogManager {
     db: Arc<SurrealClient>,
     storage_manager: Arc<StorageManager>,
+    log_path: PathBuf,
+    owner_user_ids: Vec<UserId>,
+    owner_webhook: Option<String>,
 }
 
+#[derive(Clone, Copy)]
 pub enum LogType {
     Message,
     Warning,
@@ -33,6 +44,8 @@ impl LogType {
         }
     }
 }
+
+#[derive(Clone)]
 pub enum LogSource {
     Guild,
     User,
@@ -58,10 +71,19 @@ impl LogSource {
 }
 
 impl LogManager {
-    pub fn new(db: Arc<SurrealClient>, storage_manager: Arc<StorageManager>) -> Self {
+    pub fn new(
+        db: Arc<SurrealClient>,
+        storage_manager: Arc<StorageManager>,
+        log_path: PathBuf,
+        owner_user_ids: Vec<UserId>,
+        owner_webhook: Option<String>,
+    ) -> Self {
         Self {
             db,
             storage_manager,
+            log_path,
+            owner_user_ids,
+            owner_webhook,
         }
     }
     async fn get_data_holder(&self, id: &IdType) -> Result<DataHolder, Error> {
@@ -101,6 +123,32 @@ impl LogManager {
         let string = read.string().cloned().unwrap_or_default();
 
         Ok(string)
+    }
+
+    pub async fn add_owner_log(
+        &self,
+        add_log: String,
+        log_type: LogType,
+        log_source: LogSource,
+    ) -> Result<(), Error> {
+        let mut result = Ok(());
+        for owner_id in self.owner_user_ids.iter() {
+            let res = self
+                .add_log(
+                    &IdType::UserId(*owner_id),
+                    add_log.clone(),
+                    log_type,
+                    log_source.clone(),
+                )
+                .await;
+
+            if res.is_err() {
+                result = res;
+            }
+        }
+
+        //TODO: use webhook too
+        result
     }
 
     pub async fn add_log(

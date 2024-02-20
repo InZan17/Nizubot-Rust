@@ -28,7 +28,7 @@ pub struct CurrenciesInfo {
 pub struct CurrencyManager {
     pub currency_info: RwLock<CurrenciesInfo>,
     pub list_currency_embed: RwLock<CreateEmbed>,
-    token: String,
+    token: Option<String>,
 }
 
 const SECONDS_IN_HOUR: u64 = 3600;
@@ -38,7 +38,7 @@ const SECONDS_IN_WEEK: u64 = SECONDS_IN_DAY * 7;
 const API_LINK: &str = "https://openexchangerates.org/api/";
 
 impl CurrencyManager {
-    pub async fn new(token: String) -> Self {
+    pub async fn new(token: Option<String>) -> Self {
         let self_manager = Self {
             currency_info: RwLock::new(CurrenciesInfo::default()),
             list_currency_embed: RwLock::new(CreateEmbed::default()),
@@ -93,9 +93,13 @@ impl CurrencyManager {
     ///
     /// Returns error if unable to connect to link or unable to parse result.
     pub async fn get_rates(&self) -> Result<CurrencyRates, Error> {
+        let Some(token) = &self.token else {
+            return Err("Missing token for Open exchange rates.".into());
+        };
+
         let response = reqwest::get(format!(
             "{API_LINK}latest.json?show_alternative=1&app_id={}",
-            self.token
+            token
         ))
         .await?;
 

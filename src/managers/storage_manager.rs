@@ -4,7 +4,7 @@ use std::{
     collections::HashMap,
     fs::{self, File},
     io::{BufReader, Write},
-    path::Path,
+    path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -97,22 +97,23 @@ impl DataType {
     }
 }
 
+//TODO: rethink everything. Do we really need storage manager when we got surrealdb? What do we actually use storage manager for? Can we simplify it?
 pub struct StorageManager {
-    pub storage_path: String,
+    pub storage_path: PathBuf,
+    pub storage_path_string: String,
     datas: RwLock<HashMap<String, (u64, Arc<RwLock<DataType>>)>>,
 }
 
 impl StorageManager {
-    pub async fn new(storage_path: impl Into<String>) -> Self {
-        let storage_path = storage_path.into();
-        let path = Path::new(&storage_path);
-        if path.to_str().is_none() {
+    pub async fn new(storage_path: PathBuf) -> Self {
+        let Some(path_str) = storage_path.to_str() else {
             panic!("Path is not valid UTF-8")
-        }
-        if !path.exists() {
-            fs::create_dir(path).unwrap();
+        };
+        if !storage_path.exists() {
+            fs::create_dir(&storage_path).expect("Couldn't create storage path directory.");
         }
         StorageManager {
+            storage_path_string: path_str.to_string(),
             storage_path,
             datas: RwLock::new(HashMap::new()),
         }
@@ -296,7 +297,7 @@ impl StorageManager {
     }
 
     pub fn get_full_directory(&self, path: &str) -> String {
-        return format!("{}/{}", self.storage_path, path);
+        return format!("{}/{}", self.storage_path_string, path);
     }
 }
 

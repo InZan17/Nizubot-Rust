@@ -132,7 +132,7 @@ pub async fn caption(
 
     let generated_file_path = caption::caption(
         ctx.id(),
-        &ctx.data().storage_manager.storage_path,
+        &ctx.data().storage_manager.storage_path_string,
         &image,
         &caption_type,
         upper_text,

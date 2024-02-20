@@ -1,6 +1,7 @@
 use core::panic;
 use std::{
     collections::HashSet,
+    fmt::format,
     future::Future,
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
@@ -228,7 +229,14 @@ pub fn remind_manager_loop(
                 Ok(reminders) => reminders,
                 Err(err) => {
                     println!("{err}");
-                    //TODO; Do somethign with the error. Maybe use a log for the bot specifically.
+
+                    let _ = log_manager
+                        .add_owner_log(
+                            format!("Couldn't fetch pending reminders. {}", err),
+                            LogType::Warning,
+                            LogSource::Reminder,
+                        )
+                        .await;
                     continue;
                 }
             };
@@ -239,7 +247,7 @@ pub fn remind_manager_loop(
                 }
 
                 let Some(reminder_id) = &reminder_info.id else {
-                    //TODO: notify or soeming;
+                    //This should never happen.
                     continue;
                 };
 

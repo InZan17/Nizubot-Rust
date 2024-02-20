@@ -222,7 +222,13 @@ async fn main() {
                     currency_manager: Arc::new(
                         CurrencyManager::new(bot_settings.open_exchange_rates_token).await,
                     ),
-                    log_manager: Arc::new(LogManager::new(db.clone(), storage_manager.clone())),
+                    log_manager: Arc::new(LogManager::new(
+                        db.clone(),
+                        storage_manager.clone(),
+                        bot_settings.logs_directory,
+                        bot_settings.owner_user_ids,
+                        bot_settings.warning_webhook,
+                    )),
                     storage_manager,
                     started_loops: AtomicBool::new(false),
                     db,
