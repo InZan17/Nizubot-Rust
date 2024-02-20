@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, f32::consts::E};
 
 use poise::serenity_prelude::{GuildId, MessageId, RoleId, UserId};
 use reqwest::{Client, RequestBuilder};
@@ -276,13 +276,33 @@ impl SurrealClient {
         Ok(day_color)
     }
 
-    pub async fn get_or_update_cotd(&self, day: u64, color: &ColorInfo) -> Result<(), Error> {
+    pub async fn get_or_update_cotd(
+        &self,
+        day: u64,
+        color: &ColorInfo,
+    ) -> Result<ColorInfo, Error> {
         let color_json = serde_json::to_string(color)?;
-        //TODO: If the day already has a color: return that color.
-        let res = self
-            .query(format!("CREATE cotd:{day} CONTENT {color_json};"))
-            .await?;
-        Ok(())
+        //1 returns None if it updated or Some if there already was a color.
+        let opt: Option<ColorInfo> = self
+            .query(format!(
+                "
+            LET $day_color = (SELECT * FROM cotd:{day});
+
+            IF array::len($day_color) == 0 {{
+                CREATE cotd:{day} CONTENT {color_json};
+            }} ELSE {{
+                RETURN $day_color[0]
+            }}
+            "
+            ))
+            .await?
+            .take(1)?;
+
+        if let Some(color_info) = opt {
+            Ok(color_info)
+        } else {
+            Ok(color.clone())
+        }
     }
 
     pub async fn get_all_message_detectors(

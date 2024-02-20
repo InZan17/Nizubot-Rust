@@ -119,19 +119,19 @@ impl CotdManager {
         };
 
         if let Some(color) = color {
-            return Ok(color);
+            //return Ok(color);
         }
 
         match self.generate_color().await {
-            Ok(color_info) => {
-                if let Err(err) = self.db.get_or_update_cotd(day, &color_info).await {
+            Ok(color_info) => match self.db.get_or_update_cotd(day, &color_info).await {
+                Ok(color_info) => Ok(color_info),
+                Err(err) => {
                     return Err(CotdError::Other(
                         err,
                         "Couldn't update day color from database.".to_string(),
-                    ));
-                };
-                return Ok(color_info);
-            }
+                    ))
+                }
+            },
             Err(err) => return Err(err),
         }
     }
