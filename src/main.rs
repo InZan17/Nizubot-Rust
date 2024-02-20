@@ -103,13 +103,7 @@ async fn event_handler(
                     .log_manager
                     .add_log(
                         &id,
-                        format!(
-                            //TODO: Make all functions that return errors, return good errors.
-                            //If a database call fails inside a function dont just return the error.
-                            //Give an additional description to it so that we dont have to do it here.
-                            "Couldn't check for message detector responses. {}",
-                            err.to_string()
-                        ),
+                        err.to_string(),
                         LogType::Warning,
                         LogSource::MessageDetector,
                     )
