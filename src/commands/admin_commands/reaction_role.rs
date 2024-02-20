@@ -35,10 +35,22 @@ pub async fn add(
     let guild_id = ctx.guild_id().unwrap();
     let message_id = message_id.id;
 
-    ctx.data()
+    let res = ctx
+        .data()
         .reaction_manager
         .add_reaction(emoji, role.id, guild_id, message_id)
+        .await;
+
+    if let Err(err) = res {
+        ctx.send(|m| {
+            m.ephemeral(true).content(format!(
+                "Sorry, I wasn't able to add that reaction role.\n\n{}",
+                err.to_string()
+            ))
+        })
         .await?;
+        return Ok(());
+    }
 
     ctx.send(|m| {
         m.content(format!("Sucessfully added reaction role!\nTo remove the reaction role, simply remove my reaction or run `/reaction_role remove`.")).ephemeral(true)
@@ -62,20 +74,33 @@ pub async fn remove(
     let guild_id = ctx.guild_id().unwrap();
     let message_id = message_id.id;
 
-    let removed_role = ctx
+    let removed_role_res = ctx
         .data()
         .reaction_manager
         .remove_reaction(emoji, guild_id, message_id)
-        .await?;
+        .await;
 
-    ctx.send(|m| {
-        m.content(format!(
-            "Sucessfully removed reaction role! <@&{}>",
-            removed_role
-        ))
-        .ephemeral(true)
-    })
-    .await?;
+    match removed_role_res {
+        Ok(removed_role) => {
+            ctx.send(|m| {
+                m.content(format!(
+                    "Sucessfully removed reaction role! <@&{}>",
+                    removed_role
+                ))
+                .ephemeral(true)
+            })
+            .await?;
+        }
+        Err(err) => {
+            ctx.send(|m| {
+                m.ephemeral(true).content(format!(
+                    "Sorry, I wasn't able to remove that reaction role.\n\n{}",
+                    err.to_string()
+                ))
+            })
+            .await?;
+        }
+    }
 
     Ok(())
 }
