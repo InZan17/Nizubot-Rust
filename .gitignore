@@ -21,9 +21,7 @@ Cargo.lock
 
 # Added for Nizubot
 
-token
 data/
-openExchangeRatesApiKey
+logs/
 .vscode/
-surrealdb_signin.json
 bot_settings.json
