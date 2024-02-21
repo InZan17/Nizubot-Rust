@@ -402,13 +402,14 @@ pub fn remind_manager_loop(
 
 /// Checks if a serenity error is due to internet issues (false) or discord issue for example bot role perms, missing guild or channel (true)
 pub fn is_user_fault(error: &poise::serenity_prelude::Error) -> bool {
+    //TODO: rethink this
     match error {
         poise::serenity_prelude::Error::Http(http) => match http.as_ref() {
             poise::serenity_prelude::HttpError::Request(req) => {
-                req.is_request() || req.is_timeout()
+                !(req.is_request() || req.is_timeout())
             }
-            _ => false,
+            _ => true,
         },
-        _ => false,
+        _ => true,
     }
 }
