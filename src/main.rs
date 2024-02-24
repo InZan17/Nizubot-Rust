@@ -23,7 +23,7 @@ use managers::{
 };
 use poise::{
     framework,
-    serenity_prelude::{self as serenity},
+    serenity_prelude::{self as serenity, Webhook},
     Event, ReplyHandle,
 };
 use utils::IdType;
@@ -202,6 +202,18 @@ async fn main() {
             Box::pin(async move {
                 println!("Registering commands...");
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
+
+                let arc_ctx = Arc::new(ctx.clone());
+
+                let admin_log_webhook = if let Some(webhook_url) = bot_settings.log_webhook {
+                    Some(
+                        Webhook::from_url(ctx, &webhook_url)
+                            .await
+                            .expect("Failed to get webhook from url."),
+                    )
+                } else {
+                    None
+                };
                 Ok(Data {
                     cotd_manager: Arc::new(CotdManager::new(db.clone())),
                     remind_manager: Arc::new(RemindManager::new(db.clone())),
@@ -215,7 +227,8 @@ async fn main() {
                         storage_manager.clone(),
                         bot_settings.logs_directory,
                         bot_settings.owner_user_ids,
-                        bot_settings.warning_webhook,
+                        admin_log_webhook,
+                        arc_ctx,
                     )),
                     storage_manager,
                     started_loops: AtomicBool::new(false),

@@ -106,7 +106,7 @@ impl RemindManager {
         }
 
         let current_time = get_seconds();
-        let finish_time = current_time + duration;
+        let finish_time = current_time.saturating_add(current_time);
 
         let remind_info = RemindInfo {
             original_time: current_time,
@@ -237,6 +237,7 @@ pub fn remind_manager_loop(
                             LogSource::Reminder,
                         )
                         .await;
+                    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
                     continue;
                 }
             };
@@ -407,16 +408,17 @@ pub fn remind_manager_loop(
     });
 }
 
-/// Checks if a serenity error is due to internet issues (false) or discord issue for example bot role perms, missing guild or channel (true)
+/// Checks if a serenity error is due to a user issue for example bot role perms, missing guild or channel.
 pub fn is_user_fault(error: &poise::serenity_prelude::Error) -> bool {
-    //TODO: rethink this. There's a lot more that can go wrong that wouldn't be the users fault.
     match error {
-        poise::serenity_prelude::Error::Http(http) => match http.as_ref() {
-            poise::serenity_prelude::HttpError::Request(req) => {
-                !(req.is_request() || req.is_timeout())
+        poise::serenity_prelude::Error::Http(err) => match err.as_ref() {
+            poise::serenity_prelude::HttpError::UnsuccessfulRequest(err) => {
+                const NOT_FOUND: u16 = 404;
+                const METHOD_NOT_ALLOWED: u16 = 405;
+                return err.status_code == NOT_FOUND || err.status_code == METHOD_NOT_ALLOWED;
             }
-            _ => true,
+            _ => false,
         },
-        _ => true,
+        _ => false,
     }
 }

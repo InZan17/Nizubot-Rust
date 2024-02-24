@@ -118,8 +118,6 @@ impl ReactionManager {
 
         let emoji_id = get_emoji_id(&emoji);
 
-        //TODO try to combine these 2 into 1 database request.
-
         let role_id = match db
             .get_role_from_message_reaction(&guild_id, &message_id, &emoji_id)
             .await

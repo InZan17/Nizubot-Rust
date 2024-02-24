@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use poise::serenity_prelude::{self, UserId};
+use poise::serenity_prelude::{self, Context, UserId, Webhook};
 
 use crate::{
     managers::{cotd_manager::SECONDS_IN_A_DAY, storage_manager::DataType},
@@ -25,7 +25,8 @@ pub struct LogManager {
     storage_manager: Arc<StorageManager>,
     log_path: PathBuf,
     owner_user_ids: Vec<UserId>,
-    owner_webhook: Option<String>,
+    admin_log_webhook: Option<Webhook>,
+    arc_ctx: Arc<Context>,
 }
 
 #[derive(Clone, Copy)]
@@ -76,14 +77,16 @@ impl LogManager {
         storage_manager: Arc<StorageManager>,
         log_path: PathBuf,
         owner_user_ids: Vec<UserId>,
-        owner_webhook: Option<String>,
+        admin_log_webhook: Option<Webhook>,
+        arc_ctx: Arc<Context>,
     ) -> Self {
         Self {
             db,
             storage_manager,
             log_path,
             owner_user_ids,
-            owner_webhook,
+            admin_log_webhook,
+            arc_ctx,
         }
     }
     async fn get_data_holder(&self, id: &IdType) -> Result<DataHolder, Error> {
@@ -147,8 +150,24 @@ impl LogManager {
             }
         }
 
-        //TODO: use webhook too
+        let arc_ctx = self.arc_ctx.clone();
+
+        if let Some(webhook) = &self.admin_log_webhook {
+            let _ = webhook
+                .execute(arc_ctx, false, |m| {
+                    m.content(Self::create_log_string(add_log, log_type, log_source))
+                })
+                .await;
+        }
         result
+    }
+
+    pub fn create_log_string(add_log: String, log_type: LogType, log_source: LogSource) -> String {
+        format!(
+            "[{}:{}] {add_log}",
+            log_type.to_string(),
+            log_source.to_string()
+        )
     }
 
     pub async fn add_log(
