@@ -139,12 +139,6 @@ async fn event_handler(
                     .await;
             }
         }
-        Event::ReactionRemoveAll {
-            channel_id,
-            removed_from_message_id,
-        } => {
-            //TODO: REmove all reaction roles from the message.
-        }
         Event::ReactionRemove { removed_reaction } => {
             let res = data
                 .reaction_manager

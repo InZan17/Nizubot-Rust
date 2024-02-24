@@ -50,7 +50,6 @@ pub struct ColorInfo {
     #[serde(alias = "color", alias = "hex")]
     pub hex: String,
 }
-//TODO: Make specific error types for each manager so that once the error is sent to the user it will be more clear.
 pub enum CotdError {
     UnreachedDay,
     Serenity(serenity_prelude::Error, String),
@@ -240,7 +239,15 @@ pub fn cotd_manager_loop(
 
             for cotd_role_data_query in cotd_roles_data.iter() {
                 let table_id = &cotd_role_data_query.id;
-                let guild_id = GuildId(table_id.split(':').last().unwrap().parse::<u64>().unwrap()); //TODO fix too many unwraps
+
+                let Some(guild_id_string) = table_id.split(':').last() else {
+                    continue;
+                };
+                let Ok(guild_id_u64) = guild_id_string.parse::<u64>() else {
+                    continue;
+                };
+
+                let guild_id = GuildId(guild_id_u64);
                 let cotd_role_data = &cotd_role_data_query.cotd_role;
 
                 if cotd_role_data.day == current_day {

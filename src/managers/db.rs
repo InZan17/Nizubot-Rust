@@ -1,4 +1,4 @@
-use std::{collections::HashMap, f32::consts::E};
+use std::{collections::HashMap, f32::consts::E, fmt::format};
 
 use poise::serenity_prelude::{GuildId, MessageId, RoleId, UserId};
 use reqwest::{Client, RequestBuilder};
@@ -376,6 +376,25 @@ impl SurrealClient {
             .take(0)?;
 
         Ok(res)
+    }
+
+    pub async fn clear_message_data(
+        &self,
+        id: &IdType,
+        message_id: &MessageId,
+    ) -> Result<(), Error> {
+        let table_id = id.into_db_table();
+        let res = self
+            .query(format!(
+                "UPDATE {table_id} SET messages.{message_id} = NONE;"
+            ))
+            .await?;
+
+        if let Some(err) = res.take_err(0) {
+            return Err(err);
+        }
+
+        Ok(())
     }
 
     pub async fn set_message_reaction_role(
