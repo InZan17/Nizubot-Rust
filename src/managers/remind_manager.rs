@@ -261,17 +261,6 @@ pub fn remind_manager_loop(
                     message_ending = ".".to_string()
                 }
 
-                //TODO: Put this in a loop.
-
-                //First we try to send the reminder message.
-                //If it fails we check if it's a discord permission issue.
-                //If it is we remove the reminder from database and put something on the users log.
-                //If removing it from database doesn't work then I guess we'll let it slide.
-                //If it isn't a discord permission issue then we'll continue the loop of sending the message.
-                //If message sent successfully we delete from database (in a loop).
-                //If database removal fails we redo the loop until it succeeds.
-                //All reminders will be halted and if restarted there will be a double reminder for someone.
-
                 let time_difference = current_time - reminder_info.finish_time;
 
                 let message_refrence_opt;
@@ -342,12 +331,25 @@ pub fn remind_manager_loop(
 
                     let json_string = serde_json::to_string(&reminder_info).unwrap();
 
-                    let a: Option<RemindInfo> = db
-                        .query(format!("UPDATE {reminder_id} CONTENT {json_string}"))
-                        .await
-                        .unwrap()
-                        .take(0)
-                        .unwrap();
+                    loop {
+                        let res = db
+                            .query(format!("UPDATE {reminder_id} CONTENT {json_string}"))
+                            .await;
+                        if let Ok(ok) = res {
+                            let Some(err) = ok.take_err(0) else {
+                                break;
+                            };
+                            // this isnt a connection issue and shouldn't happen.
+                            let _ = log_manager
+                                .add_owner_log(
+                                    format!("Failed to update looped reminder. {err}"),
+                                    LogType::Warning,
+                                    LogSource::Reminder,
+                                )
+                                .await;
+                        }
+                        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                    }
                 } else {
                     let res = if time_difference > 60 {
                         channel_id.send_message(arc_ctx.clone(), |m| {
@@ -391,8 +393,13 @@ pub fn remind_manager_loop(
                         }
                     }
 
-                    //If a deletion fails, abort the remind manager loop because else it will just keep spamming the same reminders.
-                    let a = db.delete_table_id(reminder_id).await.unwrap();
+                    loop {
+                        let res = db.delete_table_id(reminder_id).await;
+                        if res.is_ok() {
+                            break;
+                        }
+                        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                    }
                 }
             }
             *remind_manager.wait_until.lock().await = next_wait_until;
