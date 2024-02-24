@@ -299,7 +299,6 @@ pub fn cotd_manager_loop(
                         )
                         .await;
 
-                    //TODO: Try to see if you can see what exactly errors. For example if it errored because the role is gone.
                     if !err.is_user_fault() {
                         successful = false;
                     }
