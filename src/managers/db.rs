@@ -147,7 +147,7 @@ impl SurrealClient {
             Ok(response) => response,
             Err(err) => {
                 println!("{err}");
-                return Err("Failed to execute request to database.".into());
+                return Err("Failed to execute request to database. Maybe it's offline?".into());
             }
         };
 
