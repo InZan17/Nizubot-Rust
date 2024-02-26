@@ -214,8 +214,6 @@ pub async fn caption(
 
     ffmpeg_filter = ffmpeg_filter_chars.as_str().to_string();
 
-    println!("{ffmpeg_filter}");
-
     let mut process = tokio::process::Command::new("ffmpeg");
 
     process.args(&["-i", &downloaded_file]);

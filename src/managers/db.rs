@@ -139,15 +139,13 @@ impl SurrealClient {
         let built_request = match builder.build() {
             Ok(request) => request,
             Err(err) => {
-                println!("{err}");
-                return Err("Failed to build request to database.".into());
+                return Err(format!("Failed to build request to database. {err}").into());
             }
         };
         let response = match self.client.execute(built_request).await {
             Ok(response) => response,
             Err(err) => {
-                println!("{err}");
-                return Err("Failed to execute request to database. Maybe it's offline?".into());
+                return Err(format!("Failed to execute request to database. Maybe it's offline? {err}").into());
             }
         };
 

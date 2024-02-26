@@ -228,8 +228,6 @@ pub fn remind_manager_loop(
             let mut reminders = match result {
                 Ok(reminders) => reminders,
                 Err(err) => {
-                    println!("{err}");
-
                     let _ = log_manager
                         .add_owner_log(
                             format!("Couldn't fetch pending reminders. {}", err),

@@ -144,7 +144,6 @@ fn time_after_cycle(
     minute = minute + minute_offset + 30 * cycles;
     hour = (hour + cycles + minute / 60).rem_euclid(24);
     minute = minute.rem_euclid(60);
-    println!("{hour}, {minute}");
 
     //if user isnt using 24h format, convert back
     if format != TimeFormat::MT {
