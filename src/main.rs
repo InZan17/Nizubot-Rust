@@ -28,7 +28,10 @@ use poise::{
 };
 use utils::IdType;
 
-use crate::managers::{detector_manager::DetectorManager, reaction_manager::ReactionManager};
+use crate::managers::{
+    detector_manager::DetectorManager, log_manager::log_manager_loop,
+    reaction_manager::ReactionManager,
+};
 
 pub struct Data {
     started_loops: AtomicBool,
@@ -69,6 +72,7 @@ async fn event_handler(
                 println!("Caches are ready! Starting all the managers.");
                 let arc_ctx = Arc::new(ctx.clone());
                 storage_manager_loop(arc_ctx.clone(), data.storage_manager.clone());
+                log_manager_loop(arc_ctx.clone(), data.log_manager.clone());
                 cotd_manager_loop(
                     arc_ctx.clone(),
                     data.db.clone(),
@@ -224,7 +228,6 @@ async fn main() {
                     ),
                     log_manager: Arc::new(LogManager::new(
                         db.clone(),
-                        storage_manager.clone(),
                         bot_settings.logs_directory,
                         bot_settings.owner_user_ids,
                         admin_log_webhook,

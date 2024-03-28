@@ -1,16 +1,25 @@
 use std::{
     borrow::BorrowMut,
+    collections::HashMap,
+    hash::Hash,
+    mem::transmute,
     ops::Add,
     path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
 };
 
+use chrono::Timelike;
+use openssl::pkey::Id;
 use poise::serenity_prelude::{self, Context, UserId, Webhook};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    sync::{Mutex, RwLock},
+};
 
 use crate::{
     managers::{cotd_manager::SECONDS_IN_A_DAY, storage_manager::DataType},
-    utils::IdType,
+    utils::{get_seconds, IdType},
     Error,
 };
 
@@ -19,29 +28,58 @@ use super::{
     storage_manager::{DataHolder, StorageManager},
 };
 
-//TODO: Make log manager use its own solution to writing files.
+pub struct LogState {
+    logs: Vec<String>,
+    needs_saving: bool,
+    last_used: u64,
+}
+
+impl LogState {
+    pub fn blank() -> Self {
+        Self {
+            logs: vec![],
+            needs_saving: false,
+            last_used: get_seconds(),
+        }
+    }
+
+    pub fn add_log(&mut self, add_log: String) {
+        let now = chrono::Utc::now();
+        let date = now.to_rfc2822();
+        let log = format!("[{date}] {add_log}",);
+        self.logs.push(log);
+        self.needs_saving = true;
+        self.last_used = get_seconds();
+    }
+
+    pub fn clear(&mut self) {
+        self.logs = vec![];
+        self.needs_saving = true;
+    }
+}
+
 pub struct LogManager {
     db: Arc<SurrealClient>,
-    storage_manager: Arc<StorageManager>,
     log_path: PathBuf,
     owner_user_ids: Vec<UserId>,
     admin_log_webhook: Option<Webhook>,
     arc_ctx: Arc<Context>,
+    logs: RwLock<HashMap<IdType, Mutex<LogState>>>,
 }
 
 #[derive(Clone, Copy)]
 pub enum LogType {
-    Message,
+    Info,
     Warning,
     Error,
 }
 
 impl LogType {
-    pub fn to_string(&self) -> String {
+    pub fn to_str(&self) -> &str {
         match self {
-            LogType::Message => "MESSAGE".to_string(),
-            LogType::Warning => "WARNING".to_string(),
-            LogType::Error => "ERROR".to_string(),
+            LogType::Info => "INFO",
+            LogType::Warning => "WARNING",
+            LogType::Error => "ERROR",
         }
     }
 }
@@ -54,27 +92,49 @@ pub enum LogSource {
     ReactionRole,
     CotdRole,
     Reminder,
+    LogManager,
     Custom(String),
 }
 
 impl LogSource {
-    pub fn to_string(&self) -> String {
+    pub fn to_str(&self) -> &str {
         match self {
-            LogSource::Guild => "GUILD".to_string(),
-            LogSource::User => "USER".to_string(),
-            LogSource::MessageDetector => "MESSAGE_DETECTOR".to_string(),
-            LogSource::ReactionRole => "REACTION_ROLE".to_string(),
-            LogSource::CotdRole => "COTD_ROLE".to_string(),
-            LogSource::Reminder => "REMINDER".to_string(),
-            LogSource::Custom(string) => string.to_owned(),
+            LogSource::Guild => "GUILD",
+            LogSource::User => "USER",
+            LogSource::MessageDetector => "MESSAGE_DETECTOR",
+            LogSource::ReactionRole => "REACTION_ROLE",
+            LogSource::CotdRole => "COTD_ROLE",
+            LogSource::Reminder => "REMINDER",
+            LogSource::LogManager => "LOG_MANAGER",
+            LogSource::Custom(string) => string,
         }
     }
 }
 
 impl LogManager {
+    pub async fn load_state(&self, id: &IdType) -> LogState {
+        let mut new_path = self.log_path.clone();
+        new_path.push(LogManager::get_file_name(id));
+
+        let mut log_state = LogState::blank();
+
+        let Ok(mut file) = tokio::fs::File::open(new_path).await else {
+            return log_state
+        };
+
+        let mut string = String::new();
+
+        if file.read_to_string(&mut string).await.is_err() {
+            return log_state;
+        }
+
+        log_state.logs.push(string);
+
+        return log_state;
+    }
+
     pub fn new(
         db: Arc<SurrealClient>,
-        storage_manager: Arc<StorageManager>,
         log_path: PathBuf,
         owner_user_ids: Vec<UserId>,
         admin_log_webhook: Option<Webhook>,
@@ -82,50 +142,94 @@ impl LogManager {
     ) -> Self {
         Self {
             db,
-            storage_manager,
             log_path,
             owner_user_ids,
             admin_log_webhook,
             arc_ctx,
-        }
-    }
-    async fn get_data_holder(&self, id: &IdType) -> Result<DataHolder, Error> {
-        self.storage_manager
-            .load_or(
-                &Self::get_path(id),
-                true,
-                DataType::String("".to_string()),
-                Duration::from_secs(SECONDS_IN_A_DAY),
-            )
-            .await
-    }
-
-    fn get_path(id: &IdType) -> String {
-        match id {
-            IdType::UserId(user_id) => format!("logs/user_{user_id}.txt"),
-            IdType::GuildId(guild_id) => format!("logs/guild_{guild_id}.txt"),
+            logs: RwLock::new(HashMap::new()),
         }
     }
 
-    async fn save_data_holder(&self, id: &IdType, data_holder: &DataHolder) -> Result<(), Error> {
-        self.storage_manager
-            .save(
-                &Self::get_path(id),
-                data_holder,
-                Duration::from_secs(SECONDS_IN_A_DAY),
-            )
-            .await?;
+    async fn write_log(&self, id: &IdType, data: &str) -> Result<(), Error> {
+        let mut new_path = self.log_path.clone();
+        new_path.push(LogManager::get_file_name(id));
+
+        tokio::fs::create_dir_all(&self.log_path).await?;
+
+        let mut file = tokio::fs::File::create(new_path).await?;
+        file.write_all(data.as_bytes()).await?;
 
         Ok(())
     }
 
+    async fn clear_unused_logs(&self) {
+        let mut write = self.logs.write().await;
+        let seconds = get_seconds();
+        let mut log_removals = vec![];
+
+        let mut err_count = 0;
+        let mut save_count = 0;
+        let mut latest_err = "".into();
+
+        for (id, log_state) in write.iter() {
+            let mut lock_log = log_state.lock().await;
+
+            if lock_log.last_used + SECONDS_IN_A_DAY > seconds {
+                continue;
+            }
+
+            if lock_log.needs_saving {
+                save_count += 1;
+
+                let joined = lock_log.logs.join("\n");
+
+                if let Err(err) = self.write_log(id, &joined).await {
+                    latest_err = err;
+                    err_count += 1;
+                    continue;
+                }
+
+                lock_log.needs_saving = false;
+            }
+            log_removals.push(id.clone());
+        }
+
+        for id in log_removals {
+            write.remove(&id);
+        }
+
+        if err_count > 0 {
+            self.add_owner_log(format!("Failed to save {err_count} out of {save_count} logs. Latest error: {latest_err}"), LogType::Error, LogSource::LogManager).await;
+        }
+    }
+
+    pub fn get_file_name(id: &IdType) -> String {
+        match id {
+            IdType::UserId(user_id) => format!("user_{user_id}.log"),
+            IdType::GuildId(guild_id) => format!("guild_{guild_id}.log"),
+        }
+    }
+
     pub async fn get_logs(&self, id: &IdType) -> Result<String, Error> {
-        let data_holder = self.get_data_holder(id).await?;
+        let mut logs_read = self.logs.read().await;
+        let log_state = {
+            if let Some(log_state) = logs_read.get(id) {
+                log_state
+            } else {
+                drop(logs_read);
+                let mut logs_write = self.logs.write().await;
+                logs_write.insert(id.clone(), Mutex::new(self.load_state(id).await));
+                drop(logs_write);
+                logs_read = self.logs.read().await;
+                logs_read.get(id).unwrap_or_else(|| panic!())
+            }
+        };
 
-        let read = data_holder.data.read().await;
-        let string = read.string().cloned().unwrap_or_default();
+        let read = log_state.lock().await;
 
-        Ok(string)
+        let logs = read.logs.join("\n");
+
+        Ok(logs)
     }
 
     pub async fn add_owner_log(
@@ -163,11 +267,7 @@ impl LogManager {
     }
 
     pub fn create_log_string(add_log: String, log_type: LogType, log_source: LogSource) -> String {
-        format!(
-            "[{}:{}] {add_log}",
-            log_type.to_string(),
-            log_source.to_string()
-        )
+        format!("[{}:{}] {add_log}", log_source.to_str(), log_type.to_str())
     }
 
     pub async fn add_log(
@@ -177,61 +277,90 @@ impl LogManager {
         log_type: LogType,
         log_source: LogSource,
     ) -> Result<(), Error> {
-        let data_holder = self.get_data_holder(id).await?;
-
-        let mut write = data_holder.data.write().await;
-        let logs = write.string_mut().unwrap();
-
-        let add_str = format!(
-            "[{}:{}] {add_log}",
-            log_type.to_string(),
-            log_source.to_string()
-        );
-
-        // I'm sorry for the code
-        if let Some((rest, last_error)) = logs.rsplit_once("\n") {
-            //Check if previous error is the same.
-            if add_str == last_error {
-                //Same error. Adding (x2) to save space.
-                logs.insert_str(logs.len(), " (x2)");
-            } else if let Some((error, number)) = last_error.rsplit_once(" ") {
-                // Check if removing the (xn) makes it match.
-                if add_str == error {
-                    //Check if it ends with (xn) where n is a number
-                    if let Some(number) = extract_number(number) {
-                        *logs = format!("{rest}\n{add_str} (x{})", number + 1);
-                    } else {
-                        logs.insert_str(logs.len(), &format!("\n{add_str}"));
-                    }
-                } else {
-                    logs.insert_str(logs.len(), &format!("\n{add_str}"));
-                }
+        let mut logs_read = self.logs.read().await;
+        let log_state = {
+            if let Some(log_state) = logs_read.get(id) {
+                log_state
             } else {
-                logs.insert_str(logs.len(), &format!("\n{add_str}"));
+                drop(logs_read);
+                let mut logs_write = self.logs.write().await;
+                logs_write.insert(id.clone(), Mutex::new(self.load_state(id).await));
+                drop(logs_write);
+                logs_read = self.logs.read().await;
+                logs_read.get(id).unwrap_or_else(|| panic!())
             }
-        } else {
-            logs.insert_str(logs.len(), &format!("\n{add_str}"));
         };
 
-        drop(write);
+        let add_str = format!("[{}:{}] {add_log}", log_type.to_str(), log_source.to_str());
 
-        //if error it will still save in ram so idc.
-        let _ = self.save_data_holder(id, &data_holder).await;
+        let mut log_state_lock = log_state.lock().await;
+        log_state_lock.add_log(add_str);
+
+        drop(log_state_lock);
 
         Ok(())
     }
 
     pub async fn clear_log(&self, id: &IdType) -> Result<(), Error> {
-        self.storage_manager.delete(&Self::get_path(id)).await?;
+        let mut logs_read = self.logs.read().await;
+        let log_state = {
+            if let Some(log_state) = logs_read.get(id) {
+                log_state
+            } else {
+                drop(logs_read);
+                let mut logs_write = self.logs.write().await;
+                logs_write.insert(id.clone(), Mutex::new(self.load_state(id).await));
+                drop(logs_write);
+                logs_read = self.logs.read().await;
+                logs_read.get(id).unwrap_or_else(|| panic!())
+            }
+        };
 
+        log_state.lock().await.clear();
         Ok(())
     }
 }
 
-fn extract_number(s: &str) -> Option<u64> {
-    if s.starts_with("(x") && s.ends_with(")") && s.len() > 3 {
-        let only_number = &s[2..(s.len() - 1)];
-        return only_number.parse::<u64>().ok();
-    }
-    None
+pub fn log_manager_loop(_arc_ctx: Arc<Context>, log_manager: Arc<LogManager>) {
+    tokio::spawn(async move {
+        let mut loop_state = 0;
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+
+            loop_state += 1;
+
+            if loop_state == 60 {
+                log_manager.clear_unused_logs().await;
+                loop_state = 0;
+                continue;
+            }
+
+            let read = log_manager.logs.read().await;
+
+            let mut save_count = 0;
+            let mut err_count = 0;
+            let mut latest_err = "".into();
+
+            for (id, state) in read.iter() {
+                let mut lock_log = state.lock().await;
+                if lock_log.needs_saving {
+                    save_count += 1;
+
+                    let joined = lock_log.logs.join("\n");
+
+                    if let Err(err) = log_manager.write_log(id, &joined).await {
+                        latest_err = err;
+                        err_count += 1;
+                        continue;
+                    }
+
+                    lock_log.needs_saving = false;
+                }
+            }
+
+            if err_count > 0 {
+                log_manager.add_owner_log(format!("Failed to save {err_count} out of {save_count} logs. Latest error: {latest_err}"), LogType::Error, LogSource::LogManager).await;
+            }
+        }
+    });
 }

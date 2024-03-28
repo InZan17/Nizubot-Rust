@@ -32,7 +32,7 @@ pub async fn get(ctx: Context<'_>) -> Result<(), Error> {
     ctx.send(|m| {
         m.attachment(AttachmentType::Bytes {
             data: std::borrow::Cow::Borrowed(logs.as_bytes()),
-            filename: format!("{}_logs.txt", id.get_u64()),
+            filename: LogManager::get_file_name(&id),
         })
     })
     .await?;
@@ -62,7 +62,7 @@ pub async fn add(
         .add_log(
             &id,
             add,
-            LogType::Message,
+            LogType::Info,
             LogSource::Custom(ctx.author().id.to_string()),
         )
         .await?;
