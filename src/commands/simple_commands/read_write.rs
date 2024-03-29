@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{managers::db::StoredData, Context, Error};
 
-/// Read!
+/// Reads data!
 #[poise::command(slash_command)]
 pub async fn read(ctx: Context<'_>) -> Result<(), Error> {
     let data = ctx.data();
@@ -25,7 +25,12 @@ pub async fn read(ctx: Context<'_>) -> Result<(), Error> {
 
 /// Writes data!
 #[poise::command(slash_command)]
-pub async fn write(ctx: Context<'_>, #[description = "Write."] write: String) -> Result<(), Error> {
+pub async fn write(
+    ctx: Context<'_>,
+    #[max_length = 500]
+    #[description = "Write."]
+    write: String,
+) -> Result<(), Error> {
     let data = ctx.data();
 
     let data_struct = StoredData { content: write };

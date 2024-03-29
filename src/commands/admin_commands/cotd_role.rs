@@ -21,6 +21,7 @@ pub async fn cotdrole(_ctx: Context<'_>) -> Result<(), Error> {
 #[poise::command(slash_command)]
 pub async fn create(
     ctx: Context<'_>,
+    #[max_length = 100]
     #[description = "The name of the role. <cotd> is replaced by the name of the color. (Default: <cotd>)"]
     name: Option<String>,
     #[description = "If you have an existing role you wanna change instead of creating a new one."]

@@ -36,7 +36,9 @@ pub async fn analyze(
 #[poise::command(slash_command)]
 pub async fn clean(
     ctx: Context<'_>,
-    #[description = "Contents of the message."] content: Option<String>,
+    #[max_length = 2000]
+    #[description = "Contents of the message."]
+    content: Option<String>,
     #[description = "Embeds of the message."] embeds: Option<String>,
 ) -> Result<(), Error> {
     let empty_workaround = content.is_none() && embeds.is_none();
@@ -99,7 +101,9 @@ pub async fn clean(
 pub async fn edit(
     ctx: Context<'_>,
     #[description = "The message you want to edit."] mut message_id: Message,
-    #[description = "Contents of the message."] content: Option<String>,
+    #[max_length = 2000]
+    #[description = "Contents of the message."]
+    content: Option<String>,
     #[description = "Embeds of the message."] embeds: Option<String>,
 ) -> Result<(), Error> {
     if !message_id.is_own(ctx) {

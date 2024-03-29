@@ -8,7 +8,9 @@ use crate::{Context, Error};
 #[poise::command(slash_command)]
 pub async fn eval(
     ctx: Context<'_>,
-    #[description = "The expression"] expression: String,
+    #[max_length = 200]
+    #[description = "The expression"]
+    expression: String,
 ) -> Result<(), Error> {
     let mut context = context_map! {
         "sin" => Function::new(|argument| {

@@ -19,9 +19,12 @@ pub async fn remind(ctx: Context<'_>) -> Result<(), Error> {
 #[poise::command(slash_command)]
 pub async fn add(
     ctx: Context<'_>,
+    #[max_length = 50]
     #[description = "When do you want me to remind you? Example: 1s 2m 3h 4d 5w 6y"]
     duration: String,
-    #[description = "Message of the reminder."] message: Option<String>,
+    #[max_length = 128]
+    #[description = "Message of the reminder."]
+    message: Option<String>,
     #[description = "Should I put this reminder on a loop? (Default: False)"] looped: Option<bool>,
 ) -> Result<(), Error> {
     let looped = looped.unwrap_or(false);

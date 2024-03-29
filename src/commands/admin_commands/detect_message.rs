@@ -23,8 +23,12 @@ pub async fn detect_message(_ctx: Context<'_>) -> Result<(), Error> {
 pub async fn add(
     ctx: Context<'_>,
     #[description = "How the detection will work."] detect_type: DetectType,
-    #[description = "What I will detect."] key: String,
-    #[description = "What I will respond with after detecting it."] response: String,
+    #[max_length = 50]
+    #[description = "What I will detect."]
+    key: String,
+    #[max_length = 500]
+    #[description = "What I will respond with after detecting it."]
+    response: String,
     #[description = "If my detection should be case-sensitive. (default: False)"]
     case_sensitive: Option<bool>,
 ) -> Result<(), Error> {

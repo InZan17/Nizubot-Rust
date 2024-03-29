@@ -4,7 +4,9 @@ use crate::{Context, Error};
 #[poise::command(slash_command)]
 pub async fn echo(
     ctx: Context<'_>,
-    #[description = "What should I say?"] content: String,
+    #[max_length = 2000]
+    #[description = "What should I say?"]
+    content: String,
 ) -> Result<(), Error> {
     ctx.send(|m| m.content(content).allowed_mentions(|a| a.empty_parse()))
         .await?;
