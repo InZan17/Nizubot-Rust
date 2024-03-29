@@ -106,7 +106,7 @@ impl RemindManager {
         }
 
         let current_time = get_seconds();
-        let finish_time = current_time.saturating_add(current_time);
+        let finish_time = current_time.saturating_add(duration);
 
         let remind_info = RemindInfo {
             original_time: current_time,
