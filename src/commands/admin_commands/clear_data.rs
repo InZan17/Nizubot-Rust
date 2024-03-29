@@ -9,10 +9,8 @@ pub async fn clear_data(ctx: Context<'_>) -> Result<(), Error> {
 
     if let Some(guild_id) = ctx.guild_id() {
         id = IdType::GuildId(guild_id);
-        ctx.reply("Successfully removed guild data.").await?;
     } else {
         id = IdType::UserId(ctx.author().id);
-        ctx.reply("Successfully removed user data.").await?;
     }
 
     let table_id = id.into_db_table();
