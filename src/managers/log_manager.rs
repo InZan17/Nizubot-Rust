@@ -44,10 +44,7 @@ impl LogState {
     }
 
     pub fn add_log(&mut self, add_log: String) {
-        let now = chrono::Utc::now();
-        let date = now.to_rfc2822();
-        let log = format!("[{date}] {add_log}",);
-        self.logs.push(log);
+        self.logs.push(add_log);
         self.needs_saving = true;
         self.last_used = get_seconds();
     }
@@ -119,7 +116,7 @@ impl LogManager {
         let mut log_state = LogState::blank();
 
         let Ok(mut file) = tokio::fs::File::open(new_path).await else {
-            return log_state
+            return log_state;
         };
 
         let mut string = String::new();
@@ -267,7 +264,13 @@ impl LogManager {
     }
 
     pub fn create_log_string(add_log: String, log_type: LogType, log_source: LogSource) -> String {
-        format!("[{}:{}] {add_log}", log_source.to_str(), log_type.to_str())
+        let now = chrono::Utc::now();
+        let date = now.to_rfc2822();
+        format!(
+            "[{date}] [{}:{}] {add_log}",
+            log_source.to_str(),
+            log_type.to_str()
+        )
     }
 
     pub async fn add_log(
@@ -291,7 +294,7 @@ impl LogManager {
             }
         };
 
-        let add_str = format!("[{}:{}] {add_log}", log_type.to_str(), log_source.to_str());
+        let add_str = Self::create_log_string(add_log, log_type, log_source);
 
         let mut log_state_lock = log_state.lock().await;
         log_state_lock.add_log(add_str);
