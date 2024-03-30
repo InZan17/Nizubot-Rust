@@ -502,4 +502,15 @@ impl SurrealClient {
 
         Ok(reminders)
     }
+
+    pub async fn get_next_reminder_time(&self) -> Result<Option<u64>, Error> {
+        let reminders = self
+            .query(format!(
+                "SELECT VALUE finish_time FROM reminder ORDER BY finish_time LIMIT 1;"
+            ))
+            .await?
+            .take(0)?;
+
+        Ok(reminders)
+    }
 }

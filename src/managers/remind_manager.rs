@@ -221,8 +221,6 @@ pub fn remind_manager_loop(
                 continue;
             }
 
-            let mut next_wait_until = u64::MAX;
-
             let result = db.get_pending_reminders(current_time).await;
 
             let mut reminders = match result {
@@ -241,7 +239,6 @@ pub fn remind_manager_loop(
             };
             for (index, reminder_info) in reminders.iter_mut().enumerate() {
                 if reminder_info.finish_time > current_time {
-                    next_wait_until = next_wait_until.min(reminder_info.finish_time);
                     break;
                 }
 
@@ -294,9 +291,7 @@ pub fn remind_manager_loop(
                     };
 
                     if let Err(err) = res {
-                        if !is_user_fault(&err) {
-                            next_wait_until = 0;
-                        } else {
+                        if is_user_fault(&err) {
                             let add_log = format!(
                                 "Failed to send reminder. Deleting reminder. Reason: {}",
                                 err.to_string()
@@ -325,8 +320,6 @@ pub fn remind_manager_loop(
                     reminder_info.request_time =
                         reminder_info.finish_time + wait_time * missed_reminders;
                     reminder_info.finish_time = reminder_info.request_time + wait_time;
-
-                    next_wait_until = next_wait_until.min(reminder_info.finish_time);
 
                     let json_string = serde_json::to_string(&reminder_info).unwrap();
 
@@ -366,7 +359,6 @@ pub fn remind_manager_loop(
 
                     if let Err(err) = res {
                         if !is_user_fault(&err) {
-                            next_wait_until = 0;
                             continue;
                         } else {
                             let add_log = format!(
@@ -401,7 +393,28 @@ pub fn remind_manager_loop(
                     }
                 }
             }
-            *remind_manager.wait_until.lock().await = next_wait_until;
+
+            let next_wait_until;
+
+            loop {
+                next_wait_until = match db.get_next_reminder_time().await {
+                    Ok(next_time) => next_time,
+                    Err(err) => {
+                        let _ = log_manager
+                            .add_owner_log(
+                                format!("Couldn't fetch next reminder time. {}", err),
+                                LogType::Warning,
+                                LogSource::Reminder,
+                            )
+                            .await;
+                        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                        continue;
+                    }
+                };
+                break;
+            }
+
+            *remind_manager.wait_until.lock().await = next_wait_until.unwrap_or(u64::MAX);
         }
     });
 }
