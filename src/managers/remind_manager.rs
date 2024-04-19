@@ -359,6 +359,7 @@ pub fn remind_manager_loop(
 
                     if let Err(err) = res {
                         if !is_user_fault(&err) {
+                            println!("{:?}", err);
                             continue;
                         } else {
                             let add_log = format!(
@@ -424,9 +425,13 @@ pub fn is_user_fault(error: &poise::serenity_prelude::Error) -> bool {
     match error {
         poise::serenity_prelude::Error::Http(err) => match err.as_ref() {
             poise::serenity_prelude::HttpError::UnsuccessfulRequest(err) => {
+                //https://discord.com/developers/docs/topics/opcodes-and-status-codes#http
+                const FORBIDDEN: u16 = 403;
                 const NOT_FOUND: u16 = 404;
                 const METHOD_NOT_ALLOWED: u16 = 405;
-                return err.status_code == NOT_FOUND || err.status_code == METHOD_NOT_ALLOWED;
+                return err.status_code == FORBIDDEN
+                    || err.status_code == NOT_FOUND
+                    || err.status_code == METHOD_NOT_ALLOWED;
             }
             _ => false,
         },

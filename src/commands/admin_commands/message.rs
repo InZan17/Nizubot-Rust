@@ -5,7 +5,7 @@ use crate::{Context, Error};
 /// Commands for messages.
 #[poise::command(
     slash_command,
-    subcommands("edit", "clean", "analyze"),
+    subcommands("edit", "send", "analyze"),
     subcommand_required,
     default_member_permissions = "ADMINISTRATOR"
 )]
@@ -14,7 +14,10 @@ pub async fn message(_ctx: Context<'_>) -> Result<(), Error> {
 }
 
 /// Get information about a message.
-#[poise::command(slash_command)]
+#[poise::command(
+    slash_command,
+    required_bot_permissions = "READ_MESSAGE_HISTORY | VIEW_CHANNEL"
+)]
 pub async fn analyze(
     ctx: Context<'_>,
     #[description = "The message you want to get information from."] message_id: Message,
@@ -33,8 +36,11 @@ pub async fn analyze(
 }
 
 /// I will say what you want but not show that you ran a command.
-#[poise::command(slash_command)]
-pub async fn clean(
+#[poise::command(
+    slash_command,
+    required_bot_permissions = "SEND_MESSAGES | VIEW_CHANNEL"
+)]
+pub async fn send(
     ctx: Context<'_>,
     #[max_length = 2000]
     #[description = "Contents of the message."]
@@ -97,7 +103,10 @@ pub async fn clean(
 }
 
 /// Get the icon of a custom emoji.
-#[poise::command(slash_command)]
+#[poise::command(
+    slash_command,
+    required_bot_permissions = "READ_MESSAGE_HISTORY | VIEW_CHANNEL"
+)]
 pub async fn edit(
     ctx: Context<'_>,
     #[description = "The message you want to edit."] mut message_id: Message,
@@ -107,14 +116,20 @@ pub async fn edit(
     #[description = "Embeds of the message."] embeds: Option<String>,
 ) -> Result<(), Error> {
     if !message_id.is_own(ctx) {
-        ctx.send(|m| m.content("Please provide a message sent by me."))
-            .await?;
+        ctx.send(|m| {
+            m.content("Please provide a message sent by me.")
+                .ephemeral(true)
+        })
+        .await?;
         return Ok(());
     }
 
     if message_id.kind != MessageType::Regular {
-        ctx.send(|m| m.content("My message must not be from a command."))
-            .await?;
+        ctx.send(|m| {
+            m.content("My message must not be from a command.")
+                .ephemeral(true)
+        })
+        .await?;
         return Ok(());
     }
 

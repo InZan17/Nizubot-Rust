@@ -5,7 +5,7 @@ use poise::serenity_prelude::UserId;
 use crate::{Context, Error};
 
 /// See what order people joined at.
-#[poise::command(slash_command)]
+#[poise::command(slash_command, guild_only)]
 pub async fn joinorder(
     ctx: Context<'_>,
     #[description = "Which user you wanna check."] user: Option<UserId>,
@@ -14,15 +14,13 @@ pub async fn joinorder(
     if user.is_some() && index.is_some() {
         ctx.send(|m| {
             m.content("Please do not use the 'user' and 'index' options at the same time.")
+                .ephemeral(true)
         })
         .await?;
         return Ok(());
     }
 
-    let Some(guild) = ctx.guild() else {
-        ctx.send(|m| m.content("cant find giild")).await?;
-        return Ok(());
-    };
+    let guild = ctx.guild().unwrap();
 
     if guild.member_count > 1000 {
         ctx.send(|m| m.content("Too many members!").ephemeral(true))

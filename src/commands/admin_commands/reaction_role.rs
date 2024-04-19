@@ -11,6 +11,7 @@ use crate::{Context, Error};
     slash_command,
     subcommands("add", "remove"),
     subcommand_required,
+    guild_only,
     default_member_permissions = "ADMINISTRATOR"
 )]
 pub async fn reaction_role(_ctx: Context<'_>) -> Result<(), Error> {
@@ -18,7 +19,10 @@ pub async fn reaction_role(_ctx: Context<'_>) -> Result<(), Error> {
 }
 
 /// Add reaction role to message.
-#[poise::command(slash_command, guild_only)]
+#[poise::command(
+    slash_command,
+    required_bot_permissions = "VIEW_CHANNEL | READ_MESSAGE_HISTORY | MANAGE_ROLES | ADD_REACTIONS"
+)]
 pub async fn add(
     ctx: Context<'_>,
     #[description = "ID of the message."] message_id: Message,
@@ -27,7 +31,7 @@ pub async fn add(
 ) -> Result<(), Error> {
     if let Err(err) = message_id.react(ctx, emoji.clone()).await {
         ctx.send(|m| {
-            m.content(format!("Sorry, I couldn't react with the emoji you provided. Please make sure to provide an actual emoji.\n\nHere's the error: {}", err))
+            m.content(format!("Sorry, I couldn't react with the emoji you provided. Please make sure to provide an actual emoji.\n\nHere's the error: {}", err)).ephemeral(true)
         }).await?;
         return Ok(());
     }
@@ -43,10 +47,11 @@ pub async fn add(
 
     if let Err(err) = res {
         ctx.send(|m| {
-            m.ephemeral(true).content(format!(
+            m.content(format!(
                 "Sorry, I wasn't able to add that reaction role.\n\n{}",
                 err.to_string()
             ))
+            .ephemeral(true)
         })
         .await?;
         return Ok(());
@@ -60,7 +65,10 @@ pub async fn add(
 }
 
 /// Remove reaction role from message.
-#[poise::command(slash_command)]
+#[poise::command(
+    slash_command,
+    required_bot_permissions = "VIEW_CHANNEL | READ_MESSAGE_HISTORY"
+)]
 pub async fn remove(
     ctx: Context<'_>,
     #[description = "ID of the message."] message_id: Message,
@@ -93,10 +101,11 @@ pub async fn remove(
         }
         Err(err) => {
             ctx.send(|m| {
-                m.ephemeral(true).content(format!(
+                m.content(format!(
                     "Sorry, I wasn't able to remove that reaction role.\n\n{}",
                     err.to_string()
                 ))
+                .ephemeral(true)
             })
             .await?;
         }

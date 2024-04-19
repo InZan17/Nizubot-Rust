@@ -36,6 +36,8 @@ pub async fn brick(
 
     let user = user.unwrap_or(ctx.author().clone());
 
+    ctx.defer().await?;
+
     let brick_gif_file = brick::gen_brick_gif(storage_manager, &user).await?;
 
     let brick_file = fs::File::open(storage_manager.get_full_directory(&brick_gif_file)).await?;
@@ -98,13 +100,17 @@ pub async fn caption(
     const TWELVE_MIB_IN_BYTES: u64 = 12582912;
 
     if image.size > TWELVE_MIB_IN_BYTES {
-        ctx.send(|m| m.content("Please make sure your image is 12 MiB or less in size."))
-            .await?;
+        ctx.send(|m| {
+            m.content("Please make sure your image is 12 MiB or less in size.")
+                .ephemeral(true)
+        })
+        .await?;
         return Ok(());
     }
 
     if upper_text.is_none() && bottom_text.is_none() {
-        ctx.send(|m| m.content("Please provide some text.")).await?;
+        ctx.send(|m| m.content("Please provide some text.").ephemeral(true))
+            .await?;
         return Ok(());
     }
 
@@ -113,22 +119,27 @@ pub async fn caption(
     let content_type_vec = content_type.split("/").collect::<Vec<&str>>();
 
     if content_type_vec.len() != 2 {
-        ctx.send(|m| m.content("Sorry, I couldn't make sense of the files content type. Please make sure your file isn't corrupted.")).await?;
+        ctx.send(|m| m.content("Sorry, I couldn't make sense of the files content type. Please make sure your file isn't corrupted.").ephemeral(true)).await?;
         return Ok(());
     }
 
     if content_type_vec[0] != "image" && content_type_vec[0] != "video" {
-        ctx.send(|m| m.content("Please provide an actual image or video."))
-            .await?;
+        ctx.send(|m| {
+            m.content("Please provide an actual image or video.")
+                .ephemeral(true)
+        })
+        .await?;
         return Ok(());
     }
 
     if image.width.is_none() || image.height.is_none() {
-        ctx.send(|m| m.content("Sorry, I couldn't get the width and/or height of the image. Please make sure your file isn't corrupted.")).await?;
+        ctx.send(|m| m.content("Sorry, I couldn't get the width and/or height of the image. Please make sure your file isn't corrupted.").ephemeral(true)).await?;
         return Ok(());
     }
 
     let extension = content_type_vec[1].to_owned();
+
+    ctx.defer().await?;
 
     let generated_file_path = caption::caption(
         ctx.id(),

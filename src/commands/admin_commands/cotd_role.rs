@@ -11,6 +11,7 @@ use poise::serenity_prelude::{Role, RoleId};
     slash_command,
     subcommands("create", "remove"),
     subcommand_required,
+    guild_only,
     default_member_permissions = "ADMINISTRATOR"
 )]
 pub async fn cotdrole(_ctx: Context<'_>) -> Result<(), Error> {
@@ -18,7 +19,7 @@ pub async fn cotdrole(_ctx: Context<'_>) -> Result<(), Error> {
 }
 
 /// Create a role which will change color based on the COTD.
-#[poise::command(slash_command)]
+#[poise::command(slash_command, required_bot_permissions = "MANAGE_ROLES")]
 pub async fn create(
     ctx: Context<'_>,
     #[max_length = 100]
@@ -53,7 +54,9 @@ pub async fn create(
     if let Some(role) = role {
         cotd_role = role
     } else {
-        cotd_role = guild.create_role(ctx, |e| e.name(name.clone())).await?;
+        cotd_role = guild
+            .create_role(ctx, |e| e.name(name.clone()).position(0))
+            .await?;
     }
 
     let cotd_manager = &ctx.data().cotd_manager;
@@ -88,7 +91,8 @@ pub async fn create(
         .await?;
 
     ctx.send(|m| {
-        m.content(format!("Successfully made <@&{role_id}> a COTD role.\nPlease remember to not put this role above my highest role or else I wont be able to edit it.")).ephemeral(true)
+        m.content(format!("Successfully made <@&{role_id}> a COTD role.\nPlease remember to not put this role above my highest role or else I wont be able to edit it."))
+        .allowed_mentions(|m| m.empty_parse())
     }).await?;
 
     Ok(())
@@ -107,8 +111,11 @@ pub async fn remove(
     let cotd_role_data = data.db.get_guild_cotd_role(&guild.id).await?;
 
     let Some(cotd_role_data) = cotd_role_data else {
-        ctx.send(|m| m.content("This guild does not have a COTD role."))
-            .await?;
+        ctx.send(|m| {
+            m.content("This guild does not have a COTD role.")
+                .ephemeral(true)
+        })
+        .await?;
         return Ok(());
     };
     let role_id = cotd_role_data.cotd_role.id;
@@ -124,17 +131,24 @@ pub async fn remove(
                     role_id,
                     err.to_string()
                 ))
+                .allowed_mentions(|m| m.empty_parse())
             })
             .await?;
         } else {
-            ctx.send(|m| m.content(format!("<@&{}> has been successfully deleted.", role_id)))
-                .await?;
+            ctx.send(|m| {
+                m.content(format!("<@&{}> has been successfully deleted.", role_id))
+                    .allowed_mentions(|m| m.empty_parse())
+            })
+            .await?;
         }
         return Ok(());
     }
 
-    ctx.send(|m| m.content(format!("<@&{}> is no longer a COTD role.", role_id)))
-        .await?;
+    ctx.send(|m| {
+        m.content(format!("<@&{}> is no longer a COTD role.", role_id))
+            .allowed_mentions(|m| m.empty_parse())
+    })
+    .await?;
 
     return Ok(());
 }

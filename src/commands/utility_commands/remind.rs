@@ -16,7 +16,10 @@ pub async fn remind(ctx: Context<'_>) -> Result<(), Error> {
 }
 
 /// Command to make me remind you of whatever you want.
-#[poise::command(slash_command)]
+#[poise::command(
+    slash_command,
+    required_bot_permissions = "VIEW_CHANNEL | SEND_MESSAGES | READ_MESSAGE_HISTORY"
+)]
 pub async fn add(
     ctx: Context<'_>,
     #[max_length = 50]

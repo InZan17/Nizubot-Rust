@@ -12,14 +12,18 @@ use poise::serenity_prelude::{Role, RoleId};
     slash_command,
     subcommands("add", "remove", "list"),
     subcommand_required,
-    default_member_permissions = "ADMINISTRATOR"
+    default_member_permissions = "ADMINISTRATOR",
+    //required_bot_permissions = "READ_MESSAGE_HISTORY | SEND_MESSAGES"
 )]
 pub async fn detect_message(_ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
 /// Add event for when detecting a message.
-#[poise::command(slash_command)]
+#[poise::command(
+    slash_command,
+    required_bot_permissions = "SEND_MESSAGES | VIEW_CHANNEL"
+)]
 pub async fn add(
     ctx: Context<'_>,
     #[description = "How the detection will work."] detect_type: DetectType,
@@ -48,7 +52,7 @@ pub async fn add(
         .add_message_detect(
             detect_type.clone(),
             key.clone(),
-            response,
+            response.clone(),
             case_sensitive,
             id,
         )
@@ -56,20 +60,22 @@ pub async fn add(
 
     if let Err(err) = res {
         ctx.send(|m| {
-            m.ephemeral(true).content(format!(
+            m.content(format!(
                 "Sorry, I wasn't able to add that detector.\n\n{}",
                 err.to_string()
             ))
+            .ephemeral(true)
         })
         .await?;
         return Ok(());
     }
 
     ctx.send(|m| {
-        m.ephemeral(true).content(format!(
-            "Sure! I will now detect messages that {} \"{}\".",
+        m.content(format!(
+            "Sure! I will now detect messages that {} \"{}\" and I will reply with \"{}\".",
             detect_type.to_sentence(),
-            key
+            key,
+            response
         ))
     })
     .await?;
@@ -99,20 +105,18 @@ pub async fn remove(
 
     if let Err(err) = res {
         ctx.send(|m| {
-            m.ephemeral(true).content(format!(
+            m.content(format!(
                 "Sorry, I wasn't able to delete that detector.\n\n{}",
                 err.to_string()
             ))
+            .ephemeral(true)
         })
         .await?;
         return Ok(());
     }
 
-    ctx.send(|m| {
-        m.ephemeral(true)
-            .content("Sure! I have now removed that detection.")
-    })
-    .await?;
+    ctx.send(|m| m.content("Sure! I have now removed that detection."))
+        .await?;
 
     Ok(())
 }
@@ -132,10 +136,11 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
         Ok(ok) => ok,
         Err(err) => {
             ctx.send(|m| {
-                m.ephemeral(true).content(format!(
+                m.content(format!(
                     "Sorry, I wasn't able to list the detectors.\n\n{}",
                     err.to_string()
                 ))
+                .ephemeral(true)
             })
             .await?;
             return Ok(());
