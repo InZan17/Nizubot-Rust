@@ -118,7 +118,7 @@ impl CotdManager {
         };
 
         if let Some(color) = color {
-            //return Ok(color);
+            return Ok(color);
         }
 
         match self.generate_color().await {
