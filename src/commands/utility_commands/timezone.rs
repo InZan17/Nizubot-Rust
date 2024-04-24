@@ -1,9 +1,11 @@
-use chrono::{TimeZone, Timelike, Utc};
+use chrono::{DateTime, TimeZone, Timelike, Utc};
 
 use chrono_tz::Tz;
 use poise::serenity_prelude::{Mentionable, User};
 
 use crate::{Context, Error};
+
+use super::time_format::TimeFormat;
 
 /// Command for setting and getting timezones.
 #[poise::command(
@@ -72,7 +74,18 @@ pub async fn user(
     let now = Utc::now();
     let timezone = Tz::from_str_insensitive(&timezone_name)?;
     let date_time = timezone.from_utc_datetime(&now.naive_utc());
-    ctx.send(|m| m.content(format!("{}'s timezone is `{timezone_name}`.\nThe time for `{timezone_name}` is currently **{}:{:0>2}**.", user.mention(), date_time.hour(), date_time.minute())).allowed_mentions(|m| {
+
+    let time_format = ctx
+        .data()
+        .db
+        .get_user_time_format(&ctx.author().id)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or(TimeFormat::TwentyFour);
+
+    ctx.send(|m| m.content(format!("{}'s timezone is `{timezone_name}`.\nThe time for `{timezone_name}` is currently **{}**.", user.mention(), 
+    get_time_string(date_time, time_format))).allowed_mentions(|m| {
         m.empty_parse()
     }))
         .await?;
@@ -88,14 +101,39 @@ pub async fn check(
     let timezone = Tz::from_str_insensitive(&timezone)?;
     let now = Utc::now();
     let date_time = timezone.from_utc_datetime(&now.naive_utc());
+
+    let time_format = ctx
+        .data()
+        .db
+        .get_user_time_format(&ctx.author().id)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or(TimeFormat::TwentyFour);
+
     ctx.send(|m| {
         m.content(format!(
-            "The time for `{}` is currently **{}:{:0>2}**.",
+            "The time for `{}` is currently **{}**.",
             timezone.name(),
-            date_time.hour(),
-            date_time.minute()
+            get_time_string(date_time, time_format)
         ))
     })
     .await?;
     Ok(())
+}
+
+fn get_time_string(date_time: DateTime<Tz>, time_format: TimeFormat) -> String {
+    match time_format {
+        TimeFormat::Twelve => {
+            let (pm, hour) = date_time.hour12();
+            if pm {
+                return format!("{}:{:0>2} PM", hour, date_time.minute());
+            } else {
+                return format!("{}:{:0>2} AM", hour, date_time.minute());
+            }
+        }
+        TimeFormat::TwentyFour => {
+            format!("{}:{:0>2}", date_time.hour(), date_time.minute())
+        }
+    }
 }
