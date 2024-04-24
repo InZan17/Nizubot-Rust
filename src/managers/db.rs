@@ -415,6 +415,35 @@ impl SurrealClient {
         Ok(())
     }
 
+    pub async fn get_user_timezone(&self, user_id: &UserId) -> Result<Option<String>, Error> {
+        let timezone: Option<String> = self
+            .query(format!("SELECT VALUE timezone FROM user:{user_id};"))
+            .await?
+            .take(0)?;
+        Ok(timezone)
+    }
+
+    pub async fn set_user_timezone(
+        &self,
+        user_id: &UserId,
+        timezone: Option<String>,
+    ) -> Result<(), Error> {
+        let timezone_string = match timezone {
+            Some(string) => string,
+            None => "NONE".to_string(),
+        };
+        let err = self
+            .query(format!(
+                "UPDATE user:{user_id} SET timezone = \"{timezone_string}\";"
+            ))
+            .await?
+            .take_err(0);
+        if let Some(err) = err {
+            return Err(err);
+        }
+        Ok(())
+    }
+
     pub async fn get_role_from_message_reaction(
         &self,
         guild_id: &GuildId,

@@ -17,3 +17,4 @@ evalexpr = "11.3.0"
 percent-encoding = "2.3.1"
 openssl = { version = "0.10", features = ["vendored"] }
 chrono = "0.4.37"
+chrono-tz = { version = "0.9.0", features = ["case-insensitive"]}
