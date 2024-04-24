@@ -1,0 +1,89 @@
+use chrono::{TimeZone, Timelike, Utc};
+
+use chrono_tz::Tz;
+use poise::serenity_prelude::{Mentionable, User};
+use serde::{Deserialize, Serialize};
+
+use crate::{Context, Error};
+
+#[derive(Serialize, Deserialize, Clone, Copy, poise::ChoiceParameter)]
+pub enum TimeFormat {
+    #[name = "12-hour clock"]
+    Twelve,
+    #[name = "24-hour clock"]
+    TwentyFour,
+}
+
+/// Command for setting and getting users preferred time format.
+#[poise::command(
+    slash_command,
+    subcommands("set", "remove", "get"),
+    subcommand_required
+)]
+pub async fn time_format(ctx: Context<'_>) -> Result<(), Error> {
+    Ok(())
+}
+
+/// Command to set your preferred time format.
+#[poise::command(slash_command)]
+pub async fn set(
+    ctx: Context<'_>,
+    #[description = "What's your preferred time format?"] time_format: TimeFormat,
+) -> Result<(), Error> {
+    ctx.data()
+        .db
+        .set_user_time_format(&ctx.author().id, Some(time_format))
+        .await?;
+
+    ctx.send(|m| {
+        m.content(format!(
+            "Sure! Your preferred time format has now been set to the {}.",
+            time_format.name()
+        ))
+    })
+    .await?;
+
+    Ok(())
+}
+
+/// Command to remove your preferred time format.
+#[poise::command(slash_command)]
+pub async fn remove(ctx: Context<'_>) -> Result<(), Error> {
+    ctx.data()
+        .db
+        .set_user_time_format(&ctx.author().id, None)
+        .await?;
+
+    ctx.send(|m| m.content("Your preferred time format has been removed!"))
+        .await?;
+    Ok(())
+}
+
+/// Command to check another user's preferred time format.
+#[poise::command(slash_command)]
+pub async fn get(
+    ctx: Context<'_>,
+    #[description = "Which user do you wanna check?"] user: Option<User>,
+) -> Result<(), Error> {
+    let user = user.as_ref().unwrap_or(ctx.author());
+
+    let Some(time_format) = ctx.data().db.get_user_time_format(&ctx.author().id).await? else {
+        ctx.send(|m| {
+            m.content("That user hasn't set their preferred time format to anything.")
+                .ephemeral(true)
+        })
+        .await?;
+        return Ok(());
+    };
+
+    ctx.send(|m| {
+        m.content(format!(
+            "{}'s preferred time format is the {}.",
+            user.mention(),
+            time_format.name()
+        ))
+        .allowed_mentions(|m| m.empty_parse())
+    })
+    .await?;
+    Ok(())
+}

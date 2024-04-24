@@ -5,7 +5,7 @@ pub type Commands =
 mod admin_commands;
 mod fun_commands;
 mod simple_commands;
-mod utility_commands;
+pub mod utility_commands;
 
 pub fn get_commands() -> Commands {
     let mut commands_groups: Vec<Commands> = vec![

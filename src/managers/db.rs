@@ -6,6 +6,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
+    commands::{self, utility_commands::time_format::TimeFormat},
     tokens::{self, SurrealDbSignInInfo},
     utils::IdType,
     Error,
@@ -428,13 +429,39 @@ impl SurrealClient {
         user_id: &UserId,
         timezone: Option<String>,
     ) -> Result<(), Error> {
-        let timezone_string = match timezone {
-            Some(string) => string,
-            None => "NONE".to_string(),
-        };
+        let timezone_string = serde_json::to_string(&timezone).unwrap();
         let err = self
             .query(format!(
-                "UPDATE user:{user_id} SET timezone = \"{timezone_string}\";"
+                "UPDATE user:{user_id} SET timezone = {timezone_string};"
+            ))
+            .await?
+            .take_err(0);
+        if let Some(err) = err {
+            return Err(err);
+        }
+        Ok(())
+    }
+
+    pub async fn get_user_time_format(
+        &self,
+        user_id: &UserId,
+    ) -> Result<Option<TimeFormat>, Error> {
+        let time_format: Option<TimeFormat> = self
+            .query(format!("SELECT VALUE time_format FROM user:{user_id};"))
+            .await?
+            .take(0)?;
+        Ok(time_format)
+    }
+
+    pub async fn set_user_time_format(
+        &self,
+        user_id: &UserId,
+        time_format: Option<TimeFormat>,
+    ) -> Result<(), Error> {
+        let time_format_string = serde_json::to_string(&time_format).unwrap();
+        let err = self
+            .query(format!(
+                "UPDATE user:{user_id} SET time_format = {time_format_string};"
             ))
             .await?
             .take_err(0);
