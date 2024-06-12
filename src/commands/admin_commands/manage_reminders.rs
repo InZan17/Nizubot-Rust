@@ -7,7 +7,7 @@ use crate::{
 };
 use poise::serenity_prelude::{Member, Role, RoleId, User};
 
-/// Events for when bot detects a message.
+/// Command to check and remove other users reminders.
 #[poise::command(
     slash_command,
     subcommands("peek", "remove"),
