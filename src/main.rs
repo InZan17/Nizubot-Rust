@@ -1,5 +1,3 @@
-#![feature(downcast_unchecked)]
-#![feature(get_mut_unchecked)]
 #![feature(slice_pattern)]
 
 mod commands;
