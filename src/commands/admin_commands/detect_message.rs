@@ -12,8 +12,7 @@ use poise::serenity_prelude::{Role, RoleId};
     slash_command,
     subcommands("add", "remove", "list"),
     subcommand_required,
-    default_member_permissions = "ADMINISTRATOR",
-    //required_bot_permissions = "READ_MESSAGE_HISTORY | SEND_MESSAGES"
+    default_member_permissions = "ADMINISTRATOR"
 )]
 pub async fn detect_message(_ctx: Context<'_>) -> Result<(), Error> {
     Ok(())

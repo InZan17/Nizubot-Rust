@@ -12,8 +12,7 @@ use poise::serenity_prelude::{Member, Role, RoleId, User};
     slash_command,
     subcommands("peek", "remove"),
     subcommand_required,
-    default_member_permissions = "ADMINISTRATOR",
-    //required_bot_permissions = "READ_MESSAGE_HISTORY | SEND_MESSAGES"
+    default_member_permissions = "ADMINISTRATOR"
 )]
 pub async fn manage_reminders(_ctx: Context<'_>) -> Result<(), Error> {
     Ok(())

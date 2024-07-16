@@ -15,6 +15,7 @@ use crate::{
 use super::{
     cotd_manager::{ColorInfo, CotdRoleData, CotdRoleDataQuery},
     detector_manager::DetectorInfo,
+    reaction_manager::ReactionRoles,
     remind_manager::RemindInfo,
 };
 
@@ -374,6 +375,18 @@ impl SurrealClient {
             .query(format!(
                 "SELECT VALUE messages.{message_id}.reaction_roles from guild:{guild_id};"
             ))
+            .await?
+            .take(0)?;
+
+        Ok(res)
+    }
+
+    pub async fn get_reaction_role_messages(
+        &self,
+        guild_id: &GuildId,
+    ) -> Result<Option<HashMap<MessageId, ReactionRoles>>, Error> {
+        let res = self
+            .query(format!("SELECT VALUE messages from guild:{guild_id};"))
             .await?
             .take(0)?;
 

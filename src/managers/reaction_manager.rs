@@ -2,8 +2,9 @@ use std::{collections::HashMap, sync::Arc};
 
 use percent_encoding::{percent_decode_str, utf8_percent_encode, NON_ALPHANUMERIC};
 use poise::serenity_prelude::{
-    self, Context, GuildId, Member, MessageId, Reaction, ReactionType, RoleId, UserId,
+    self, Context, EmojiId, GuildId, Member, MessageId, Reaction, ReactionType, RoleId, UserId,
 };
+use serde::Deserialize;
 
 use crate::Error;
 
@@ -11,6 +12,11 @@ use super::db::SurrealClient;
 
 pub struct ReactionManager {
     pub db: Arc<SurrealClient>,
+}
+
+#[derive(Deserialize)]
+pub struct ReactionRoles {
+    pub reaction_roles: Option<HashMap<String, RoleId>>,
 }
 
 pub enum ReactionError {
@@ -64,7 +70,7 @@ impl ReactionManager {
                 Err(err) => {
                     return Err(ReactionError::Database(
                         err,
-                        "Couldn't fetch current reaction roles.".to_string(),
+                        "Couldn't fetch current reaction roles from database.".to_string(),
                     ))
                 }
             };
@@ -146,6 +152,64 @@ impl ReactionManager {
         }
 
         Ok(role_id)
+    }
+
+    /// Gets all reaction roles given a guild id and message id.
+    pub async fn get_reaction_roles(
+        &self,
+        guild_id: GuildId,
+        message_id: MessageId,
+    ) -> Result<HashMap<String, RoleId>, ReactionError> {
+        let db = &self.db;
+
+        let message_reaction_roles =
+            match db.get_message_reaction_roles(&guild_id, &message_id).await {
+                Ok(ok) => ok,
+                Err(err) => {
+                    return Err(ReactionError::Database(
+                        err,
+                        "Couldn't fetch current reaction roles from database.".to_string(),
+                    ))
+                }
+            }
+            .unwrap_or_default();
+
+        Ok(message_reaction_roles)
+    }
+
+    /// Gets all reaction role messages in a guild and the amount of reaction roles on them.
+    pub async fn get_reaction_role_messages(
+        &self,
+        guild_id: GuildId,
+    ) -> Result<Vec<(MessageId, usize)>, ReactionError> {
+        let db = &self.db;
+
+        let messages = match db.get_reaction_role_messages(&guild_id).await {
+            Ok(ok) => ok,
+            Err(err) => {
+                return Err(ReactionError::Database(
+                    err,
+                    "Couldn't fetch current reaction roles from database.".to_string(),
+                ))
+            }
+        }
+        .unwrap_or_default();
+
+        let mut filtered_messages = Vec::with_capacity(messages.len());
+
+        for (message_id, reaction_roles) in messages.into_iter() {
+            let Some(reaction_roles) = &reaction_roles.reaction_roles else {
+                continue;
+            };
+
+            if reaction_roles.len() != 0 {
+                filtered_messages.push((message_id, reaction_roles.len()));
+            }
+        }
+
+        filtered_messages.sort();
+
+        Ok(filtered_messages)
     }
 
     /// Runs whenever a user reacts to a message.
