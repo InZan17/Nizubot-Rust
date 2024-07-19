@@ -43,6 +43,23 @@ impl ReactionError {
     }
 }
 
+pub enum ReactionTypeOrRoleId {
+    ReactionType(ReactionType),
+    RoleId(RoleId),
+}
+
+impl From<ReactionType> for ReactionTypeOrRoleId {
+    fn from(value: ReactionType) -> Self {
+        Self::ReactionType(value)
+    }
+}
+
+impl From<RoleId> for ReactionTypeOrRoleId {
+    fn from(value: RoleId) -> Self {
+        Self::RoleId(value)
+    }
+}
+
 impl ReactionManager {
     pub fn new(db: Arc<SurrealClient>) -> Self {
         Self { db }
@@ -128,14 +145,11 @@ impl ReactionManager {
     /// Errors if communication with db doesn't work or if there's no emoji registered for that message.
     pub async fn remove_reaction(
         &self,
-        //TODO/SUGGESTION: Allow for removing using roles too. Make an enum which has either reactiontype or roleid
-        emoji: ReactionType,
+        emoji_or_role: ReactionTypeOrRoleId,
         guild_id: GuildId,
         message_id: MessageId,
-    ) -> Result<RoleId, ReactionError> {
+    ) -> Result<(RoleId), ReactionError> {
         let db = &self.db;
-
-        let emoji_id = get_emoji_id(&emoji);
 
         let guild_message = match db.get_guild_message(&guild_id, &message_id).await {
             Ok(ok) => ok,
@@ -151,7 +165,25 @@ impl ReactionManager {
             return Err(ReactionError::NoReaction);
         };
 
-        let role_id = guild_message.reaction_roles.remove(&emoji_id);
+        let mut emoji_id_removal = String::new();
+
+        match emoji_or_role {
+            ReactionTypeOrRoleId::ReactionType(emoji) => {
+                emoji_id_removal = get_emoji_id(&emoji);
+            }
+            ReactionTypeOrRoleId::RoleId(role_id) => {
+                for (key, v) in guild_message.reaction_roles.iter() {
+                    if *v == role_id {
+                        emoji_id_removal = key.clone();
+                    }
+                }
+                if emoji_id_removal.is_empty() {
+                    return Err(ReactionError::NoReaction);
+                }
+            }
+        }
+
+        let role_id = guild_message.reaction_roles.remove(&emoji_id_removal);
 
         let Some(role_id) = role_id else {
             return Err(ReactionError::NoReaction);

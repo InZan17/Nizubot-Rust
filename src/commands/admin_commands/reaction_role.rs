@@ -2,9 +2,10 @@ use std::collections::HashMap;
 
 use poise::serenity_prelude::{
     AttachmentType, CreateEmbed, Embed, Emoji, Message, MessageId, MessageType, ReactionType, Role,
+    RoleId,
 };
 
-use crate::{Context, Error};
+use crate::{managers::reaction_manager::ReactionTypeOrRoleId, Context, Error};
 
 /// Manage reactions so you get roles when clicking them.
 #[poise::command(
@@ -77,22 +78,48 @@ pub async fn add(
 pub async fn remove(
     ctx: Context<'_>,
     #[description = "ID of the message."] message_id: Message,
-    #[description = "The emoji to remove."] emoji: ReactionType,
+    #[description = "The emoji to remove."] emoji: Option<ReactionType>,
+    #[description = "The role to remove."] role: Option<RoleId>,
 ) -> Result<(), Error> {
+    if role.is_some() && emoji.is_some() {
+        ctx.send(|m| {
+            m.content("Please make sure only one of the `emoji` and `role` parameters are used.")
+                .ephemeral(true)
+        })
+        .await?;
+        return Ok(());
+    }
+
+    let emoji_or_role;
+    if let Some(role) = role {
+        emoji_or_role = ReactionTypeOrRoleId::RoleId(role)
+    } else if let Some(emoji) = emoji.clone() {
+        emoji_or_role = ReactionTypeOrRoleId::ReactionType(emoji)
+    } else {
+        ctx.send(|m| {
+            m.content("Please make sure only one of the `emoji` and `role` parameters are used.")
+                .ephemeral(true)
+        })
+        .await?;
+        return Ok(());
+    }
+
     let guild_id = ctx.guild_id().unwrap();
     let message_id_id = message_id.id;
 
     let removed_role_res = ctx
         .data()
         .reaction_manager
-        .remove_reaction(emoji.clone(), guild_id, message_id_id)
+        .remove_reaction(emoji_or_role, guild_id, message_id_id)
         .await;
 
     match removed_role_res {
         Ok(removed_role) => {
-            let _ = message_id
-                .delete_reaction(ctx, Some(ctx.framework().bot_id), emoji.clone())
-                .await;
+            if let Some(emoji) = emoji {
+                let _ = message_id
+                    .delete_reaction(ctx, Some(ctx.framework().bot_id), emoji)
+                    .await;
+            }
 
             ctx.send(|m| {
                 m.content(format!(
