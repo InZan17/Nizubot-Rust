@@ -37,12 +37,17 @@ pub async fn add(
     }
 
     let guild_id = ctx.guild_id().unwrap();
-    let message_id = message_id.id;
 
     let res = ctx
         .data()
         .reaction_manager
-        .add_reaction(emoji, role.id, guild_id, message_id)
+        .add_reaction(
+            emoji,
+            role.id,
+            guild_id,
+            message_id.channel_id,
+            message_id.id,
+        )
         .await;
 
     if let Err(err) = res {
@@ -116,11 +121,13 @@ pub async fn remove(
 /// List all reaction roles in this guild or for a message.
 #[poise::command(slash_command)]
 pub async fn list(ctx: Context<'_>, message_id: Option<MessageId>) -> Result<(), Error> {
+    let guild_id = ctx.guild_id().unwrap();
+
     if let Some(message_id) = message_id {
         let reaction_roles = ctx
             .data()
             .reaction_manager
-            .get_reaction_roles(ctx.guild_id().unwrap(), message_id)
+            .get_reaction_roles(guild_id, message_id)
             .await;
 
         match reaction_roles {
@@ -178,7 +185,7 @@ pub async fn list(ctx: Context<'_>, message_id: Option<MessageId>) -> Result<(),
         let reaction_messages = ctx
             .data()
             .reaction_manager
-            .get_reaction_role_messages(ctx.guild_id().unwrap())
+            .get_reaction_role_messages(guild_id)
             .await;
 
         match reaction_messages {
@@ -203,9 +210,14 @@ pub async fn list(ctx: Context<'_>, message_id: Option<MessageId>) -> Result<(),
                             });
 
                         let mut description = String::new();
-                        for (message_id, reaction_count) in reaction_messages {
+                        for (message_id, channel_id, reaction_count) in reaction_messages {
+                            let append = if let Some(channel_id) = channel_id {
+                                format!("[{message_id}](https://discord.com/channels/{guild_id}/{channel_id}/{message_id})")
+                            } else {
+                                message_id.to_string()
+                            };
                             description = format!(
-                                "{description}{message_id}: {reaction_count} reaction role{}.\n",
+                                "{description}{append}: {reaction_count} reaction role{}.\n",
                                 if reaction_count == 1 { "" } else { "s" }
                             );
                         }

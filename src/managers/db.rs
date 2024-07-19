@@ -15,7 +15,7 @@ use crate::{
 use super::{
     cotd_manager::{ColorInfo, CotdRoleData, CotdRoleDataQuery},
     detector_manager::DetectorInfo,
-    reaction_manager::ReactionRoles,
+    message_manager::StoredMessageData,
     remind_manager::RemindInfo,
 };
 
@@ -366,14 +366,14 @@ impl SurrealClient {
         Ok(())
     }
 
-    pub async fn get_message_reaction_roles(
+    pub async fn get_guild_message(
         &self,
         guild_id: &GuildId,
         message_id: &MessageId,
-    ) -> Result<Option<HashMap<String, RoleId>>, Error> {
+    ) -> Result<Option<StoredMessageData>, Error> {
         let res = self
             .query(format!(
-                "SELECT VALUE messages.{message_id}.reaction_roles from guild:{guild_id};"
+                "SELECT VALUE messages.{message_id} from guild:{guild_id};"
             ))
             .await?
             .take(0)?;
@@ -381,10 +381,10 @@ impl SurrealClient {
         Ok(res)
     }
 
-    pub async fn get_reaction_role_messages(
+    pub async fn get_guild_messages(
         &self,
         guild_id: &GuildId,
-    ) -> Result<Option<HashMap<MessageId, ReactionRoles>>, Error> {
+    ) -> Result<Option<HashMap<MessageId, StoredMessageData>>, Error> {
         let res = self
             .query(format!("SELECT VALUE messages from guild:{guild_id};"))
             .await?
@@ -412,20 +412,17 @@ impl SurrealClient {
         Ok(())
     }
 
-    pub async fn set_message_reaction_role(
+    pub async fn set_guild_message(
         &self,
         guild_id: &GuildId,
         message_id: &MessageId,
-        emoji_id: &str,
-        role_id: Option<&RoleId>,
+        message_data: Option<&StoredMessageData>,
     ) -> Result<(), Error> {
-        let role_id_format = if let Some(role_id) = role_id {
-            format!("{role_id}")
-        } else {
-            "NONE".to_owned()
-        };
-        // I have to use merge here because if I try doing ["🧀"] like I do on the other queries then inside the database it will be "'🧀'" instead of "🧀"
-        self.query(format!("UPDATE guild:{guild_id} MERGE {{ \"messages\": {{ {message_id}: {{ \"reaction_roles\": {{ \"{emoji_id}\": {role_id_format} }} }} }} }};")).await?;
+        let message_data_json = serde_json::to_string(&message_data).unwrap();
+        self.query(format!(
+            "UPDATE guild:{guild_id} SET messages.{message_id} = {message_data_json}"
+        ))
+        .await?;
         Ok(())
     }
 
@@ -482,22 +479,6 @@ impl SurrealClient {
             return Err(err);
         }
         Ok(())
-    }
-
-    pub async fn get_role_from_message_reaction(
-        &self,
-        guild_id: &GuildId,
-        message_id: &MessageId,
-        emoji_id: &str,
-    ) -> Result<Option<RoleId>, Error> {
-        let role_id = self
-            .query(format!(
-                "SELECT VALUE messages.{message_id}.reaction_roles['{emoji_id}'] from guild:{guild_id};"
-            ))
-            .await?
-            .take(0)?;
-
-        Ok(role_id)
     }
 
     pub async fn list_user_reminders(&self, user_id: &UserId) -> Result<Vec<RemindInfo>, Error> {

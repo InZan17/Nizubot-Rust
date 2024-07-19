@@ -2,21 +2,17 @@ use std::{collections::HashMap, sync::Arc};
 
 use percent_encoding::{percent_decode_str, utf8_percent_encode, NON_ALPHANUMERIC};
 use poise::serenity_prelude::{
-    self, Context, EmojiId, GuildId, Member, MessageId, Reaction, ReactionType, RoleId, UserId,
+    self, ChannelId, Context, EmojiId, GuildId, Member, MessageId, Reaction, ReactionType, RoleId,
+    UserId,
 };
 use serde::Deserialize;
 
 use crate::Error;
 
-use super::db::SurrealClient;
+use super::{db::SurrealClient, message_manager::StoredMessageData};
 
 pub struct ReactionManager {
     pub db: Arc<SurrealClient>,
-}
-
-#[derive(Deserialize)]
-pub struct ReactionRoles {
-    pub reaction_roles: Option<HashMap<String, RoleId>>,
 }
 
 pub enum ReactionError {
@@ -60,46 +56,63 @@ impl ReactionManager {
         emoji: ReactionType,
         role_id: RoleId,
         guild_id: GuildId,
+        channel_id: ChannelId,
         message_id: MessageId,
     ) -> Result<(), ReactionError> {
         let db = &self.db;
 
-        let message_reaction_roles_option =
-            match db.get_message_reaction_roles(&guild_id, &message_id).await {
-                Ok(ok) => ok,
-                Err(err) => {
-                    return Err(ReactionError::Database(
-                        err,
-                        "Couldn't fetch current reaction roles from database.".to_string(),
-                    ))
-                }
-            };
-
-        if let Some(message_reaction_roles) = message_reaction_roles_option {
-            if let Some(role_id) = message_reaction_roles.get(&get_emoji_id(&emoji)) {
-                return Err(ReactionError::EmojiTaken(*role_id));
-            }
-
-            // Check if role is already registered on the same message.
-            for (other_emoji, other_role_id) in message_reaction_roles.iter() {
-                if *other_role_id != role_id {
-                    continue;
-                }
-
-                let emoji_string = if other_emoji.chars().all(char::is_numeric) {
-                    format!("<:custom:{other_emoji}>")
-                } else {
-                    other_emoji.clone()
-                };
-
-                return Err(ReactionError::RoleTaken(emoji_string));
+        let guild_message_option = match db.get_guild_message(&guild_id, &message_id).await {
+            Ok(ok) => ok,
+            Err(err) => {
+                return Err(ReactionError::Database(
+                    err,
+                    "Couldn't fetch current reaction roles from database.".to_string(),
+                ))
             }
         };
 
+        let mut guild_message;
+
+        if let Some(some_guild_message) = guild_message_option {
+            guild_message = some_guild_message;
+        } else {
+            guild_message = StoredMessageData {
+                message_id: Some(message_id),
+                channel_id: Some(channel_id),
+                reaction_roles: HashMap::new(),
+            }
+        }
+
+        if guild_message.needs_updating() {
+            guild_message.message_id = Some(message_id);
+            guild_message.channel_id = Some(channel_id);
+        }
+
+        if let Some(role_id) = guild_message.reaction_roles.get(&get_emoji_id(&emoji)) {
+            return Err(ReactionError::EmojiTaken(*role_id));
+        }
+
+        // Check if role is already registered on the same message.
+        for (other_emoji, other_role_id) in guild_message.reaction_roles.iter() {
+            if *other_role_id != role_id {
+                continue;
+            }
+
+            let emoji_string = if other_emoji.chars().all(char::is_numeric) {
+                format!("<:custom:{other_emoji}>")
+            } else {
+                other_emoji.clone()
+            };
+
+            return Err(ReactionError::RoleTaken(emoji_string));
+        }
+
         let emoji_id = get_emoji_id(&emoji);
 
+        guild_message.reaction_roles.insert(emoji_id, role_id);
+
         if let Err(err) = db
-            .set_message_reaction_role(&guild_id, &message_id, &emoji_id, Some(&role_id))
+            .set_guild_message(&guild_id, &message_id, Some(&guild_message))
             .await
         {
             return Err(ReactionError::Database(
@@ -124,10 +137,7 @@ impl ReactionManager {
 
         let emoji_id = get_emoji_id(&emoji);
 
-        let role_id = match db
-            .get_role_from_message_reaction(&guild_id, &message_id, &emoji_id)
-            .await
-        {
+        let guild_message = match db.get_guild_message(&guild_id, &message_id).await {
             Ok(ok) => ok,
             Err(err) => {
                 return Err(ReactionError::Database(
@@ -137,12 +147,18 @@ impl ReactionManager {
             }
         };
 
+        let Some(mut guild_message) = guild_message else {
+            return Err(ReactionError::NoReaction);
+        };
+
+        let role_id = guild_message.reaction_roles.remove(&emoji_id);
+
         let Some(role_id) = role_id else {
             return Err(ReactionError::NoReaction);
         };
 
         if let Err(err) = db
-            .set_message_reaction_role(&guild_id, &message_id, &emoji_id, None)
+            .set_guild_message(&guild_id, &message_id, Some(&guild_message))
             .await
         {
             return Err(ReactionError::Database(
@@ -162,29 +178,32 @@ impl ReactionManager {
     ) -> Result<HashMap<String, RoleId>, ReactionError> {
         let db = &self.db;
 
-        let message_reaction_roles =
-            match db.get_message_reaction_roles(&guild_id, &message_id).await {
-                Ok(ok) => ok,
-                Err(err) => {
-                    return Err(ReactionError::Database(
-                        err,
-                        "Couldn't fetch current reaction roles from database.".to_string(),
-                    ))
-                }
+        let guild_message = match db.get_guild_message(&guild_id, &message_id).await {
+            Ok(ok) => ok,
+            Err(err) => {
+                return Err(ReactionError::Database(
+                    err,
+                    "Couldn't fetch current reaction roles from database.".to_string(),
+                ))
             }
-            .unwrap_or_default();
+        };
 
-        Ok(message_reaction_roles)
+        let reaction_roles = match guild_message {
+            Some(some) => some.reaction_roles,
+            None => HashMap::new(),
+        };
+
+        Ok(reaction_roles)
     }
 
     /// Gets all reaction role messages in a guild and the amount of reaction roles on them.
     pub async fn get_reaction_role_messages(
         &self,
         guild_id: GuildId,
-    ) -> Result<Vec<(MessageId, usize)>, ReactionError> {
+    ) -> Result<Vec<(MessageId, Option<ChannelId>, usize)>, ReactionError> {
         let db = &self.db;
 
-        let messages = match db.get_reaction_role_messages(&guild_id).await {
+        let messages = match db.get_guild_messages(&guild_id).await {
             Ok(ok) => ok,
             Err(err) => {
                 return Err(ReactionError::Database(
@@ -197,13 +216,13 @@ impl ReactionManager {
 
         let mut filtered_messages = Vec::with_capacity(messages.len());
 
-        for (message_id, reaction_roles) in messages.into_iter() {
-            let Some(reaction_roles) = &reaction_roles.reaction_roles else {
-                continue;
-            };
-
-            if reaction_roles.len() != 0 {
-                filtered_messages.push((message_id, reaction_roles.len()));
+        for (message_id, guild_message) in messages.into_iter() {
+            if guild_message.reaction_roles.len() != 0 {
+                filtered_messages.push((
+                    message_id,
+                    guild_message.channel_id,
+                    guild_message.reaction_roles.len(),
+                ));
             }
         }
 
@@ -242,10 +261,7 @@ impl ReactionManager {
         let emoji_id = get_emoji_id(&reaction.emoji);
 
         // TODO: try caching the results to not do as many calls to the db.
-        let role_id = match db
-            .get_role_from_message_reaction(&guild_id, &message_id, &emoji_id)
-            .await
-        {
+        let guild_message_option = match db.get_guild_message(&guild_id, &message_id).await {
             Ok(ok) => ok,
             Err(err) => {
                 return Err(ReactionError::Database(
@@ -255,7 +271,19 @@ impl ReactionManager {
             }
         };
 
-        let Some(role_id) = role_id else {
+        let Some(mut guild_message) = guild_message_option else {
+            return Ok(());
+        };
+
+        if guild_message.needs_updating() {
+            guild_message.message_id = Some(reaction.message_id);
+            guild_message.channel_id = Some(reaction.channel_id);
+            let _ = db
+                .set_guild_message(&guild_id, &message_id, Some(&guild_message))
+                .await;
+        }
+
+        let Some(role_id) = guild_message.reaction_roles.get(&emoji_id) else {
             return Ok(());
         };
 
@@ -304,10 +332,7 @@ impl ReactionManager {
 
         let db = &self.db;
 
-        let role_id = match db
-            .get_role_from_message_reaction(&guild_id, &message_id, &emoji_id)
-            .await
-        {
+        let guild_message_option = match db.get_guild_message(&guild_id, &message_id).await {
             Ok(ok) => ok,
             Err(err) => {
                 return Err(ReactionError::Database(
@@ -317,23 +342,42 @@ impl ReactionManager {
             }
         };
 
-        let Some(role_id) = role_id else {
+        let Some(mut guild_message) = guild_message_option else {
             return Ok(());
         };
 
+        let needs_updating = guild_message.needs_updating();
+
+        if needs_updating {
+            guild_message.channel_id = Some(reaction.channel_id);
+            guild_message.message_id = Some(reaction.message_id);
+        }
+
         if user_id == bot_id {
+            let Some(removed_role_id) = guild_message.reaction_roles.remove(&emoji_id) else {
+                return Ok(());
+            };
+
             if let Err(err) = db
-                .set_message_reaction_role(&guild_id, &message_id, &emoji_id, None)
+                .set_guild_message(&guild_id, &message_id, Some(&guild_message))
                 .await
             {
                 return Err(ReactionError::Database(
                     err,
-                    "Bot unreacted to reaction. Couldn't remove reaction role from message."
+                    "Bot unreacted to reaction but couldn't remove reaction role from message."
                         .to_string(),
                 ));
             };
-            return Err(ReactionError::BotReactionRemoved(role_id, emoji_id));
+            return Err(ReactionError::BotReactionRemoved(removed_role_id, emoji_id));
+        } else if needs_updating {
+            let _ = db
+                .set_guild_message(&guild_id, &message_id, Some(&guild_message))
+                .await;
         }
+
+        let Some(role_id) = guild_message.reaction_roles.get(&emoji_id).cloned() else {
+            return Ok(());
+        };
 
         let mut member = match guild_id.member(&ctx, user_id).await {
             Ok(ok) => ok,
