@@ -10,9 +10,10 @@ use tokio::{fs, io::AsyncWriteExt};
 
 mod brick;
 mod caption;
+mod petpet;
 
 /// I will generate a meme.
-#[poise::command(slash_command, subcommands("brick", "caption"))]
+#[poise::command(slash_command, subcommands("brick", "petpet", "caption"))]
 pub async fn genmeme(_ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
@@ -57,6 +58,47 @@ pub async fn brick(
             e.title(random_title)
         })
     }).await?;
+
+    Ok(())
+}
+
+const PETPET_TITLES: [&str; 3] = ["PETTHE<USER>", "rt to pet <user>", "mmmm myes pet <user>"];
+
+/// Generate a gif of some user getting petted.
+#[poise::command(slash_command)]
+pub async fn petpet(
+    ctx: Context<'_>,
+    #[description = "The user to be petted."] user: Option<User>,
+) -> Result<(), Error> {
+    let storage_manager = &ctx.data().storage_manager;
+
+    let user = user.unwrap_or(ctx.author().clone());
+
+    ctx.defer().await?;
+
+    let petpet_gif_file = petpet::gen_petpet_gif(storage_manager, &user).await?;
+
+    let petpet_file = fs::File::open(storage_manager.get_full_directory(&petpet_gif_file)).await?;
+
+    ctx.send(|m| {
+        m.attachment(AttachmentType::File {
+            file: &petpet_file,
+            filename: "petpet.gif".to_string(),
+        })
+        .embed(|e| {
+            e.footer(|f| f.text("Original hand video from DitzyFlama on twitter.\nhttps://x.com/DitzyFlama/status/1229852204082679809"))
+                .attachment("petpet.gif");
+
+            let mut rng = rand::thread_rng();
+            let random_index = rng.gen_range(0..PETPET_TITLES.len());
+            let random_title = PETPET_TITLES[random_index]
+                .replace("<user>", &user.name)
+                .replace("<USER>", &user.name.to_uppercase());
+
+            e.title(random_title)
+        })
+    })
+    .await?;
 
     Ok(())
 }
