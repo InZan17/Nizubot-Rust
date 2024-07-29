@@ -73,7 +73,7 @@ pub async fn gen_petpet_gif(
         const SIDE_OFFSET: &str = "round((sin(t*10*PI-PI*0.5)+0.9)*2)";
 
         process.args(&["-i", &petpet_gif]);
-        process.args(&["-loop", "1"]);
+        process.args(&["-stream_loop", "-1"]);
         process.args(&["-i", &storage_manager.get_full_directory(&user_pfp_file)]);
         process.args(&["-f", "lavfi"]);
         process.args(&["-i", "color=size=112x112:color=#00000000,format=rgba"]);
@@ -81,6 +81,7 @@ pub async fn gen_petpet_gif(
             "-filter_complex",
             &format!(
                 "[1:v]format=rgba,
+                fps=50,
                 scale=
                 83+{SIDE_SQUISH}:
                 83-{HEIGHT_SQUISH}:
