@@ -106,7 +106,7 @@ pub async fn caption(
     let generated_file = format!("{caption_folder}/{}.{extension}", id);
     let downloaded_file = format!("{images_folder}/{}.{extension}", id);
 
-    let mut ffmpeg_filter = "[0]".to_string();
+    let mut ffmpeg_filter = "[0]format=rgba,".to_string();
 
     let font = {
         if *caption_type == CaptionType::What {
