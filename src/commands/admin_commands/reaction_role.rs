@@ -1,8 +1,8 @@
-use std::collections::HashMap;
-
-use poise::serenity_prelude::{
-    AttachmentType, CreateEmbed, Embed, Emoji, Message, MessageId, MessageType, ReactionType, Role,
-    RoleId,
+use poise::{
+    serenity_prelude::{
+        CreateEmbed, CreateEmbedFooter, Message, MessageId, ReactionType, Role, RoleId,
+    },
+    CreateReply,
 };
 
 use crate::{managers::reaction_manager::ReactionTypeOrRoleId, Context, Error};
@@ -31,9 +31,8 @@ pub async fn add(
     #[description = "Role to give."] role: Role,
 ) -> Result<(), Error> {
     if let Err(err) = message_id.react(ctx, emoji.clone()).await {
-        ctx.send(|m| {
-            m.content(format!("Sorry, I couldn't react with the emoji you provided. Please make sure to provide an actual emoji.\n\nHere's the error: {}", err)).ephemeral(true)
-        }).await?;
+        ctx.send(CreateReply::default().content(format!("Sorry, I couldn't react with the emoji you provided. Please make sure to provide an actual emoji.\n\nHere's the error: {}", err)).ephemeral(true)
+        ).await?;
         return Ok(());
     }
 
@@ -52,20 +51,20 @@ pub async fn add(
         .await;
 
     if let Err(err) = res {
-        ctx.send(|m| {
-            m.content(format!(
-                "Sorry, I wasn't able to add that reaction role.\n\n{}",
-                err.to_string()
-            ))
-            .ephemeral(true)
-        })
+        ctx.send(
+            CreateReply::default()
+                .content(format!(
+                    "Sorry, I wasn't able to add that reaction role.\n\n{}",
+                    err.to_string()
+                ))
+                .ephemeral(true),
+        )
         .await?;
         return Ok(());
     }
 
-    ctx.send(|m| {
-        m.content(format!("Sucessfully added reaction role!\nTo remove the reaction role, simply remove my reaction or run `/reaction_role remove`.")).ephemeral(true)
-    }).await?;
+    ctx.send(CreateReply::default().content(format!("Sucessfully added reaction role!\nTo remove the reaction role, simply remove my reaction or run `/reaction_role remove`.")).ephemeral(true)
+    ).await?;
 
     Ok(())
 }
@@ -82,10 +81,11 @@ pub async fn remove(
     #[description = "The role to remove."] role: Option<RoleId>,
 ) -> Result<(), Error> {
     if role.is_some() && emoji.is_some() {
-        ctx.send(|m| {
-            m.content("Please make sure only one of the `emoji` and `role` parameters are used.")
-                .ephemeral(true)
-        })
+        ctx.send(
+            CreateReply::default()
+                .content("Please make sure only one of the `emoji` and `role` parameters are used.")
+                .ephemeral(true),
+        )
         .await?;
         return Ok(());
     }
@@ -96,10 +96,11 @@ pub async fn remove(
     } else if let Some(emoji) = emoji.clone() {
         emoji_or_role = ReactionTypeOrRoleId::ReactionType(emoji)
     } else {
-        ctx.send(|m| {
-            m.content("Please make sure only one of the `emoji` and `role` parameters are used.")
-                .ephemeral(true)
-        })
+        ctx.send(
+            CreateReply::default()
+                .content("Please make sure only one of the `emoji` and `role` parameters are used.")
+                .ephemeral(true),
+        )
         .await?;
         return Ok(());
     }
@@ -121,23 +122,25 @@ pub async fn remove(
                     .await;
             }
 
-            ctx.send(|m| {
-                m.content(format!(
-                    "Sucessfully removed reaction role! <@&{}>",
-                    removed_role
-                ))
-                .ephemeral(true)
-            })
+            ctx.send(
+                CreateReply::default()
+                    .content(format!(
+                        "Sucessfully removed reaction role! <@&{}>",
+                        removed_role
+                    ))
+                    .ephemeral(true),
+            )
             .await?;
         }
         Err(err) => {
-            ctx.send(|m| {
-                m.content(format!(
-                    "Sorry, I wasn't able to remove that reaction role.\n\n{}",
-                    err.to_string()
-                ))
-                .ephemeral(true)
-            })
+            ctx.send(
+                CreateReply::default()
+                    .content(format!(
+                        "Sorry, I wasn't able to remove that reaction role.\n\n{}",
+                        err.to_string()
+                    ))
+                    .ephemeral(true),
+            )
             .await?;
         }
     }
@@ -159,52 +162,57 @@ pub async fn list(ctx: Context<'_>, message_id: Option<MessageId>) -> Result<(),
 
         match reaction_roles {
             Err(err) => {
-                ctx.send(|m| {
-                    m.content(format!(
-                        "Sorry, I wasn't able to list the message's reaction roles.\n\n{}",
-                        err.to_string()
-                    ))
-                    .ephemeral(true)
-                })
+                ctx.send(
+                    CreateReply::default()
+                        .content(format!(
+                            "Sorry, I wasn't able to list the message's reaction roles.\n\n{}",
+                            err.to_string()
+                        ))
+                        .ephemeral(true),
+                )
                 .await?;
                 return Ok(());
             }
             Ok(reaction_roles) => {
                 let mut keys = reaction_roles.keys().collect::<Vec<_>>();
+
                 keys.sort();
-                ctx.send(|m| {
-                    m.embed(|e| {
-                        e.title("Reaction Roles")
-                            .description("All of the reaction roles for this message.")
-                            .footer(|f| f.text(format!("Total reactors: {}", keys.len())));
 
-                        let mut description = String::new();
-                        for key in keys {
-                            let role_id = reaction_roles.get(key).unwrap();
+                let keys_len = keys.len();
 
-                            let is_custom_emoji = key.chars().all(char::is_numeric);
+                let mut description = String::new();
+                for key in keys {
+                    let role_id = reaction_roles.get(key).unwrap();
 
-                            let emoji;
-                            let raw_emoji;
+                    let is_custom_emoji = key.chars().all(char::is_numeric);
 
-                            if is_custom_emoji {
-                                raw_emoji = key.clone();
-                                emoji = format!("<:custom:{key}>");
-                            } else {
-                                raw_emoji = format!("\\{key}");
-                                emoji = key.clone();
-                            }
+                    let emoji;
+                    let raw_emoji;
 
-                            description =
-                                format!("{description}{emoji} ({raw_emoji}): <@&{role_id}>\n");
-                        }
+                    if is_custom_emoji {
+                        raw_emoji = key.clone();
+                        emoji = format!("<:custom:{key}>");
+                    } else {
+                        raw_emoji = format!("\\{key}");
+                        emoji = key.clone();
+                    }
 
-                        e.description(description);
+                    description = format!("{description}{emoji} ({raw_emoji}): <@&{role_id}>\n");
+                }
 
-                        e
-                    })
-                    .ephemeral(true)
-                })
+                ctx.send(
+                    CreateReply::default()
+                        .embed(
+                            CreateEmbed::new()
+                                .title("Reaction Roles")
+                                .description("All of the reaction roles for this message.")
+                                .footer(CreateEmbedFooter::new(format!(
+                                    "Total reactors: {keys_len}"
+                                )))
+                                .description(description),
+                        )
+                        .ephemeral(true),
+                )
                 .await?;
             }
         }
@@ -217,44 +225,45 @@ pub async fn list(ctx: Context<'_>, message_id: Option<MessageId>) -> Result<(),
 
         match reaction_messages {
             Err(err) => {
-                ctx.send(|m| {
-                    m.content(format!(
+                ctx.send(
+                    CreateReply::default()
+                        .content(format!(
                         "Sorry, I wasn't able to list reaction role messages in this guild.\n\n{}",
                         err.to_string()
                     ))
-                    .ephemeral(true)
-                })
+                        .ephemeral(true),
+                )
                 .await?;
                 return Ok(());
             }
             Ok(reaction_messages) => {
-                ctx.send(|m| {
-                    m.embed(|e| {
-                        e.title("Reaction Roles Messages")
-                            .description("All of the reaction role messages for this guild.")
-                            .footer(|f| {
-                                f.text(format!("Total messages: {}", reaction_messages.len()))
-                            });
+                let mut description = String::new();
+                for (message_id, channel_id, reaction_count) in reaction_messages.iter() {
+                    let append = if let Some(channel_id) = channel_id {
+                        format!("[{message_id}](https://discord.com/channels/{guild_id}/{channel_id}/{message_id})")
+                    } else {
+                        message_id.to_string()
+                    };
+                    description = format!(
+                        "{description}{append}: {reaction_count} reaction role{}.\n",
+                        if *reaction_count == 1 { "" } else { "s" }
+                    );
+                }
 
-                        let mut description = String::new();
-                        for (message_id, channel_id, reaction_count) in reaction_messages {
-                            let append = if let Some(channel_id) = channel_id {
-                                format!("[{message_id}](https://discord.com/channels/{guild_id}/{channel_id}/{message_id})")
-                            } else {
-                                message_id.to_string()
-                            };
-                            description = format!(
-                                "{description}{append}: {reaction_count} reaction role{}.\n",
-                                if reaction_count == 1 { "" } else { "s" }
-                            );
-                        }
-
-                        e.description(description);
-
-                        e
-                    })
-                    .ephemeral(true)
-                })
+                ctx.send(
+                    CreateReply::default()
+                        .embed(
+                            CreateEmbed::new()
+                                .title("Reaction Roles Messages")
+                                .description("All of the reaction role messages for this guild.")
+                                .footer(CreateEmbedFooter::new(format!(
+                                    "Total messages: {}",
+                                    reaction_messages.len()
+                                )))
+                                .description(description),
+                        )
+                        .ephemeral(true),
+                )
                 .await?;
             }
         }

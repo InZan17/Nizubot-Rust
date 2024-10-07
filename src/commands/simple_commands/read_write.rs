@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use poise::{serenity_prelude::CreateAllowedMentions, CreateReply};
 
 use crate::{managers::db::StoredData, Context, Error};
 
@@ -15,10 +15,11 @@ pub async fn read(ctx: Context<'_>) -> Result<(), Error> {
         "".to_string()
     };
 
-    ctx.send(|m| {
-        m.content(format!("Written data: {}", content))
-            .allowed_mentions(|a| a.empty_parse())
-    })
+    ctx.send(
+        CreateReply::default()
+            .content(format!("Written data: {}", content))
+            .allowed_mentions(CreateAllowedMentions::new()),
+    )
     .await?;
     Ok(())
 }

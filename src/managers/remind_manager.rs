@@ -1,19 +1,10 @@
-use core::panic;
-use std::{
-    collections::HashSet,
-    fmt::format,
-    future::Future,
-    sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::{future::Future, sync::Arc};
 
 use poise::serenity_prelude::{
-    CacheHttp, Channel, ChannelId, Context, CreateMessage, GuildId, Message, MessageId,
-    MessageReference, UserId,
+    ChannelId, Context, CreateAllowedMentions, CreateMessage, GuildId, MessageId, MessageReference,
+    UserId,
 };
-use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use tokio::sync::Mutex;
 
 use crate::{
@@ -237,7 +228,7 @@ pub fn remind_manager_loop(
                     continue;
                 }
             };
-            for (index, reminder_info) in reminders.iter_mut().enumerate() {
+            for reminder_info in reminders.iter_mut() {
                 if reminder_info.finish_time > current_time {
                     break;
                 }
@@ -271,23 +262,23 @@ pub fn remind_manager_loop(
                     message_refrence_opt = None;
                 }
 
+                let mut create_message = CreateMessage::new().allowed_mentions(
+                    CreateAllowedMentions::new().users(vec![reminder_info.user_id]),
+                );
+
+                if let Some(message_refrence) = message_refrence_opt {
+                    create_message = create_message.reference_message(message_refrence);
+                }
+
                 if reminder_info.looping {
                     let wait_time = reminder_info.finish_time - reminder_info.request_time;
                     let missed_reminders =
                         (current_time - reminder_info.request_time) / wait_time - 1;
 
                     let res = if time_difference > 60 {
-                        channel_id.send_message(arc_ctx.clone(), |m| {
-                            if let Some(message_refrence) = message_refrence_opt {
-                                m.reference_message(message_refrence);
-                            }
-                            m.allowed_mentions(|a| {a.users(vec![reminder_info.user_id])}).content(format!("Sorry <@!{}>, I was supposed to remind you <t:{}:R>! <t:{}:R> you told me to keep reminding you{message_ending}", reminder_info.user_id, reminder_info.finish_time, reminder_info.original_time))}).await
+                        channel_id.send_message(arc_ctx.clone(), create_message.content(format!("Sorry <@!{}>, I was supposed to remind you <t:{}:R>! <t:{}:R> you told me to keep reminding you{message_ending}", reminder_info.user_id, reminder_info.finish_time, reminder_info.original_time))).await
                     } else {
-                        channel_id.send_message(arc_ctx.clone(), |m| {
-                            if let Some(message_refrence) = message_refrence_opt {
-                                m.reference_message(message_refrence);
-                            }
-                            m.allowed_mentions(|a| {a.users(vec![reminder_info.user_id])}).content(format!("<@!{}>! <t:{}:R> you told me to keep reminding you{message_ending}", reminder_info.user_id, reminder_info.original_time))}).await
+                        channel_id.send_message(arc_ctx.clone(), create_message.content(format!("<@!{}>! <t:{}:R> you told me to keep reminding you{message_ending}", reminder_info.user_id, reminder_info.original_time))).await
                     };
 
                     if let Err(err) = res {
@@ -344,17 +335,17 @@ pub fn remind_manager_loop(
                     }
                 } else {
                     let res = if time_difference > 60 {
-                        channel_id.send_message(arc_ctx.clone(), |m| {
-                            if let Some(message_refrence) = message_refrence_opt {
-                                m.reference_message(message_refrence);
-                            }
-                            m.allowed_mentions(|a| {a.users(vec![reminder_info.user_id])}).content(format!("Sorry <@!{}>, I was supposed to remind you <t:{}:R>! <t:{}:R> you told me to remind you{message_ending}", reminder_info.user_id, reminder_info.finish_time, reminder_info.original_time))}).await
+                        channel_id.send_message(arc_ctx.clone(), create_message.content(format!("Sorry <@!{}>, I was supposed to remind you <t:{}:R>! <t:{}:R> you told me to remind you{message_ending}", reminder_info.user_id, reminder_info.finish_time, reminder_info.original_time))).await
                     } else {
-                        channel_id.send_message(arc_ctx.clone(), |m| {
-                            if let Some(message_refrence) = message_refrence_opt {
-                                m.reference_message(message_refrence);
-                            }
-                            m.allowed_mentions(|a| {a.users(vec![reminder_info.user_id])}).content(format!("<@!{}>! <t:{}:R> you told me to remind you{message_ending}", reminder_info.user_id, reminder_info.original_time))}).await
+                        channel_id
+                            .send_message(
+                                arc_ctx.clone(),
+                                create_message.content(format!(
+                                    "<@!{}>! <t:{}:R> you told me to remind you{message_ending}",
+                                    reminder_info.user_id, reminder_info.original_time
+                                )),
+                            )
+                            .await
                     };
 
                     if let Err(err) = res {
@@ -423,7 +414,7 @@ pub fn remind_manager_loop(
 /// Checks if a serenity error is due to a user issue for example bot role perms, missing guild or channel.
 pub fn is_user_fault(error: &poise::serenity_prelude::Error) -> bool {
     match error {
-        poise::serenity_prelude::Error::Http(err) => match err.as_ref() {
+        poise::serenity_prelude::Error::Http(err) => match err {
             poise::serenity_prelude::HttpError::UnsuccessfulRequest(err) => {
                 //https://discord.com/developers/docs/topics/opcodes-and-status-codes#http
                 const FORBIDDEN: u16 = 403;

@@ -1,21 +1,18 @@
 use std::{
-    any::{Any, TypeId},
-    borrow::Borrow,
     collections::HashMap,
-    fs::{self, File},
-    io::{BufReader, Write},
+    fs::{self},
     path::{Path, PathBuf},
     sync::Arc,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::Duration,
 };
 
-use poise::{
-    futures_util::lock::Mutex,
-    serenity_prelude::{Context, RwLock},
+use poise::serenity_prelude::Context;
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    sync::RwLock,
 };
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use crate::{give_up_serialize::GiveUpSerialize, utils::get_seconds, Error};
+use crate::{utils::get_seconds, Error};
 
 pub struct DataDirectories {}
 impl DataDirectories {
@@ -71,13 +68,13 @@ impl DataType {
     pub fn string(&self) -> Option<&String> {
         match self {
             DataType::String(string) => Some(string),
-            DataType::Bytes(bytes) => None,
+            DataType::Bytes(_) => None,
         }
     }
 
     pub fn bytes(&self) -> Option<&Vec<u8>> {
         match self {
-            DataType::String(string) => None,
+            DataType::String(_) => None,
             DataType::Bytes(bytes) => Some(bytes),
         }
     }
@@ -85,13 +82,13 @@ impl DataType {
     pub fn string_mut(&mut self) -> Option<&mut String> {
         match self {
             DataType::String(string) => Some(string),
-            DataType::Bytes(bytes) => None,
+            DataType::Bytes(_) => None,
         }
     }
 
     pub fn bytes_mut(&mut self) -> Option<&mut Vec<u8>> {
         match self {
-            DataType::String(string) => None,
+            DataType::String(_) => None,
             DataType::Bytes(bytes) => Some(bytes),
         }
     }

@@ -1,18 +1,13 @@
-use std::{
-    ops::Add,
-    time::{SystemTime, UNIX_EPOCH},
+use poise::{
+    serenity_prelude::{CreateEmbed, CreateEmbedFooter, Timestamp},
+    CreateReply,
 };
 
-use poise::serenity_prelude::Timestamp;
-
-use crate::{
-    managers::{currency_manager::CurrenciesInfo, remind_manager::RemindInfo},
-    Context, Error,
-};
+use crate::{Context, Error};
 
 /// Command about converting currencies.
 #[poise::command(slash_command, subcommands("convert", "list"), subcommand_required)]
-pub async fn currency(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn currency(_: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
@@ -44,11 +39,12 @@ pub async fn convert(
         to_name = "".to_owned();
     }
 
-    ctx.send(|m| {
-        m.embed(|e| {
-            e.title("Currency Conversion")
+    ctx.send(
+        CreateReply::default().embed(
+            CreateEmbed::new()
+                .title("Currency Conversion")
                 .description("Currency rates were taken from https://openexchangerates.org.")
-                .footer(|f| f.text("Currency rates last updated"))
+                .footer(CreateEmbedFooter::new("Currency rates last updated"))
                 .timestamp(Timestamp::from_unix_timestamp(timestamp as i64).unwrap())
                 .field(
                     format!("From: {} {}", from.to_uppercase(), from_name),
@@ -60,9 +56,9 @@ pub async fn convert(
                     fancy_round(converted, 2).to_string(),
                     false,
                 )
-                .field("", "", false)
-        })
-    })
+                .field("", "", false),
+        ),
+    )
     .await?;
 
     Ok(())
@@ -72,13 +68,7 @@ pub async fn convert(
 pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
     let the_embed = ctx.data().currency_manager.get_embed().await;
 
-    ctx.send(|m| {
-        m.embed(|e| {
-            *e = the_embed;
-            e
-        })
-    })
-    .await?;
+    ctx.send(CreateReply::default().embed(the_embed)).await?;
     Ok(())
 }
 

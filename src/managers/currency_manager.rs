@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::collections::HashMap;
 
 use poise::serenity_prelude::CreateEmbed;
 use serde::{Deserialize, Serialize};
@@ -41,7 +37,7 @@ impl CurrencyManager {
     pub async fn new(token: Option<String>) -> Self {
         let self_manager = Self {
             currency_info: RwLock::new(CurrenciesInfo::default()),
-            list_currency_embed: RwLock::new(CreateEmbed::default()),
+            list_currency_embed: RwLock::new(CreateEmbed::new()),
             token,
         };
 
@@ -55,9 +51,7 @@ impl CurrencyManager {
         let currency_info = self.currency_info.read().await;
         let mut current_embed = self.list_currency_embed.write().await;
 
-        let mut new_embed = CreateEmbed::default();
-
-        new_embed.title("Currency acronyms/abbreviations.")
+        let mut new_embed = CreateEmbed::new().title("Currency acronyms/abbreviations.")
             .description("A list of most currencies along with their acronyms/abbreviations. When running `/currency convert`, you will need to provide the currencies acronyms/abbreviations, not their full name.")
             .field("", "", false);
 
@@ -67,7 +61,7 @@ impl CurrencyManager {
         ];
 
         for currency in LIST_OF_CURRENCIES {
-            new_embed.field(
+            new_embed = new_embed.field(
                 currency_info
                     .names
                     .get(currency)
@@ -78,8 +72,8 @@ impl CurrencyManager {
             );
         }
 
-        new_embed.field("", "", false); //used as padding
-        new_embed.field("More Currencies", "For a list of all supported currencies, go here: https://docs.openexchangerates.org/reference/supported-currencies", false);
+        new_embed = new_embed.field("", "", false); //used as padding
+        new_embed = new_embed.field("More Currencies", "For a list of all supported currencies, go here: https://docs.openexchangerates.org/reference/supported-currencies", false);
 
         *current_embed = new_embed;
     }

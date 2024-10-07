@@ -1,5 +1,8 @@
 use crate::{managers::cotd_manager::SECONDS_IN_A_DAY, Context, Error};
-use poise::serenity_prelude::{AttachmentType, Color, Timestamp};
+use poise::{
+    serenity_prelude::{Color, CreateAttachment, CreateEmbed, CreateEmbedFooter, Timestamp},
+    CreateReply,
+};
 
 /// Get the current color of the day.
 #[poise::command(slash_command)]
@@ -55,29 +58,33 @@ pub async fn cotd(
 
     let file_name = format!("{}.png", color_info.hex);
 
-    ctx.send(|m| {
-        m.attachment(AttachmentType::Bytes {
-            data: std::borrow::Cow::Borrowed(png_bytes.as_slice()),
-            filename: file_name.clone(),
-        })
-        .embed(|e| {
-            e.title(title)
-                .description(format!(
-                    "**{}** (#{})",
-                    color_info.name,
-                    color_info.hex.to_ascii_uppercase()
-                ))
-                .image(format!("attachment://{}", file_name))
-                .timestamp(
-                    Timestamp::from_unix_timestamp(
-                        (working_day * SECONDS_IN_A_DAY + date_offset) as i64,
+    ctx.send(
+        CreateReply::default()
+            .attachment(CreateAttachment::bytes(
+                png_bytes.as_slice(),
+                file_name.clone(),
+            ))
+            .embed(
+                CreateEmbed::new()
+                    .title(title)
+                    .description(format!(
+                        "**{}** (#{})",
+                        color_info.name,
+                        color_info.hex.to_ascii_uppercase()
+                    ))
+                    .image(format!("attachment://{}", file_name))
+                    .timestamp(
+                        Timestamp::from_unix_timestamp(
+                            (working_day * SECONDS_IN_A_DAY + date_offset) as i64,
+                        )
+                        .unwrap(),
                     )
-                    .unwrap(),
-                )
-                .footer(|f| f.text(format!("Day {working_day} | {date_description}")))
-                .color(Color::from_rgb(color.r() / 2, color.g() / 2, color.b() / 2))
-        })
-    })
+                    .footer(CreateEmbedFooter::new(format!(
+                        "Day {working_day} | {date_description}"
+                    )))
+                    .color(Color::from_rgb(color.r() / 2, color.g() / 2, color.b() / 2)),
+            ),
+    )
     .await?;
     Ok(())
 }

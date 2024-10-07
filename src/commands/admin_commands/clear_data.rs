@@ -14,7 +14,7 @@ pub async fn clear_data(ctx: Context<'_>) -> Result<(), Error> {
     }
 
     let table_id = id.into_db_table();
-    let res = db
+    let _res = db
         .query(format!(
             "
         FOR $reminder IN (SELECT VALUE ->reminds->reminder FROM {table_id}) {{
@@ -25,6 +25,7 @@ pub async fn clear_data(ctx: Context<'_>) -> Result<(), Error> {
         ))
         .await?;
 
+    // TODO: log unsucessful deletion.
     if id.is_user() {
         ctx.reply("Successfully removed user data.").await?;
     } else {

@@ -1,5 +1,3 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use evalexpr::{context_map, EvalexprError, Value};
 
 use crate::{Context, Error};

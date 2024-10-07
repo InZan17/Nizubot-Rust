@@ -1,3 +1,5 @@
+use poise::{serenity_prelude::CreateAllowedMentions, CreateReply};
+
 use crate::{Context, Error};
 
 /// I will say what you want!
@@ -8,7 +10,12 @@ pub async fn echo(
     #[description = "What should I say?"]
     content: String,
 ) -> Result<(), Error> {
-    ctx.send(|m| m.content(content).allowed_mentions(|a| a.empty_parse()))
-        .await?;
+    ctx.send(
+        CreateReply::default()
+            .content(content)
+            // TODO: make sure this works
+            .allowed_mentions(CreateAllowedMentions::new()),
+    )
+    .await?;
     return Ok(());
 }

@@ -3,7 +3,7 @@ use crate::{
     utils::IdType,
     Context, Error,
 };
-use poise::serenity_prelude::{AttachmentType, Emoji, User};
+use poise::{serenity_prelude::CreateAttachment, CreateReply};
 
 /// Logs for debugging.
 #[poise::command(
@@ -12,7 +12,7 @@ use poise::serenity_prelude::{AttachmentType, Emoji, User};
     subcommand_required,
     default_member_permissions = "ADMINISTRATOR"
 )]
-pub async fn log(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn log(_: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
@@ -29,12 +29,10 @@ pub async fn get(ctx: Context<'_>) -> Result<(), Error> {
 
     let logs = ctx.data().log_manager.get_logs(&id).await?;
 
-    ctx.send(|m| {
-        m.attachment(AttachmentType::Bytes {
-            data: std::borrow::Cow::Borrowed(logs.as_bytes()),
-            filename: LogManager::get_file_name(&id),
-        })
-    })
+    ctx.send(CreateReply::default().attachment(CreateAttachment::bytes(
+        logs.as_bytes(),
+        LogManager::get_file_name(&id),
+    )))
     .await?;
 
     Ok(())

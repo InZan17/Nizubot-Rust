@@ -1,6 +1,9 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use poise::serenity_prelude::UserId;
+use poise::{
+    serenity_prelude::{CreateEmbed, CreateEmbedFooter, Member, UserId},
+    CreateReply,
+};
 
 use crate::{Context, Error};
 
@@ -12,28 +15,37 @@ pub async fn joinorder(
     #[description = "Which index you wanna check."] index: Option<usize>,
 ) -> Result<(), Error> {
     if user.is_some() && index.is_some() {
-        ctx.send(|m| {
-            m.content("Please do not use the 'user' and 'index' options at the same time.")
-                .ephemeral(true)
-        })
+        ctx.send(
+            CreateReply::default()
+                .content("Please do not use the 'user' and 'index' options at the same time.")
+                .ephemeral(true),
+        )
+        .await?;
+        return Ok(());
+    }
+    let mut members: Vec<Member>;
+    let member_count;
+    let guild_id;
+
+    {
+        let guild = ctx.guild().unwrap();
+        members = guild.members.values().cloned().collect();
+        member_count = guild.member_count;
+        guild_id = guild.id;
+    }
+
+    if member_count > 1000 {
+        ctx.send(
+            CreateReply::default()
+                .content("Too many members!")
+                .ephemeral(true),
+        )
         .await?;
         return Ok(());
     }
 
-    let guild = ctx.guild().unwrap();
-
-    if guild.member_count > 1000 {
-        ctx.send(|m| m.content("Too many members!").ephemeral(true))
-            .await?;
-        return Ok(());
-    }
-
-    let mut members;
-
-    if (guild.members.len() as u64) < guild.member_count {
-        members = guild.members(ctx, Some(1000), None).await.unwrap();
-    } else {
-        members = guild.members.values().cloned().collect();
+    if (members.len() as u64) < member_count {
+        members = guild_id.members(ctx, Some(1000), None).await.unwrap();
     }
 
     let now = get_current_ms_time();
@@ -76,41 +88,37 @@ pub async fn joinorder(
         min_index = max_possible_index - 8;
     }
 
-    ctx.send(|m| {
-        m.embed(|e| {
-            e.title("Join order").footer(|f| {
-                f.text(format!(
+    let mut description = "".to_owned();
+
+    let author_id = ctx.author().id;
+
+    for i in min_index..max_index + 1 {
+        let member = &members[i as usize];
+
+        // TODO: Verify that it works correctly when discriminator is None
+        let tag = member.user.tag();
+
+        description.push_str(format!("**{i}.** {tag}").as_str());
+
+        if member.user.id == author_id {
+            description.push_str(" ***(you)***\n");
+        } else if target_index == i || target_user_id == member.user.id {
+            description.push_str(" ***(target)***\n");
+        } else {
+            description.push_str("\n");
+        }
+    }
+
+    ctx.send(
+        CreateReply::default().embed(
+            CreateEmbed::new()
+                .title("Join order")
+                .footer(CreateEmbedFooter::new(format!(
                     "sorting took {comparisons} comparisons and {difference_ms}ms."
-                ))
-            });
-
-            let mut description = "".to_owned();
-
-            let author_id = ctx.author().id;
-
-            for i in min_index..max_index + 1 {
-                let member = &members[i as usize];
-
-                let tag = if member.user.discriminator == 0 {
-                    member.user.name.clone()
-                } else {
-                    member.user.tag()
-                };
-
-                description.push_str(format!("**{i}.** {tag}").as_str());
-
-                if member.user.id == author_id {
-                    description.push_str(" ***(you)***\n");
-                } else if target_index == i || target_user_id == member.user.id {
-                    description.push_str(" ***(target)***\n");
-                } else {
-                    description.push_str("\n");
-                }
-            }
-
-            e.description(description)
-        })
-    })
+                )))
+                .description(description),
+        ),
+    )
     .await?;
 
     return Ok(());

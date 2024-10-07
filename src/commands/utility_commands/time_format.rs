@@ -1,12 +1,12 @@
-use chrono::{TimeZone, Timelike, Utc};
-
-use chrono_tz::Tz;
-use poise::serenity_prelude::{Mentionable, User};
+use poise::{
+    serenity_prelude::{CreateAllowedMentions, Mentionable, User},
+    ChoiceParameter, CreateReply,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{Context, Error};
 
-#[derive(Serialize, Deserialize, Clone, Copy, poise::ChoiceParameter)]
+#[derive(Serialize, Deserialize, Clone, Copy, ChoiceParameter)]
 pub enum TimeFormat {
     #[name = "12-hour clock"]
     Twelve,
@@ -20,7 +20,7 @@ pub enum TimeFormat {
     subcommands("set", "remove", "get"),
     subcommand_required
 )]
-pub async fn time_format(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn time_format(_: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
@@ -35,12 +35,10 @@ pub async fn set(
         .set_user_time_format(&ctx.author().id, Some(time_format))
         .await?;
 
-    ctx.send(|m| {
-        m.content(format!(
-            "Sure! Your preferred time format has now been set to the {}.",
-            time_format.name()
-        ))
-    })
+    ctx.send(CreateReply::default().content(format!(
+        "Sure! Your preferred time format has now been set to the {}.",
+        time_format.name()
+    )))
     .await?;
 
     Ok(())
@@ -54,7 +52,7 @@ pub async fn remove(ctx: Context<'_>) -> Result<(), Error> {
         .set_user_time_format(&ctx.author().id, None)
         .await?;
 
-    ctx.send(|m| m.content("Your preferred time format has been removed!"))
+    ctx.send(CreateReply::default().content("Your preferred time format has been removed!"))
         .await?;
     Ok(())
 }
@@ -68,22 +66,24 @@ pub async fn get(
     let user = user.as_ref().unwrap_or(ctx.author());
 
     let Some(time_format) = ctx.data().db.get_user_time_format(&ctx.author().id).await? else {
-        ctx.send(|m| {
-            m.content("That user hasn't set their preferred time format to anything.")
-                .ephemeral(true)
-        })
+        ctx.send(
+            CreateReply::default()
+                .content("That user hasn't set their preferred time format to anything.")
+                .ephemeral(true),
+        )
         .await?;
         return Ok(());
     };
 
-    ctx.send(|m| {
-        m.content(format!(
-            "{}'s preferred time format is the {}.",
-            user.mention(),
-            time_format.name()
-        ))
-        .allowed_mentions(|m| m.empty_parse())
-    })
+    ctx.send(
+        CreateReply::default()
+            .content(format!(
+                "{}'s preferred time format is the {}.",
+                user.mention(),
+                time_format.name()
+            ))
+            .allowed_mentions(CreateAllowedMentions::new()),
+    )
     .await?;
     Ok(())
 }

@@ -1,11 +1,10 @@
 use std::{ops::Add, vec};
 
-use crate::{
-    managers::{detector_manager::DetectType, storage_manager::DataDirectories},
-    utils::IdType,
-    Context, Error,
+use crate::{Context, Error};
+use poise::{
+    serenity_prelude::{CreateAllowedMentions, CreateEmbed, CreateEmbedFooter, User},
+    CreateReply,
 };
-use poise::serenity_prelude::{Member, Role, RoleId, User};
 
 /// Command to check and remove other users reminders.
 #[poise::command(
@@ -36,10 +35,11 @@ pub async fn remove(
         .await?;
 
     let Some(removed_reminder) = removed_reminder else {
-        ctx.send(|m| {
-            m.content("Failed to remove reminder. Are you using a valid index?")
-                .ephemeral(true)
-        })
+        ctx.send(
+            CreateReply::default()
+                .content("Failed to remove reminder. Are you using a valid index?")
+                .ephemeral(true),
+        )
         .await?;
 
         return Ok(());
@@ -53,14 +53,15 @@ pub async fn remove(
         message_ending = format!(" <t:{}:R>.", removed_reminder.finish_time)
     }
 
-    ctx.send(|m| {
-        m.content(format!(
-            "Successfully removed {}s reminder{}",
-            user.name, message_ending
-        ))
-        .allowed_mentions(|a| a.empty_parse())
-        .ephemeral(true)
-    })
+    ctx.send(
+        CreateReply::default()
+            .content(format!(
+                "Successfully removed {}s reminder{}",
+                user.name, message_ending
+            ))
+            .allowed_mentions(CreateAllowedMentions::new())
+            .ephemeral(true),
+    )
     .await?;
 
     Ok(())
@@ -79,30 +80,29 @@ pub async fn peek(
 
     let reminders = remind_manager.list_reminders(user_id, guild_id).await?;
 
-    ctx.send(|m| {
-        m.embed(|e| {
-            e.title("Reminders")
-                .description(format!("All of {}s reminders on this guild.", user.name))
-                .footer(|f| f.text(format!("Total reminders: {}", reminders.len())));
+    let mut create_embed = CreateEmbed::new()
+        .title("Reminders")
+        .description(format!("All of {}s reminders on this guild.", user.name))
+        .footer(CreateEmbedFooter::new(format!(
+            "Total reminders: {}",
+            reminders.len()
+        )));
 
-            for (index, reminder) in reminders.iter().enumerate() {
-                let mut ending = format!(" <#{}>", reminder.channel_id);
+    for (index, reminder) in reminders.iter().enumerate() {
+        let mut ending = format!(" <#{}>", reminder.channel_id);
 
-                if reminder.looping {
-                    ending = ending.add(" (Looped)");
-                }
+        if reminder.looping {
+            ending = ending.add(" (Looped)");
+        }
 
-                e.field(
-                    format!("{index}: <t:{}:R>{ending}", reminder.finish_time),
-                    reminder.message.clone().unwrap_or_default(),
-                    false,
-                );
-            }
+        create_embed = create_embed.field(
+            format!("{index}: <t:{}:R>{ending}", reminder.finish_time),
+            reminder.message.clone().unwrap_or_default(),
+            false,
+        );
+    }
 
-            e
-        })
-        .ephemeral(true)
-    })
-    .await?;
+    ctx.send(CreateReply::default().embed(create_embed).ephemeral(true))
+        .await?;
     Ok(())
 }

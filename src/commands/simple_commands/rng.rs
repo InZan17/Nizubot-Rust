@@ -1,4 +1,5 @@
-use crate::{reply, Context, Error};
+use crate::{Context, Error};
+use poise::CreateReply;
 use rand::Rng;
 
 /// I will pick a random number!
@@ -12,16 +13,19 @@ pub async fn rng(
     let mut max_unwrap = max.unwrap_or(0);
     if max.is_some() || min.is_some() {
         if max_unwrap == min_unwrap {
-            reply(
-                ctx,
+            ctx.send(CreateReply::default().content(
                 "Please make sure the difference between 'min' and 'max' are larger than 0.",
-                true,
-            )
+            ).ephemeral(true))
             .await?;
             return Ok(());
         }
         if max_unwrap < min_unwrap {
-            reply(ctx, "Please make sure 'min' is less than 'max'.", true).await?;
+            ctx.send(
+                CreateReply::default()
+                    .content("Please make sure 'min' is less than 'max'.")
+                    .ephemeral(true),
+            )
+            .await?;
             return Ok(());
         }
     } else {

@@ -1,8 +1,7 @@
 use core::slice::SlicePattern;
-use std::{ops::Deref, path::Path, sync::Arc};
+use std::{path::Path, sync::Arc};
 
 use poise::serenity_prelude::User;
-use tokio::{fs, io::AsyncWriteExt};
 
 use crate::{
     managers::storage_manager::{DataType, StorageManager},

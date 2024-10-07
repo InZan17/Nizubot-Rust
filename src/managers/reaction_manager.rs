@@ -1,11 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
-use percent_encoding::{percent_decode_str, utf8_percent_encode, NON_ALPHANUMERIC};
 use poise::serenity_prelude::{
-    self, ChannelId, Context, EmojiId, GuildId, Member, MessageId, Reaction, ReactionType, RoleId,
-    UserId,
+    self, ChannelId, Context, GuildId, MessageId, Reaction, ReactionType, RoleId, UserId,
 };
-use serde::Deserialize;
 
 use crate::Error;
 
@@ -148,7 +145,7 @@ impl ReactionManager {
         emoji_or_role: ReactionTypeOrRoleId,
         guild_id: GuildId,
         message_id: MessageId,
-    ) -> Result<(RoleId), ReactionError> {
+    ) -> Result<RoleId, ReactionError> {
         let db = &self.db;
 
         let guild_message = match db.get_guild_message(&guild_id, &message_id).await {
@@ -319,7 +316,7 @@ impl ReactionManager {
             return Ok(());
         };
 
-        let mut member = match guild_id.member(&ctx, user_id).await {
+        let member = match guild_id.member(&ctx, user_id).await {
             Ok(ok) => ok,
             Err(err) => {
                 return Err(ReactionError::Serenity(
@@ -411,7 +408,7 @@ impl ReactionManager {
             return Ok(());
         };
 
-        let mut member = match guild_id.member(&ctx, user_id).await {
+        let member = match guild_id.member(&ctx, user_id).await {
             Ok(ok) => ok,
             Err(err) => {
                 return Err(ReactionError::Serenity(
@@ -440,7 +437,7 @@ fn get_emoji_id(emoji: &ReactionType) -> String {
             animated: _,
             id,
             name: _,
-        } => id.0.to_string(),
+        } => id.get().to_string(),
         ReactionType::Unicode(name) => name.to_string(),
         _ => emoji.as_data(),
     }

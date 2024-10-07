@@ -1,22 +1,17 @@
 use std::{
-    collections::HashMap,
-    fmt::format,
     sync::Arc,
-    thread::current,
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use poise::serenity_prelude::{self, guild, Context, GuildId, Http, Role, RoleId};
+use poise::serenity_prelude::{self, CacheHttp, Context, EditRole, GuildId, RoleId};
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
-use tokio::sync::{Mutex, RwLock};
 
 use crate::{managers::remind_manager::is_user_fault, utils::IdType, Error};
 
 use super::{
     db::SurrealClient,
     log_manager::{LogManager, LogSource, LogType},
-    storage_manager::{DataDirectories, StorageManager},
 };
 
 pub const SECONDS_IN_A_DAY: u64 = 86400;
@@ -178,18 +173,21 @@ impl CotdManager {
     /// Will error if it cannot update the role.
     pub async fn update_role(
         &self,
-        http: impl AsRef<Http>,
+        http: impl CacheHttp,
         guild_id: GuildId,
         role_id: RoleId,
         name: &String,
         current_color: &ColorInfo,
     ) -> Result<(), CotdError> {
+        let color = u64::from_str_radix(current_color.hex.clone().as_str(), 16).unwrap();
         let res = guild_id
-            .edit_role(http, role_id, |r| {
-                let color = u64::from_str_radix(current_color.hex.clone().as_str(), 16).unwrap();
-                r.name(name.replace("<cotd>", &current_color.name))
-                    .colour(color)
-            })
+            .edit_role(
+                http,
+                role_id,
+                EditRole::new()
+                    .name(name.replace("<cotd>", &current_color.name))
+                    .colour(color),
+            )
             .await;
 
         match res {
@@ -247,7 +245,7 @@ pub fn cotd_manager_loop(
                     continue;
                 };
 
-                let guild_id = GuildId(guild_id_u64);
+                let guild_id = GuildId::new(guild_id_u64);
                 let cotd_role_data = &cotd_role_data_query.cotd_role;
 
                 if cotd_role_data.day == current_day {
@@ -306,7 +304,7 @@ pub fn cotd_manager_loop(
                     continue;
                 }
 
-                db.mark_cotd_role_updated(&guild_id, current_day).await;
+                let _ = db.mark_cotd_role_updated(guild_id, current_day).await;
             }
 
             if successful {

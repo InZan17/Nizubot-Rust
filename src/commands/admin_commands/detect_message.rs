@@ -1,11 +1,10 @@
 use std::vec;
 
-use crate::{
-    managers::{detector_manager::DetectType, storage_manager::DataDirectories},
-    utils::IdType,
-    Context, Error,
+use crate::{managers::detector_manager::DetectType, utils::IdType, Context, Error};
+use poise::{
+    serenity_prelude::{CreateEmbed, CreateEmbedFooter},
+    CreateReply,
 };
-use poise::serenity_prelude::{Role, RoleId};
 
 /// Events for when bot detects a message.
 #[poise::command(
@@ -58,25 +57,24 @@ pub async fn add(
         .await;
 
     if let Err(err) = res {
-        ctx.send(|m| {
-            m.content(format!(
-                "Sorry, I wasn't able to add that detector.\n\n{}",
-                err.to_string()
-            ))
-            .ephemeral(true)
-        })
+        ctx.send(
+            CreateReply::default()
+                .content(format!(
+                    "Sorry, I wasn't able to add that detector.\n\n{}",
+                    err.to_string()
+                ))
+                .ephemeral(true),
+        )
         .await?;
         return Ok(());
     }
 
-    ctx.send(|m| {
-        m.content(format!(
-            "Sure! I will now detect messages that {} \"{}\" and I will reply with \"{}\".",
-            detect_type.to_sentence(),
-            key,
-            response
-        ))
-    })
+    ctx.send(CreateReply::default().content(format!(
+        "Sure! I will now detect messages that {} \"{}\" and I will reply with \"{}\".",
+        detect_type.to_sentence(),
+        key,
+        response
+    )))
     .await?;
 
     Ok(())
@@ -103,20 +101,20 @@ pub async fn remove(
         .await;
 
     if let Err(err) = res {
-        ctx.send(|m| {
-            m.content(format!(
-                "Sorry, I wasn't able to delete that detector.\n\n{}",
-                err.to_string()
-            ))
-            .ephemeral(true)
-        })
+        ctx.send(
+            CreateReply::default()
+                .content(format!(
+                    "Sorry, I wasn't able to delete that detector.\n\n{}",
+                    err.to_string()
+                ))
+                .ephemeral(true),
+        )
         .await?;
         return Ok(());
     }
 
-    ctx.send(|m| m.content("Sure! I have now removed that detection."))
+    ctx.send(CreateReply::default().content("Sure! I have now removed that detection."))
         .await?;
-
     Ok(())
 }
 
@@ -134,48 +132,48 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
     let detectors = match ctx.data().detector_manager.get_message_detects(id).await {
         Ok(ok) => ok,
         Err(err) => {
-            ctx.send(|m| {
-                m.content(format!(
-                    "Sorry, I wasn't able to list the detectors.\n\n{}",
-                    err.to_string()
-                ))
-                .ephemeral(true)
-            })
+            ctx.send(
+                CreateReply::default()
+                    .content(format!(
+                        "Sorry, I wasn't able to list the detectors.\n\n{}",
+                        err.to_string()
+                    ))
+                    .ephemeral(true),
+            )
             .await?;
             return Ok(());
         }
     };
 
-    ctx.send(|m| {
-        m.embed(|e| {
-            e.title("Message Detectors")
-                .description("All of the message detectors in this guild.")
-                .footer(|f| f.text(format!("Total detectors: {}", detectors.len())));
+    let mut create_embed = CreateEmbed::new()
+        .title("Message Detectors")
+        .description("All of the message detectors in this guild.")
+        .footer(CreateEmbedFooter::new(format!(
+            "Total detectors: {}",
+            detectors.len()
+        )));
 
-            for (index, detector) in detectors.iter().enumerate() {
-                let ending;
+    for (index, detector) in detectors.iter().enumerate() {
+        let ending;
 
-                if detector.case_sensitive {
-                    ending = " (case-sensitive)";
-                } else {
-                    ending = ""
-                }
+        if detector.case_sensitive {
+            ending = " (case-sensitive)";
+        } else {
+            ending = ""
+        }
 
-                e.field(
-                    format!(
-                        "{index}: {}: {}{ending}",
-                        detector.detect_type.to_sentence(),
-                        detector.key
-                    ),
-                    &detector.response,
-                    false,
-                );
-            }
+        create_embed = create_embed.field(
+            format!(
+                "{index}: {}: {}{ending}",
+                detector.detect_type.to_sentence(),
+                detector.key
+            ),
+            &detector.response,
+            false,
+        );
+    }
 
-            e
-        })
-    })
-    .await?;
+    ctx.send(CreateReply::default().embed(create_embed)).await?;
 
     return Ok(());
 }

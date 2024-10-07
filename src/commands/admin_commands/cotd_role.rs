@@ -1,10 +1,10 @@
 use std::vec;
 
-use crate::{
-    managers::cotd_manager::{CotdRoleData, CotdRoleDataQuery},
-    Context, Error,
+use crate::{managers::cotd_manager::CotdRoleData, Context, Error};
+use poise::{
+    serenity_prelude::{CreateAllowedMentions, EditRole, Role},
+    CreateReply,
 };
-use poise::serenity_prelude::{Role, RoleId};
 
 /// COTD role.
 #[poise::command(
@@ -32,18 +32,25 @@ pub async fn create(
 
     let data = ctx.data();
 
-    let guild = ctx.guild().unwrap();
+    let roles;
+    let guild_id;
 
-    let cotd_role_data = data.db.get_guild_cotd_role(&guild.id).await?;
+    {
+        let guild = ctx.guild().unwrap();
+        guild_id = guild.id;
+        roles = guild.roles.clone();
+    }
+
+    let cotd_role_data = data.db.get_guild_cotd_role(guild_id).await?;
 
     if let Some(cotd_role_data) = cotd_role_data {
         let role_id = cotd_role_data.cotd_role.id;
-        let guild_roles = &guild.roles;
-        if guild_roles.contains_key(&role_id) {
-            ctx.send(|m| {
-                m.content(format!("You already have a COTD role! <@&{role_id}>",))
-                    .ephemeral(true)
-            })
+        if roles.contains_key(&role_id) {
+            ctx.send(
+                CreateReply::default()
+                    .content(format!("You already have a COTD role! <@&{role_id}>",))
+                    .ephemeral(true),
+            )
             .await?;
             return Ok(());
         }
@@ -54,8 +61,8 @@ pub async fn create(
     if let Some(role) = role {
         cotd_role = role
     } else {
-        cotd_role = guild
-            .create_role(ctx, |e| e.name(name.clone()).position(0))
+        cotd_role = guild_id
+            .create_role(ctx, EditRole::new().name(name.clone()).position(0))
             .await?;
     }
 
@@ -70,13 +77,12 @@ pub async fn create(
     };
 
     let res = cotd_manager
-        .update_role(ctx, guild.id, cotd_role.id, &name, &current_color)
+        .update_role(ctx, guild_id, cotd_role.id, &name, &current_color)
         .await;
 
     if let Err(err) = res {
-        ctx.send(|m| {
-            m.content(format!("Sorry, it seems like I wasn't able to create the role properly. \n\nHere's the error:\n{}", err.to_string())).ephemeral(true)
-        }).await?;
+        ctx.send(CreateReply::default().content(format!("Sorry, it seems like I wasn't able to create the role properly. \n\nHere's the error:\n{}", err.to_string())).ephemeral(true)
+        ).await?;
         return Ok(());
     }
 
@@ -87,13 +93,12 @@ pub async fn create(
     };
 
     data.db
-        .update_guild_cotd_role(&Some(cotd_role_info), &guild.id)
+        .update_guild_cotd_role(&Some(cotd_role_info), guild_id)
         .await?;
 
-    ctx.send(|m| {
-        m.content(format!("Successfully made <@&{role_id}> a COTD role.\nPlease remember to not put this role above my highest role or else I wont be able to edit it."))
-        .allowed_mentions(|m| m.empty_parse())
-    }).await?;
+    ctx.send(CreateReply::default().content(format!("Successfully made <@&{role_id}> a COTD role.\nPlease remember to not put this role above my highest role or else I wont be able to edit it."))
+        .allowed_mentions(CreateAllowedMentions::new())
+    ).await?;
 
     Ok(())
 }
@@ -106,48 +111,59 @@ pub async fn remove(
 ) -> Result<(), Error> {
     let data = ctx.data();
 
-    let guild = ctx.guild().unwrap();
+    let guild_id;
+    {
+        let guild = ctx.guild().unwrap();
+        guild_id = guild.id;
+    }
 
-    let cotd_role_data = data.db.get_guild_cotd_role(&guild.id).await?;
+    let cotd_role_data = data.db.get_guild_cotd_role(guild_id).await?;
 
     let Some(cotd_role_data) = cotd_role_data else {
-        ctx.send(|m| {
-            m.content("This guild does not have a COTD role.")
-                .ephemeral(true)
-        })
+        ctx.send(
+            CreateReply::default()
+                .content(format!("This guild does not have a COTD role.",))
+                .ephemeral(true),
+        )
         .await?;
         return Ok(());
     };
     let role_id = cotd_role_data.cotd_role.id;
 
-    data.db.update_guild_cotd_role(&None, &guild.id).await?;
+    data.db.update_guild_cotd_role(&None, guild_id).await?;
 
     if delete.unwrap_or(false) {
-        let res = ctx.guild().unwrap().delete_role(ctx, role_id).await;
+        let res = guild_id.delete_role(ctx, role_id).await;
         if let Err(err) = res {
-            ctx.send(|m| {
-                m.content(format!(
-                    "<@&{}> is no longer a COTD role but I was unable to delete it.\n\n{}",
-                    role_id,
-                    err.to_string()
-                ))
-                .allowed_mentions(|m| m.empty_parse())
-            })
+            ctx.send(
+                CreateReply::default()
+                    .content(format!(
+                        "<@&{}> is no longer a COTD role but I was unable to delete it.\n\n{}",
+                        role_id,
+                        err.to_string()
+                    ))
+                    // TODO: Make sure this does not ping anything.
+                    .allowed_mentions(CreateAllowedMentions::new()),
+            )
             .await?;
         } else {
-            ctx.send(|m| {
-                m.content(format!("<@&{}> has been successfully deleted.", role_id))
-                    .allowed_mentions(|m| m.empty_parse())
-            })
+            ctx.send(
+                CreateReply::default()
+                    .content(format!("<@&{}> has been successfully deleted.", role_id))
+                    // TODO: Make sure this does not ping anything.
+                    .allowed_mentions(CreateAllowedMentions::new()),
+            )
             .await?;
         }
         return Ok(());
     }
 
-    ctx.send(|m| {
-        m.content(format!("<@&{}> is no longer a COTD role.", role_id))
-            .allowed_mentions(|m| m.empty_parse())
-    })
+    ctx.send(
+        CreateReply::default()
+            .content(format!("<@&{}> is no longer a COTD role.", role_id))
+            // TODO: Make sure this does not ping anything.
+            .allowed_mentions(CreateAllowedMentions::new()),
+    )
     .await?;
 
     return Ok(());

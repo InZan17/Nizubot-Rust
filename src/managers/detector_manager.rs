@@ -1,15 +1,11 @@
-use core::borrow;
 use std::{sync::Arc, vec};
 
-use poise::serenity_prelude::{self, Message, MessageAction};
+use poise::serenity_prelude::{self, CreateMessage, Message};
 use serde::{Deserialize, Serialize};
 
-use crate::{utils::IdType, Context, Error};
+use crate::{utils::IdType, Error};
 
-use super::{
-    db::SurrealClient,
-    storage_manager::{self, StorageManager},
-};
+use super::db::SurrealClient;
 
 #[derive(Serialize, Deserialize, Clone, poise::ChoiceParameter)]
 pub enum DetectType {
@@ -239,7 +235,7 @@ impl DetectorManager {
 
             let res = message
                 .channel_id
-                .send_message(ctx, |m| m.content(&detector_info.response))
+                .send_message(ctx, CreateMessage::new().content(&detector_info.response))
                 .await;
 
             if let Err(err) = res {

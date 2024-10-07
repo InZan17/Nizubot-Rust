@@ -1,7 +1,10 @@
 use chrono::{DateTime, TimeZone, Timelike, Utc};
 
 use chrono_tz::Tz;
-use poise::serenity_prelude::{Mentionable, User};
+use poise::{
+    serenity_prelude::{CreateAllowedMentions, Mentionable, User},
+    CreateReply,
+};
 
 use crate::{Context, Error};
 
@@ -13,7 +16,7 @@ use super::time_format::TimeFormat;
     subcommands("set", "remove", "check", "user"),
     subcommand_required
 )]
-pub async fn timezone(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn timezone(_: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
@@ -32,12 +35,10 @@ pub async fn set(
         .set_user_timezone(&ctx.author().id, Some(tz_name.to_string()))
         .await?;
 
-    ctx.send(|m| {
-        m.content(format!(
-            "Sure! Your timezone has now been set to `{}`.",
-            tz_name
-        ))
-    })
+    ctx.send(CreateReply::default().content(format!(
+        "Sure! Your timezone has now been set to `{}`.",
+        tz_name
+    )))
     .await?;
 
     Ok(())
@@ -51,7 +52,7 @@ pub async fn remove(ctx: Context<'_>) -> Result<(), Error> {
         .set_user_timezone(&ctx.author().id, None)
         .await?;
 
-    ctx.send(|m| m.content("Your timezone has been removed!"))
+    ctx.send(CreateReply::default().content("Your timezone has been removed!"))
         .await?;
     Ok(())
 }
@@ -64,10 +65,11 @@ pub async fn user(
 ) -> Result<(), Error> {
     let user = user.as_ref().unwrap_or(ctx.author());
     let Some(timezone_name) = ctx.data().db.get_user_timezone(&user.id).await? else {
-        ctx.send(|m| {
-            m.content("That user hasn't set their timezone to anything.")
-                .ephemeral(true)
-        })
+        ctx.send(
+            CreateReply::default()
+                .content("That user hasn't set their timezone to anything.")
+                .ephemeral(true),
+        )
         .await?;
         return Ok(());
     };
@@ -84,10 +86,8 @@ pub async fn user(
         .flatten()
         .unwrap_or(TimeFormat::TwentyFour);
 
-    ctx.send(|m| m.content(format!("{}'s timezone is `{timezone_name}`.\nThe time for `{timezone_name}` is currently **{}**.", user.mention(), 
-    get_time_string(date_time, time_format))).allowed_mentions(|m| {
-        m.empty_parse()
-    }))
+    ctx.send(CreateReply::default().content(format!("{}'s timezone is `{timezone_name}`.\nThe time for `{timezone_name}` is currently **{}**.", user.mention(), 
+    get_time_string(date_time, time_format))).allowed_mentions(CreateAllowedMentions::new()))
         .await?;
     Ok(())
 }
@@ -111,13 +111,11 @@ pub async fn check(
         .flatten()
         .unwrap_or(TimeFormat::TwentyFour);
 
-    ctx.send(|m| {
-        m.content(format!(
-            "The time for `{}` is currently **{}**.",
-            timezone.name(),
-            get_time_string(date_time, time_format)
-        ))
-    })
+    ctx.send(CreateReply::default().content(format!(
+        "The time for `{}` is currently **{}**.",
+        timezone.name(),
+        get_time_string(date_time, time_format)
+    )))
     .await?;
     Ok(())
 }

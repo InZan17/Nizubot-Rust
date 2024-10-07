@@ -1,12 +1,10 @@
 use crate::{Context, Error};
-use core::slice::SlicePattern;
-use evalexpr::context_map;
 use poise::{
-    serenity_prelude::{Attachment, AttachmentType, User},
-    SlashChoiceParameter,
+    serenity_prelude::{Attachment, CreateAttachment, CreateEmbed, CreateEmbedFooter, User},
+    CreateReply,
 };
 use rand::Rng;
-use tokio::{fs, io::AsyncWriteExt};
+use tokio::fs;
 
 mod brick;
 mod caption;
@@ -43,21 +41,21 @@ pub async fn brick(
 
     let brick_file = fs::File::open(storage_manager.get_full_directory(&brick_gif_file)).await?;
 
-    ctx.send(|m| {
-        m.attachment(AttachmentType::File { file: &brick_file, filename: "brick.gif".to_string()})
-        .embed(|e| {
-            e.footer(|f| {
-                f.text("Original gif by \"mega-KOT\" on newgrounds.\nhttps://www.newgrounds.com/art/view/mega-kot/think-fast")
-            })
-            .attachment("brick.gif");
+    let random_index;
+    let random_title;
 
-            let mut rng = rand::thread_rng();
-            let random_index = rng.gen_range(0..BRICK_TITLES.len());
-            let random_title = BRICK_TITLES[random_index].replace("<user>", &user.name);
+    {
+        let mut rng = rand::thread_rng();
+        random_index = rng.gen_range(0..BRICK_TITLES.len());
+        random_title = BRICK_TITLES[random_index].replace("<user>", &user.name);
+    }
 
-            e.title(random_title)
-        })
-    }).await?;
+    ctx.send(CreateReply::default().attachment(CreateAttachment::file ( &brick_file, "brick.gif").await?)
+        .embed(CreateEmbed::new().footer(CreateEmbedFooter::new("Original gif by \"mega-KOT\" on newgrounds.\nhttps://www.newgrounds.com/art/view/mega-kot/think-fast"))
+            .attachment("brick.gif")
+
+            .title(random_title)
+        )).await?;
 
     Ok(())
 }
@@ -80,24 +78,28 @@ pub async fn petpet(
 
     let petpet_file = fs::File::open(storage_manager.get_full_directory(&petpet_gif_file)).await?;
 
-    ctx.send(|m| {
-        m.attachment(AttachmentType::File {
-            file: &petpet_file,
-            filename: "petpet.gif".to_string(),
-        })
-        .embed(|e| {
-            e.footer(|f| f.text("Original hand video from DitzyFlama on twitter.\nhttps://x.com/DitzyFlama/status/1229852204082679809"))
-                .attachment("petpet.gif");
+    let random_index;
+    let random_title;
 
-            let mut rng = rand::thread_rng();
-            let random_index = rng.gen_range(0..PETPET_TITLES.len());
-            let random_title = PETPET_TITLES[random_index]
-                .replace("<user>", &user.name)
-                .replace("<USER>", &user.name.to_uppercase());
+    {
+        let mut rng = rand::thread_rng();
+        random_index = rng.gen_range(0..PETPET_TITLES.len());
+        random_title = PETPET_TITLES[random_index]
+            .replace("<user>", &user.name)
+            .replace("<USER>", &user.name.to_uppercase());
+    }
 
-            e.title(random_title)
-        })
-    })
+    ctx.send(CreateReply::default().attachment(CreateAttachment::file(
+            &petpet_file,
+            "petpet.gif".to_string(),
+    ).await?)
+        .embed(CreateEmbed::new().footer(CreateEmbedFooter::new("Original hand video from DitzyFlama on twitter.\nhttps://x.com/DitzyFlama/status/1229852204082679809"))
+                .attachment("petpet.gif")
+
+
+            .title(random_title)
+        )
+    )
     .await?;
 
     Ok(())
@@ -139,20 +141,25 @@ pub async fn caption(
     #[description = "Amount of empty space around the text. (WHAT: width/9, Boxes: width/20, Overlay: height/30)"]
     padding: Option<String>,
 ) -> Result<(), Error> {
-    const TWELVE_MIB_IN_BYTES: u64 = 12582912;
+    const TWELVE_MIB_IN_BYTES: u32 = 12582912;
 
     if image.size > TWELVE_MIB_IN_BYTES {
-        ctx.send(|m| {
-            m.content("Please make sure your image is 12 MiB or less in size.")
-                .ephemeral(true)
-        })
+        ctx.send(
+            CreateReply::default()
+                .content("Please make sure your image is 12 MiB or less in size.")
+                .ephemeral(true),
+        )
         .await?;
         return Ok(());
     }
 
     if upper_text.is_none() && bottom_text.is_none() {
-        ctx.send(|m| m.content("Please provide some text.").ephemeral(true))
-            .await?;
+        ctx.send(
+            CreateReply::default()
+                .content("Please provide some text.")
+                .ephemeral(true),
+        )
+        .await?;
         return Ok(());
     }
 
@@ -161,21 +168,24 @@ pub async fn caption(
     let content_type_vec = content_type.split("/").collect::<Vec<&str>>();
 
     if content_type_vec.len() != 2 {
-        ctx.send(|m| m.content("Sorry, I couldn't make sense of the files content type. Please make sure your file isn't corrupted.").ephemeral(true)).await?;
+        ctx.send(
+            CreateReply::default().content("Sorry, I couldn't make sense of the files content type. Please make sure your file isn't corrupted.").ephemeral(true)).await?;
         return Ok(());
     }
 
     if content_type_vec[0] != "image" && content_type_vec[0] != "video" {
-        ctx.send(|m| {
-            m.content("Please provide an actual image or video.")
-                .ephemeral(true)
-        })
+        ctx.send(
+            CreateReply::default()
+                .content("Please provide an actual image or video.")
+                .ephemeral(true),
+        )
         .await?;
         return Ok(());
     }
 
     if image.width.is_none() || image.height.is_none() {
-        ctx.send(|m| m.content("Sorry, I couldn't get the width and/or height of the image. Please make sure your file isn't corrupted.").ephemeral(true)).await?;
+        ctx.send(
+            CreateReply::default().content("Sorry, I couldn't get the width and/or height of the image. Please make sure your file isn't corrupted.").ephemeral(true)).await?;
         return Ok(());
     }
 
@@ -199,17 +209,20 @@ pub async fn caption(
 
     let generated_image_file = fs::File::open(generated_file_path).await?;
 
-    ctx.send(|m| {
-        m.attachment(AttachmentType::File {
-            file: &generated_image_file,
-            filename: format!(
-                "{}_{}.{}",
-                remove_extension(&image.filename),
-                caption_type.to_string(),
-                extension
-            ),
-        })
-    })
+    ctx.send(
+        CreateReply::default().attachment(
+            CreateAttachment::file(
+                &generated_image_file,
+                format!(
+                    "{}_{}.{}",
+                    remove_extension(&image.filename),
+                    caption_type.to_string(),
+                    extension
+                ),
+            )
+            .await?,
+        ),
+    )
     .await?;
 
     Ok(())

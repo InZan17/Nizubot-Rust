@@ -26,8 +26,8 @@ impl IdType {
 
     pub fn get_u64(&self) -> u64 {
         match self {
-            IdType::UserId(id) => id.0,
-            IdType::GuildId(id) => id.0,
+            IdType::UserId(id) => id.get(),
+            IdType::GuildId(id) => id.get(),
         }
     }
 

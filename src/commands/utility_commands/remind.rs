@@ -1,9 +1,11 @@
-use std::{
-    ops::Add,
-    time::{SystemTime, UNIX_EPOCH},
+use std::ops::Add;
+
+use poise::{
+    serenity_prelude::{CreateAllowedMentions, CreateEmbed, CreateEmbedFooter},
+    CreateReply,
 };
 
-use crate::{managers::remind_manager::RemindInfo, utils::get_seconds, Context, Error};
+use crate::{utils::get_seconds, Context, Error};
 
 /// Command for reminders.
 #[poise::command(
@@ -11,7 +13,7 @@ use crate::{managers::remind_manager::RemindInfo, utils::get_seconds, Context, E
     subcommands("add", "remove", "list"),
     subcommand_required
 )]
-pub async fn remind(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn remind(_: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
@@ -33,25 +35,31 @@ pub async fn add(
     let looped = looped.unwrap_or(false);
 
     let Some(duration) = parse_duration_string(duration) else {
-        ctx.send(|m| {
-            m.content("Please give me a valid duration.")
-                .ephemeral(true)
-        })
+        ctx.send(
+            CreateReply::default()
+                .content("Please give me a valid duration.")
+                .ephemeral(true),
+        )
         .await?;
         return Ok(());
     };
 
     if duration < 0. {
-        ctx.send(|m| m.content("Duration cannot be negative.").ephemeral(true))
-            .await?;
+        ctx.send(
+            CreateReply::default()
+                .content("Duration cannot be negative.")
+                .ephemeral(true),
+        )
+        .await?;
         return Ok(());
     }
     // 60 seconds = 1 minute, 60 minutes = 1 hour
     if looped && duration < 60. * 60. {
-        ctx.send(|m| {
-            m.content("When making a loop reminder, please make the duration 1 hour or longer.")
-                .ephemeral(true)
-        })
+        ctx.send(
+            CreateReply::default()
+                .content("When making a loop reminder, please make the duration 1 hour or longer.")
+                .ephemeral(true),
+        )
         .await?;
         return Ok(());
     }
@@ -85,23 +93,17 @@ pub async fn add(
 
                 if looped {
                     handle = ctx
-                        .send(|m| {
-                            m.content(format!(
+                        .send(CreateReply::default().content(format!(
                                 "Sure! I will now keep reminding you <t:{remind_time}:R>{message_ending}"
-                            )).allowed_mentions(|a| {
-                                a.empty_parse()
-                            })
-                        })
+                            )).allowed_mentions(CreateAllowedMentions::new())
+                        )
                         .await?;
                 } else {
                     handle = ctx
-                        .send(|m| {
-                            m.content(format!(
+                        .send(CreateReply::default().content(format!(
                                 "Sure! I will now remind you <t:{remind_time}:R>{message_ending}"
-                            )).allowed_mentions(|a| {
-                                a.empty_parse()
-                            })
-                        })
+                            )).allowed_mentions(CreateAllowedMentions::new())
+                        )
                         .await?;
                 }
 
@@ -112,13 +114,14 @@ pub async fn add(
         .await;
 
     if let Err(err) = add_result {
-        ctx.send(|m| {
-            m.content(format!(
-                "Sorry, I wasn't able to add that reminder. {}",
-                err
-            ))
-            .ephemeral(true)
-        })
+        ctx.send(
+            CreateReply::default()
+                .content(format!(
+                    "Sorry, I wasn't able to add that reminder. {}",
+                    err
+                ))
+                .ephemeral(true),
+        )
         .await?;
         return Ok(());
     }
@@ -143,10 +146,11 @@ pub async fn remove(
         .await?;
 
     let Some(removed_reminder) = removed_reminder else {
-        ctx.send(|m| {
-            m.content("Failed to remove reminder. Are you using a valid index?")
-                .ephemeral(true)
-        })
+        ctx.send(
+            CreateReply::default()
+                .content("Failed to remove reminder. Are you using a valid index?")
+                .ephemeral(true),
+        )
         .await?;
 
         return Ok(());
@@ -160,10 +164,11 @@ pub async fn remove(
         message_ending = format!(" <t:{}:R>.", removed_reminder.finish_time)
     }
 
-    ctx.send(|m| {
-        m.content(format!("Successfully removed reminder{}", message_ending))
-            .allowed_mentions(|a| a.empty_parse())
-    })
+    ctx.send(
+        CreateReply::default()
+            .content(format!("Successfully removed reminder{}", message_ending))
+            .allowed_mentions(CreateAllowedMentions::new()),
+    )
     .await?;
 
     Ok(())
@@ -179,30 +184,29 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
 
     let reminders = remind_manager.list_reminders(user_id, guild_id).await?;
 
-    ctx.send(|m| {
-        m.embed(|e| {
-            e.title("Reminders")
-                .description("All of your reminders on this guild.")
-                .footer(|f| f.text(format!("Total reminders: {}", reminders.len())));
+    let mut create_embed = CreateEmbed::new()
+        .title("Reminders")
+        .description("All of your reminders on this guild.")
+        .footer(CreateEmbedFooter::new(format!(
+            "Total reminders: {}",
+            reminders.len()
+        )));
 
-            for (index, reminder) in reminders.iter().enumerate() {
-                let mut ending = format!(" <#{}>", reminder.channel_id);
+    for (index, reminder) in reminders.iter().enumerate() {
+        let mut ending = format!(" <#{}>", reminder.channel_id);
 
-                if reminder.looping {
-                    ending = ending.add(" (Looped)");
-                }
+        if reminder.looping {
+            ending = ending.add(" (Looped)");
+        }
 
-                e.field(
-                    format!("{index}: <t:{}:R>{ending}", reminder.finish_time),
-                    reminder.message.clone().unwrap_or_default(),
-                    false,
-                );
-            }
+        create_embed = create_embed.field(
+            format!("{index}: <t:{}:R>{ending}", reminder.finish_time),
+            reminder.message.clone().unwrap_or_default(),
+            false,
+        );
+    }
 
-            e
-        })
-    })
-    .await?;
+    ctx.send(CreateReply::default().embed(create_embed)).await?;
     Ok(())
 }
 

@@ -1,7 +1,6 @@
 #![feature(slice_pattern)]
 
 mod commands;
-pub mod give_up_serialize;
 mod managers;
 mod tokens;
 pub mod utils;
@@ -19,11 +18,7 @@ use managers::{
     remind_manager::{remind_manager_loop, RemindManager},
     storage_manager::{storage_manager_loop, StorageManager},
 };
-use poise::{
-    framework,
-    serenity_prelude::{self as serenity, Webhook},
-    Event, ReplyHandle,
-};
+use poise::serenity_prelude::{self as serenity, FullEvent, Webhook};
 use utils::IdType;
 
 use crate::managers::{
@@ -46,26 +41,17 @@ pub struct Handler {} // User data, which is stored and accessible in all comman
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
 
-pub async fn reply(
-    ctx: Context<'_>,
-    text: impl Into<String>,
-    ephemeral: bool,
-) -> Result<crate::ReplyHandle<'_>, crate::serenity::SerenityError> {
-    ctx.send(|b| b.content(text).reply(true).ephemeral(ephemeral))
-        .await
-}
-
-async fn event_handler(
+async fn event_handler<'thing>(
     ctx: &serenity::Context,
-    event: &Event<'_>,
-    framework: poise::FrameworkContext<'_, Data, Error>,
+    event: &FullEvent,
+    framework: poise::FrameworkContext<'thing, Data, Error>,
     data: &Data,
 ) -> Result<(), Error> {
     match event {
-        Event::Ready { data_about_bot } => {
+        FullEvent::Ready { data_about_bot } => {
             println!("Logged in as {}", data_about_bot.user.tag());
         }
-        Event::CacheReady { guilds } => {
+        FullEvent::CacheReady { guilds } => {
             if !data.started_loops.load(Ordering::Relaxed) {
                 println!("Caches are ready! Starting all the managers.");
                 let arc_ctx = Arc::new(ctx.clone());
@@ -91,7 +77,7 @@ async fn event_handler(
             //
             // Also do these kinds of checks whenever communication to db hasnt worked.
         }
-        Event::Message { new_message } => {
+        FullEvent::Message { new_message } => {
             if let Err(err) = data.detector_manager.on_message(ctx, new_message).await {
                 let id;
 
@@ -112,7 +98,7 @@ async fn event_handler(
                     .await?;
             }
         }
-        Event::ReactionAdd { add_reaction } => {
+        FullEvent::ReactionAdd { add_reaction } => {
             let res = data
                 .reaction_manager
                 .reaction_add_event(ctx, add_reaction, framework.bot_id)
@@ -141,7 +127,7 @@ async fn event_handler(
                     .await;
             }
         }
-        Event::ReactionRemove { removed_reaction } => {
+        FullEvent::ReactionRemove { removed_reaction } => {
             let res = data
                 .reaction_manager
                 .reaction_remove_event(ctx, removed_reaction, framework.bot_id)
@@ -185,17 +171,12 @@ async fn main() {
     let storage_manager = Arc::new(StorageManager::new(bot_settings.temp_data_directory).await);
 
     let framework = poise::Framework::builder()
-        .token(bot_settings.discord_token)
-        .intents(
-            serenity::GatewayIntents::GUILDS
-                | serenity::GatewayIntents::GUILD_MESSAGES
-                | serenity::GatewayIntents::GUILD_MESSAGE_REACTIONS
-                | serenity::GatewayIntents::DIRECT_MESSAGES
-                | serenity::GatewayIntents::MESSAGE_CONTENT,
-        )
         .options(poise::FrameworkOptions {
             commands: commands::get_commands(),
-            event_handler: |_ctx: &serenity::Context, event: &Event<'_>, _framework, _data| {
+            event_handler: |_ctx: &serenity::Context,
+                            event: &serenity::FullEvent,
+                            _framework,
+                            _data| {
                 Box::pin(event_handler(_ctx, event, _framework, _data))
             },
             ..Default::default()
@@ -225,7 +206,6 @@ async fn main() {
                         CurrencyManager::new(bot_settings.open_exchange_rates_token).await,
                     ),
                     log_manager: Arc::new(LogManager::new(
-                        db.clone(),
                         bot_settings.logs_directory,
                         bot_settings.owner_user_ids,
                         admin_log_webhook,
@@ -236,7 +216,17 @@ async fn main() {
                     db,
                 })
             })
-        });
+        })
+        .build();
 
-    framework.run().await.unwrap();
+    let intents = serenity::GatewayIntents::GUILDS
+        | serenity::GatewayIntents::GUILD_MESSAGES
+        | serenity::GatewayIntents::GUILD_MESSAGE_REACTIONS
+        | serenity::GatewayIntents::DIRECT_MESSAGES
+        | serenity::GatewayIntents::MESSAGE_CONTENT;
+
+    let client = serenity::ClientBuilder::new(bot_settings.discord_token, intents)
+        .framework(framework)
+        .await;
+    client.unwrap().start().await.unwrap()
 }

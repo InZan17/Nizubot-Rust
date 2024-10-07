@@ -1,15 +1,13 @@
-use std::{collections::HashMap, f32::consts::E, fmt::format};
+use std::collections::HashMap;
 
-use poise::serenity_prelude::{GuildId, MessageId, RoleId, UserId};
+use poise::serenity_prelude::{GuildId, MessageId, UserId};
 use reqwest::{Client, RequestBuilder};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
-    commands::{self, utility_commands::time_format::TimeFormat},
-    tokens::{self, SurrealDbSignInInfo},
-    utils::IdType,
-    Error,
+    commands::utility_commands::time_format::TimeFormat, tokens::SurrealDbSignInInfo,
+    utils::IdType, Error,
 };
 
 use super::{
@@ -222,7 +220,7 @@ impl SurrealClient {
 
     pub async fn get_guild_cotd_role(
         &self,
-        guild_id: &GuildId,
+        guild_id: GuildId,
     ) -> Result<Option<CotdRoleDataQuery>, crate::Error> {
         //id is needed in the query because another function uses it and I dont wanna make another struct.
         let cotd_role_data: Option<CotdRoleDataQuery> = self
@@ -248,11 +246,12 @@ impl SurrealClient {
     pub async fn update_guild_cotd_role(
         &self,
         cotd_role_data: &Option<CotdRoleData>,
-        guild_id: &GuildId,
+        guild_id: GuildId,
     ) -> Result<(), crate::Error> {
         let cotd_role_data_string = serde_json::to_string(&cotd_role_data)?;
 
-        let cotd_role_data = self
+        //TODO: Perhaps check for error.
+        let _cotd_role_data = self
             .query(format!(
                 "UPDATE guild:{guild_id} SET cotd_role = {cotd_role_data_string};"
             ))
@@ -263,7 +262,7 @@ impl SurrealClient {
 
     pub async fn mark_cotd_role_updated(
         &self,
-        guild_id: &GuildId,
+        guild_id: GuildId,
         current_day: u64,
     ) -> Result<(), Error> {
         self.query(format!("UPDATE guild:{guild_id} MERGE {{ cotd_role: {{ day:{current_day} }} }} WHERE cotd_role;")).await?;

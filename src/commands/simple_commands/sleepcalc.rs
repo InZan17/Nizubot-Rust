@@ -1,3 +1,5 @@
+use poise::CreateReply;
+
 use crate::{Context, Error};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, poise::ChoiceParameter)]
@@ -54,7 +56,8 @@ pub async fn sleep(
         time_string(time_after_cycle(wake_hour, wake_minute, format, -6)),
     ];
 
-    ctx.send(|m| m.content(gen_wake_message(cycles))).await?;
+    ctx.send(CreateReply::default().content(gen_wake_message(cycles)))
+        .await?;
     Ok(())
 }
 
@@ -82,14 +85,15 @@ pub async fn wake(
         time_string(time_after_cycle(sleep_hour, sleep_minute, format, 6)),
     ];
 
-    ctx.send(|m| m.content(gen_sleep_message(cycles))).await?;
+    ctx.send(CreateReply::default().content(gen_sleep_message(cycles)))
+        .await?;
     Ok(())
 }
 
 /// Info about how I calculate the times.
 #[poise::command(slash_command)]
 pub async fn info(ctx: Context<'_>) -> Result<(), Error> {
-    ctx.send(|m| m.content("The average human takes around 15 minutes to fall asleep. Once you are asleep you will go through sleep cycles. One sleep cycle is about 90 minutes and a good night's sleep consists of 5-6 sleep cycles. It's best to wake up at the end of a cycle to help you feel more rested and ready to start the day.\nI will calculate the best time for you to sleep/wake up by using this information.")).await?;
+    ctx.send(CreateReply::default().content("The average human takes around 15 minutes to fall asleep. Once you are asleep you will go through sleep cycles. One sleep cycle is about 90 minutes and a good night's sleep consists of 5-6 sleep cycles. It's best to wake up at the end of a cycle to help you feel more rested and ready to start the day.\nI will calculate the best time for you to sleep/wake up by using this information.")).await?;
     return Ok(());
 }
 

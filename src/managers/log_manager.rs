@@ -1,32 +1,18 @@
-use std::{
-    borrow::BorrowMut,
-    collections::HashMap,
-    hash::Hash,
-    mem::transmute,
-    ops::Add,
-    path::{Path, PathBuf},
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
-use chrono::Timelike;
-use openssl::pkey::Id;
-use poise::serenity_prelude::{self, Context, UserId, Webhook};
+use poise::serenity_prelude::{Context, ExecuteWebhook, UserId, Webhook};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     sync::{Mutex, RwLock},
 };
 
 use crate::{
-    managers::{cotd_manager::SECONDS_IN_A_DAY, storage_manager::DataType},
+    managers::cotd_manager::SECONDS_IN_A_DAY,
     utils::{get_seconds, IdType},
     Error,
 };
 
-use super::{
-    db::SurrealClient,
-    storage_manager::{DataHolder, StorageManager},
-};
+use super::db::SurrealClient;
 
 pub struct LogState {
     logs: Vec<String>,
@@ -56,7 +42,6 @@ impl LogState {
 }
 
 pub struct LogManager {
-    db: Arc<SurrealClient>,
     log_path: PathBuf,
     owner_user_ids: Vec<UserId>,
     admin_log_webhook: Option<Webhook>,
@@ -131,14 +116,12 @@ impl LogManager {
     }
 
     pub fn new(
-        db: Arc<SurrealClient>,
         log_path: PathBuf,
         owner_user_ids: Vec<UserId>,
         admin_log_webhook: Option<Webhook>,
         arc_ctx: Arc<Context>,
     ) -> Self {
         Self {
-            db,
             log_path,
             owner_user_ids,
             admin_log_webhook,
@@ -255,9 +238,12 @@ impl LogManager {
 
         if let Some(webhook) = &self.admin_log_webhook {
             let _ = webhook
-                .execute(arc_ctx, false, |m| {
-                    m.content(Self::create_log_string(add_log, log_type, log_source))
-                })
+                .execute(
+                    arc_ctx,
+                    false,
+                    ExecuteWebhook::new()
+                        .content(Self::create_log_string(add_log, log_type, log_source)),
+                )
                 .await;
         }
         result
