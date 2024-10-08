@@ -26,7 +26,9 @@ impl TimeFormat {
 #[poise::command(
     slash_command,
     subcommands("sleep", "wake", "info"),
-    subcommand_required
+    subcommand_required,
+    install_context = "Guild|User",
+    interaction_context = "Guild|BotDm|PrivateChannel"
 )]
 pub async fn sleepcalc(_ctx: Context<'_>) -> Result<(), Error> {
     Ok(())

@@ -18,7 +18,10 @@ use managers::{
     remind_manager::{remind_manager_loop, RemindManager},
     storage_manager::{storage_manager_loop, StorageManager},
 };
-use poise::serenity_prelude::{self as serenity, FullEvent, Webhook};
+use poise::{
+    samples::create_application_commands,
+    serenity_prelude::{self as serenity, FullEvent, Webhook},
+};
 use utils::IdType;
 
 use crate::managers::{

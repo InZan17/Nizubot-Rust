@@ -8,7 +8,9 @@ use poise::{
 #[poise::command(
     slash_command,
     subcommands("user", "guild", "emoji"),
-    subcommand_required
+    subcommand_required,
+    install_context = "Guild|User",
+    interaction_context = "Guild|BotDm|PrivateChannel"
 )]
 pub async fn icon(_ctx: Context<'_>) -> Result<(), Error> {
     Ok(())

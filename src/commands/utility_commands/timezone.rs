@@ -14,7 +14,9 @@ use super::time_format::TimeFormat;
 #[poise::command(
     slash_command,
     subcommands("set", "remove", "check", "user"),
-    subcommand_required
+    subcommand_required,
+    install_context = "Guild|User",
+    interaction_context = "Guild|BotDm|PrivateChannel"
 )]
 pub async fn timezone(_: Context<'_>) -> Result<(), Error> {
     Ok(())

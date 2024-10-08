@@ -6,7 +6,13 @@ use poise::{
 use crate::{Context, Error};
 
 /// Command about converting currencies.
-#[poise::command(slash_command, subcommands("convert", "list"), subcommand_required)]
+#[poise::command(
+    slash_command,
+    subcommands("convert", "list"),
+    subcommand_required,
+    install_context = "Guild|User",
+    interaction_context = "Guild|BotDm|PrivateChannel"
+)]
 pub async fn currency(_: Context<'_>) -> Result<(), Error> {
     Ok(())
 }

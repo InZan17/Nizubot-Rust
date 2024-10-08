@@ -3,7 +3,11 @@ use evalexpr::{context_map, EvalexprError, Value};
 use crate::{Context, Error};
 
 /// I will evaluate an expression!
-#[poise::command(slash_command)]
+#[poise::command(
+    slash_command,
+    install_context = "Guild|User",
+    interaction_context = "Guild|BotDm|PrivateChannel"
+)]
 pub async fn eval(
     ctx: Context<'_>,
     #[max_length = 200]

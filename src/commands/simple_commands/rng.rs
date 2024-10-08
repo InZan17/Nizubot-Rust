@@ -3,7 +3,11 @@ use poise::CreateReply;
 use rand::Rng;
 
 /// I will pick a random number!
-#[poise::command(slash_command)]
+#[poise::command(
+    slash_command,
+    install_context = "Guild|User",
+    interaction_context = "Guild|BotDm|PrivateChannel"
+)]
 pub async fn rng(
     ctx: Context<'_>,
     #[description = "Smallest possible number."] min: Option<i32>,

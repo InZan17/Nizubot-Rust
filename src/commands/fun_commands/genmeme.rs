@@ -11,7 +11,12 @@ mod caption;
 mod petpet;
 
 /// I will generate a meme.
-#[poise::command(slash_command, subcommands("brick", "petpet", "caption"))]
+#[poise::command(
+    slash_command,
+    subcommands("brick", "petpet", "caption"),
+    install_context = "Guild|User",
+    interaction_context = "Guild|BotDm|PrivateChannel"
+)]
 pub async fn genmeme(_ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }

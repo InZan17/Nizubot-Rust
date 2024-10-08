@@ -18,7 +18,9 @@ pub enum TimeFormat {
 #[poise::command(
     slash_command,
     subcommands("set", "remove", "get"),
-    subcommand_required
+    subcommand_required,
+    install_context = "Guild|User",
+    interaction_context = "Guild|BotDm|PrivateChannel"
 )]
 pub async fn time_format(_: Context<'_>) -> Result<(), Error> {
     Ok(())

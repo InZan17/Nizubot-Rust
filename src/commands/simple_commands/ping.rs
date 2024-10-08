@@ -3,7 +3,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::{Context, Error};
 
 /// Pong!
-#[poise::command(slash_command)]
+#[poise::command(
+    slash_command,
+    install_context = "Guild|User",
+    interaction_context = "Guild|BotDm|PrivateChannel"
+)]
 pub async fn ping(ctx: Context<'_>) -> Result<(), Error> {
     let current = get_current_ms_time();
     ctx.defer().await?;
