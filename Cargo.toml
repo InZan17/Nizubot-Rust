@@ -15,7 +15,9 @@ serde_json = "1.0.107"
 tokio = {version = "1.32.0", features = ["macros", "rt-multi-thread", "process"]}
 evalexpr = "11.3.0"
 percent-encoding = "2.3.1"
-openssl = { version = "0.10.66", features = ["bindgen"] }
+openssl = { version = "=0.10.57", features = ["vendored"] }
+openssl-sys = { version = "=0.9.92" }
+cc = "=1.0.69"
 chrono = "0.4.37"
 chrono-tz = { version = "0.10.0", features = ["case-insensitive"]}
 serenity = { version = "0.12.2", features = ["unstable_discord_api"] }
