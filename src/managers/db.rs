@@ -203,21 +203,6 @@ pub struct StoredData {
 }
 
 impl SurrealClient {
-    pub async fn get_single_data(&self) -> Result<Option<StoredData>, crate::Error> {
-        let stored_data: Option<StoredData> =
-            self.query("SELECT * FROM stored_data:1").await?.take(0)?;
-
-        Ok(stored_data)
-    }
-
-    pub async fn update_single_data(&self, data: &StoredData) -> Result<(), crate::Error> {
-        let data_json = serde_json::to_string(data)?;
-        self.query(format!("UPDATE stored_data:1 CONTENT {data_json};"))
-            .await?;
-
-        Ok(())
-    }
-
     pub async fn get_guild_cotd_role(
         &self,
         guild_id: GuildId,
