@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    fmt::Display,
     fs::{self},
     path::{Path, PathBuf},
     sync::Arc,
@@ -107,7 +108,9 @@ impl StorageManager {
             panic!("Path is not valid UTF-8")
         };
         if !storage_path.exists() {
-            fs::create_dir(&storage_path).expect("Couldn't create storage path directory.");
+            tokio::fs::create_dir_all(&storage_path)
+                .await
+                .expect("Couldn't create storage path directory.");
         }
         StorageManager {
             storage_path_string: path_str.to_string(),
@@ -116,24 +119,27 @@ impl StorageManager {
         }
     }
 
-    pub async fn save_mem(
-        self: &Arc<Self>,
-        key: &str,
-        data: Arc<RwLock<DataType>>,
-        duration: Duration,
-    ) {
+    pub async fn create_dir_all(&self, path: impl Display) -> std::io::Result<()> {
+        tokio::fs::create_dir_all(format!("{}/{path}", self.storage_path_string)).await
+    }
+
+    pub fn path_exists(&self, path: &str) -> bool {
+        Path::new(&self.get_full_directory(path)).exists()
+    }
+
+    pub async fn save_mem(&self, key: &str, data: Arc<RwLock<DataType>>, duration: Duration) {
         let mut write = self.datas.write().await;
         write.insert(key.into(), (duration_to_timestamp(&duration), data));
     }
 
-    pub async fn load_mem(self: &Arc<Self>, key: &str) -> Option<Arc<RwLock<DataType>>> {
+    pub async fn load_mem(&self, key: &str) -> Option<Arc<RwLock<DataType>>> {
         let read = self.datas.read().await;
         let (_, data) = read.get(key)?;
         Some(data.clone())
     }
 
     pub async fn load_mem_or(
-        self: &Arc<Self>,
+        &self,
         key: &str,
         data: DataType,
         duration: Duration,
@@ -147,12 +153,12 @@ impl StorageManager {
         mem_data
     }
 
-    pub async fn delete_mem(self: &Arc<Self>, key: &str) {
+    pub async fn delete_mem(&self, key: &str) {
         let mut write = self.datas.write().await;
         write.remove(key);
     }
 
-    pub async fn save_disk(self: &Arc<Self>, path: &str, data: &DataType) -> Result<String, Error> {
+    pub async fn save_disk(&self, path: &str, data: &DataType) -> Result<String, Error> {
         let path = self.get_full_directory(path);
 
         if let Some(path) = Path::new(&path).parent() {
@@ -165,11 +171,7 @@ impl StorageManager {
         Ok(path)
     }
 
-    pub async fn load_disk(
-        self: &Arc<Self>,
-        path: &str,
-        to_string: bool,
-    ) -> Result<Option<DataType>, Error> {
+    pub async fn load_disk(&self, path: &str, to_string: bool) -> Result<Option<DataType>, Error> {
         let path = self.get_full_directory(path);
 
         if !Path::new(&path).exists() {
@@ -190,7 +192,7 @@ impl StorageManager {
     }
 
     pub async fn load_disk_or(
-        self: &Arc<Self>,
+        &self,
         path: &str,
         to_string: bool,
         data: DataType,
@@ -202,7 +204,7 @@ impl StorageManager {
         Ok(data)
     }
 
-    pub async fn delete_disk(self: &Arc<Self>, path: &str) -> Result<String, Error> {
+    pub async fn delete_disk(&self, path: &str) -> Result<String, Error> {
         let path = self.get_full_directory(path);
         let path_path = Path::new(&path);
 
@@ -215,7 +217,7 @@ impl StorageManager {
     }
 
     pub async fn save(
-        self: &Arc<Self>,
+        &self,
         path: &str,
         data_holder: &DataHolder,
         duration: Duration,
@@ -237,7 +239,7 @@ impl StorageManager {
     }
 
     pub async fn load(
-        self: &Arc<Self>,
+        &self,
         path: &str,
         to_string: bool,
         duration: Duration,
@@ -264,7 +266,7 @@ impl StorageManager {
     }
 
     pub async fn load_or(
-        self: &Arc<Self>,
+        &self,
         path: &str,
         to_string: bool,
         data: DataType,
@@ -288,7 +290,7 @@ impl StorageManager {
         Ok(data)
     }
 
-    pub async fn delete(self: &Arc<Self>, path: &str) -> Result<String, Error> {
+    pub async fn delete(&self, path: &str) -> Result<String, Error> {
         self.delete_mem(path).await;
         self.delete_disk(path).await
     }

@@ -1,8 +1,9 @@
 use evalexpr::{context_map, EvalexprError, Value};
+use poise::CreateReply;
 
 use crate::{Context, Error};
 
-/// I will evaluate an expression!
+/// I will evaluate a math expression!
 #[poise::command(
     slash_command,
     install_context = "Guild|User",
@@ -11,9 +12,12 @@ use crate::{Context, Error};
 pub async fn eval(
     ctx: Context<'_>,
     #[max_length = 200]
-    #[description = "The expression"]
+    #[description = "The math expression"]
     expression: String,
+    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
+    let ephemeral = ephemeral.unwrap_or(false);
+
     let mut context = context_map! {
         "sin" => Function::new(|argument| {
             if let Ok(int) = argument.as_int() {
@@ -37,6 +41,11 @@ pub async fn eval(
 
     let value = evalexpr::eval_with_context_mut(&expression, &mut context)?;
 
-    ctx.say(format!("{value}")).await?;
+    ctx.send(
+        CreateReply::default()
+            .content(value.to_string())
+            .ephemeral(ephemeral),
+    )
+    .await?;
     Ok(())
 }

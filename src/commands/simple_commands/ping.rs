@@ -8,9 +8,17 @@ use crate::{Context, Error};
     install_context = "Guild|User",
     interaction_context = "Guild|BotDm|PrivateChannel"
 )]
-pub async fn ping(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn ping(
+    ctx: Context<'_>,
+    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
+) -> Result<(), Error> {
+    let ephemeral = ephemeral.unwrap_or(false);
     let current = get_current_ms_time();
-    ctx.defer().await?;
+    if ephemeral {
+        ctx.defer_ephemeral().await?;
+    } else {
+        ctx.defer().await?;
+    }
     let after = get_current_ms_time();
     let difference = after - current;
     ctx.say(format!("Pong! `{}ms`", difference)).await?;

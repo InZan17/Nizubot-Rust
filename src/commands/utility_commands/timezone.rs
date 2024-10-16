@@ -37,10 +37,14 @@ pub async fn set(
         .set_user_timezone(&ctx.author().id, Some(tz_name.to_string()))
         .await?;
 
-    ctx.send(CreateReply::default().content(format!(
-        "Sure! Your timezone has now been set to `{}`.",
-        tz_name
-    )))
+    ctx.send(
+        CreateReply::default()
+            .content(format!(
+                "Sure! Your timezone has now been set to `{}`.",
+                tz_name
+            ))
+            .ephemeral(true),
+    )
     .await?;
 
     Ok(())
@@ -54,8 +58,12 @@ pub async fn remove(ctx: Context<'_>) -> Result<(), Error> {
         .set_user_timezone(&ctx.author().id, None)
         .await?;
 
-    ctx.send(CreateReply::default().content("Your timezone has been removed!"))
-        .await?;
+    ctx.send(
+        CreateReply::default()
+            .content("Your timezone has been removed!")
+            .ephemeral(true),
+    )
+    .await?;
     Ok(())
 }
 
@@ -64,7 +72,9 @@ pub async fn remove(ctx: Context<'_>) -> Result<(), Error> {
 pub async fn user(
     ctx: Context<'_>,
     #[description = "Which user do you wanna check?"] user: Option<User>,
+    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
+    let ephemeral = ephemeral.unwrap_or(false);
     let user = user.as_ref().unwrap_or(ctx.author());
     let Some(timezone_name) = ctx.data().db.get_user_timezone(&user.id).await? else {
         ctx.send(
@@ -89,7 +99,8 @@ pub async fn user(
         .unwrap_or(TimeFormat::TwentyFour);
 
     ctx.send(CreateReply::default().content(format!("{}'s timezone is `{timezone_name}`.\nThe time for `{timezone_name}` is currently **{}**.", user.mention(), 
-    get_time_string(date_time, time_format))).allowed_mentions(CreateAllowedMentions::new()))
+    get_time_string(date_time, time_format))).allowed_mentions(CreateAllowedMentions::new())
+    .ephemeral(ephemeral))
         .await?;
     Ok(())
 }
@@ -99,7 +110,9 @@ pub async fn user(
 pub async fn check(
     ctx: Context<'_>,
     #[description = "Which timezone do you wanna check?"] timezone: String,
+    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
+    let ephemeral = ephemeral.unwrap_or(false);
     let timezone = Tz::from_str_insensitive(&timezone)?;
     let now = Utc::now();
     let date_time = timezone.from_utc_datetime(&now.naive_utc());
@@ -113,11 +126,15 @@ pub async fn check(
         .flatten()
         .unwrap_or(TimeFormat::TwentyFour);
 
-    ctx.send(CreateReply::default().content(format!(
-        "The time for `{}` is currently **{}**.",
-        timezone.name(),
-        get_time_string(date_time, time_format)
-    )))
+    ctx.send(
+        CreateReply::default()
+            .content(format!(
+                "The time for `{}` is currently **{}**.",
+                timezone.name(),
+                get_time_string(date_time, time_format)
+            ))
+            .ephemeral(ephemeral),
+    )
     .await?;
     Ok(())
 }

@@ -21,7 +21,9 @@ pub async fn icon(_ctx: Context<'_>) -> Result<(), Error> {
 pub async fn user(
     ctx: Context<'_>,
     #[description = "The user to get the profile picture from."] user: Option<User>,
+    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
+    let ephemeral = ephemeral.unwrap_or(false);
     let target_user;
     if let Some(user) = user.as_ref() {
         target_user = user;
@@ -35,11 +37,13 @@ pub async fn user(
         .unwrap_or(target_user.default_avatar_url());
 
     ctx.send(
-        CreateReply::default().embed(
-            CreateEmbed::new()
-                .title(format!("{name}'s avatar"))
-                .image(avatar_url),
-        ),
+        CreateReply::default()
+            .embed(
+                CreateEmbed::new()
+                    .title(format!("{name}'s avatar"))
+                    .image(avatar_url),
+            )
+            .ephemeral(ephemeral),
     )
     .await?;
     Ok(())
@@ -47,7 +51,11 @@ pub async fn user(
 
 /// Get the icon of the guild.
 #[poise::command(slash_command)]
-pub async fn guild(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn guild(
+    ctx: Context<'_>,
+    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
+) -> Result<(), Error> {
+    let ephemeral = ephemeral.unwrap_or(false);
     let name;
     let icon_url;
     {
@@ -66,11 +74,13 @@ pub async fn guild(ctx: Context<'_>) -> Result<(), Error> {
 
     if let Some(icon_url) = icon_url {
         ctx.send(
-            CreateReply::default().embed(
-                CreateEmbed::new()
-                    .title(format!("{name}'s icon"))
-                    .image(format!("{icon_url}?size=1024")),
-            ),
+            CreateReply::default()
+                .embed(
+                    CreateEmbed::new()
+                        .title(format!("{name}'s icon"))
+                        .image(format!("{icon_url}?size=1024")),
+                )
+                .ephemeral(ephemeral),
         )
         .await?;
         return Ok(());
@@ -91,13 +101,17 @@ pub async fn guild(ctx: Context<'_>) -> Result<(), Error> {
 pub async fn emoji(
     ctx: Context<'_>,
     #[description = "The custom emoji to get the icon from."] emoji: Emoji,
+    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
+    let ephemeral = ephemeral.unwrap_or(false);
     ctx.send(
-        CreateReply::default().embed(
-            CreateEmbed::new()
-                .title(format!("{}'s icon", emoji.name))
-                .image(format!("{}?size=1024", emoji.url())),
-        ),
+        CreateReply::default()
+            .embed(
+                CreateEmbed::new()
+                    .title(format!("{}'s icon", emoji.name))
+                    .image(format!("{}?size=1024", emoji.url())),
+            )
+            .ephemeral(ephemeral),
     )
     .await?;
     return Ok(());

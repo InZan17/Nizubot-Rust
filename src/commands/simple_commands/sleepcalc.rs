@@ -47,7 +47,9 @@ pub async fn sleep(
     #[min = 0]
     wake_minute: i16,
     #[description = "What format the time is in."] format: TimeFormat,
+    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
+    let ephemeral = ephemeral.unwrap_or(false);
     let cycles = vec![
         time_string(time_after_cycle(wake_hour, wake_minute, format, -0)),
         time_string(time_after_cycle(wake_hour, wake_minute, format, -1)),
@@ -58,8 +60,12 @@ pub async fn sleep(
         time_string(time_after_cycle(wake_hour, wake_minute, format, -6)),
     ];
 
-    ctx.send(CreateReply::default().content(gen_wake_message(cycles)))
-        .await?;
+    ctx.send(
+        CreateReply::default()
+            .content(gen_wake_message(cycles))
+            .ephemeral(ephemeral),
+    )
+    .await?;
     Ok(())
 }
 
@@ -76,7 +82,9 @@ pub async fn wake(
     #[min = 0]
     sleep_minute: i16,
     #[description = "What format the time is in."] format: TimeFormat,
+    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
+    let ephemeral = ephemeral.unwrap_or(false);
     let cycles = vec![
         time_string(time_after_cycle(sleep_hour, sleep_minute, format, 0)),
         time_string(time_after_cycle(sleep_hour, sleep_minute, format, 1)),
@@ -87,15 +95,24 @@ pub async fn wake(
         time_string(time_after_cycle(sleep_hour, sleep_minute, format, 6)),
     ];
 
-    ctx.send(CreateReply::default().content(gen_sleep_message(cycles)))
-        .await?;
+    ctx.send(
+        CreateReply::default()
+            .content(gen_sleep_message(cycles))
+            .ephemeral(ephemeral),
+    )
+    .await?;
     Ok(())
 }
 
 /// Info about how I calculate the times.
 #[poise::command(slash_command)]
-pub async fn info(ctx: Context<'_>) -> Result<(), Error> {
-    ctx.send(CreateReply::default().content("The average human takes around 15 minutes to fall asleep. Once you are asleep you will go through sleep cycles. One sleep cycle is about 90 minutes and a good night's sleep consists of 5-6 sleep cycles. It's best to wake up at the end of a cycle to help you feel more rested and ready to start the day.\nI will calculate the best time for you to sleep/wake up by using this information.")).await?;
+pub async fn info(
+    ctx: Context<'_>,
+    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
+) -> Result<(), Error> {
+    let ephemeral = ephemeral.unwrap_or(false);
+    ctx.send(CreateReply::default().content("The average human takes around 15 minutes to fall asleep. Once you are asleep you will go through sleep cycles. One sleep cycle is about 90 minutes and a good night's sleep consists of 5-6 sleep cycles. It's best to wake up at the end of a cycle to help you feel more rested and ready to start the day.\nI will calculate the best time for you to sleep/wake up by using this information.")
+    .ephemeral(ephemeral)).await?;
     return Ok(());
 }
 

@@ -24,7 +24,9 @@ pub async fn convert(
     #[description = "The amount of currency you wanna convert."] amount: f64,
     #[description = "Currency to convert from."] from: String,
     #[description = "Currency to convert to."] to: String,
+    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
+    let ephemeral = ephemeral.unwrap_or(false);
     let currency_manager = &ctx.data().currency_manager;
 
     let (converted, timestamp) = currency_manager.convert(amount, &from, &to).await?;
@@ -46,24 +48,26 @@ pub async fn convert(
     }
 
     ctx.send(
-        CreateReply::default().embed(
-            CreateEmbed::new()
-                .title("Currency Conversion")
-                .description("Currency rates were taken from https://openexchangerates.org.")
-                .footer(CreateEmbedFooter::new("Currency rates last updated"))
-                .timestamp(Timestamp::from_unix_timestamp(timestamp as i64).unwrap())
-                .field(
-                    format!("From: {} {}", from.to_uppercase(), from_name),
-                    amount.to_string(),
-                    false,
-                )
-                .field(
-                    format!("To: {} {}", to.to_uppercase(), to_name),
-                    fancy_round(converted, 2).to_string(),
-                    false,
-                )
-                .field("", "", false),
-        ),
+        CreateReply::default()
+            .embed(
+                CreateEmbed::new()
+                    .title("Currency Conversion")
+                    .description("Currency rates were taken from https://openexchangerates.org.")
+                    .footer(CreateEmbedFooter::new("Currency rates last updated"))
+                    .timestamp(Timestamp::from_unix_timestamp(timestamp as i64).unwrap())
+                    .field(
+                        format!("From: {} {}", from.to_uppercase(), from_name),
+                        amount.to_string(),
+                        false,
+                    )
+                    .field(
+                        format!("To: {} {}", to.to_uppercase(), to_name),
+                        fancy_round(converted, 2).to_string(),
+                        false,
+                    )
+                    .field("", "", false),
+            )
+            .ephemeral(ephemeral),
     )
     .await?;
 
@@ -71,10 +75,15 @@ pub async fn convert(
 }
 /// List of some currencies and their acronyms/abbreviations.
 #[poise::command(slash_command)]
-pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn list(
+    ctx: Context<'_>,
+    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
+) -> Result<(), Error> {
+    let ephemeral = ephemeral.unwrap_or(false);
     let the_embed = ctx.data().currency_manager.get_embed().await;
 
-    ctx.send(CreateReply::default().embed(the_embed)).await?;
+    ctx.send(CreateReply::default().embed(the_embed).ephemeral(ephemeral))
+        .await?;
     Ok(())
 }
 

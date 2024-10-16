@@ -13,12 +13,15 @@ pub async fn echo(
     #[max_length = 2000]
     #[description = "What should I say?"]
     content: String,
+    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
+    let ephemeral = ephemeral.unwrap_or(false);
     ctx.send(
         CreateReply::default()
             .content(content)
             // TODO: make sure this works
-            .allowed_mentions(CreateAllowedMentions::new()),
+            .allowed_mentions(CreateAllowedMentions::new())
+            .ephemeral(ephemeral),
     )
     .await?;
     return Ok(());

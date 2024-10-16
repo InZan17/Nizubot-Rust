@@ -1,29 +1,27 @@
-use crate::Error;
-use core::slice::SlicePattern;
+use crate::{managers::storage_manager::StorageManager, Error};
 use evalexpr::context_map;
-use poise::serenity_prelude::Attachment;
-use tokio::{fs, io::AsyncWriteExt};
+use tokio::fs;
 
-use super::CaptionType;
+use super::{CaptionType, ImageInfo};
 
 pub async fn caption(
-    id: u64,
-    storage_path: &String,
-    image: &Attachment,
+    storage_manager: &StorageManager,
+    mut image_info: ImageInfo,
     caption_type: &CaptionType,
     upper_text: Option<String>,
     bottom_text: Option<String>,
     font_size_expr: Option<String>,
     break_height_expr: Option<String>,
     padding_expr: Option<String>,
-    extension: &String,
 ) -> Result<String, Error> {
-    let width = image.width.unwrap_or(0);
-    let height = image.height.unwrap_or(0);
+    if image_info.image_id.is_user() {
+        // This is so it will update the width/height.
+        image_info.download_image(storage_manager).await?;
+    }
 
     let mut context = context_map! {
-        "width" => evalexpr::Value::Int(width as i64),
-        "height" => evalexpr::Value::Int(height as i64),
+        "width" => evalexpr::Value::Int(image_info.width as i64),
+        "height" => evalexpr::Value::Int(image_info.height as i64),
     }
     .unwrap();
 
@@ -97,15 +95,6 @@ pub async fn caption(
         }
     };
 
-    let caption_folder = format!("{}/generated/caption", storage_path);
-    let images_folder = format!("{}/downloads/images", storage_path);
-
-    fs::create_dir_all(&caption_folder).await?;
-    fs::create_dir_all(&images_folder).await?;
-
-    let generated_file = format!("{caption_folder}/{}.{extension}", id);
-    let downloaded_file = format!("{images_folder}/{}.{extension}", id);
-
     let mut ffmpeg_filter = "[0]format=rgba,".to_string();
 
     let font = {
@@ -143,8 +132,8 @@ pub async fn caption(
             }
         }
         CaptionType::What => {
-            let small_border_size = (height as f64 / 297.).ceil() * 2.;
-            let big_border_size = (height as f64 / 74.).ceil() * 2.;
+            let small_border_size = (image_info.height as f64 / 297.).ceil() * 2.;
+            let big_border_size = (image_info.height as f64 / 74.).ceil() * 2.;
 
             let bottom_height = padding
                 + font_size * bottom_texts.len() as f64
@@ -162,7 +151,8 @@ pub async fn caption(
             );
 
             ffmpeg_filter = format!(
-                "{ffmpeg_filter}pad=width=ih*({width}/{height}):x=(iw-out_w)/2:color=0x000000,"
+                "{ffmpeg_filter}pad=width=ih*({}/{}):x=(iw-out_w)/2:color=0x000000,",
+                image_info.width, image_info.height
             );
         }
         CaptionType::Overlay => {}
@@ -195,18 +185,21 @@ pub async fn caption(
         ffmpeg_filter = format!("{ffmpeg_filter}drawtext=text='{sanitized_text}':font={font}:x=(main_w-text_w)/2:y=main_h{alignment_offset}-{line_offset}:fontsize={font_size}:fontcolor={font_color},");
     }
 
-    if extension == "gif" {
+    if image_info.output_extension == "gif" {
         ffmpeg_filter = format!("{ffmpeg_filter}split=2[s0][s1];[s0]palettegen=reserve_transparent=on[p];[s1][p]paletteuse,")
     }
 
-    let resp = reqwest::get(&image.url).await?;
-    if !resp.status().is_success() {
-        return Err(Error::from(resp.text().await?));
-    }
+    let caption_folder = format!("{}/generated/caption", storage_manager.storage_path_string);
 
-    let image_bytes = resp.bytes().await?;
-    let mut image_file = fs::File::create(&downloaded_file).await?;
-    image_file.write_all(image_bytes.as_slice()).await?;
+    fs::create_dir_all(&caption_folder).await?;
+
+    let generated_file = format!(
+        "{caption_folder}/{}.{}",
+        image_info.image_id.get(),
+        image_info.output_extension
+    );
+
+    let downloaded_file = image_info.download_image(storage_manager).await?;
 
     let mut ffmpeg_filter_chars = ffmpeg_filter.chars();
 

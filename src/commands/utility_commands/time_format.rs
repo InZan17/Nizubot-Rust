@@ -37,10 +37,14 @@ pub async fn set(
         .set_user_time_format(&ctx.author().id, Some(time_format))
         .await?;
 
-    ctx.send(CreateReply::default().content(format!(
-        "Sure! Your preferred time format has now been set to the {}.",
-        time_format.name()
-    )))
+    ctx.send(
+        CreateReply::default()
+            .content(format!(
+                "Sure! Your preferred time format has now been set to the {}.",
+                time_format.name()
+            ))
+            .ephemeral(true),
+    )
     .await?;
 
     Ok(())
@@ -54,8 +58,12 @@ pub async fn remove(ctx: Context<'_>) -> Result<(), Error> {
         .set_user_time_format(&ctx.author().id, None)
         .await?;
 
-    ctx.send(CreateReply::default().content("Your preferred time format has been removed!"))
-        .await?;
+    ctx.send(
+        CreateReply::default()
+            .content("Your preferred time format has been removed!")
+            .ephemeral(true),
+    )
+    .await?;
     Ok(())
 }
 
@@ -64,7 +72,9 @@ pub async fn remove(ctx: Context<'_>) -> Result<(), Error> {
 pub async fn get(
     ctx: Context<'_>,
     #[description = "Which user do you wanna check?"] user: Option<User>,
+    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
+    let ephemeral = ephemeral.unwrap_or(false);
     let user = user.as_ref().unwrap_or(ctx.author());
 
     let Some(time_format) = ctx.data().db.get_user_time_format(&ctx.author().id).await? else {
@@ -84,7 +94,8 @@ pub async fn get(
                 user.mention(),
                 time_format.name()
             ))
-            .allowed_mentions(CreateAllowedMentions::new()),
+            .allowed_mentions(CreateAllowedMentions::new())
+            .ephemeral(ephemeral),
     )
     .await?;
     Ok(())

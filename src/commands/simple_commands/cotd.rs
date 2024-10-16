@@ -13,8 +13,14 @@ use poise::{
 pub async fn cotd(
     ctx: Context<'_>,
     #[description = "The day you wanna get the color of."] day: Option<u64>,
+    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
-    ctx.defer().await?;
+    let ephemeral = ephemeral.unwrap_or(false);
+    if ephemeral {
+        ctx.defer_ephemeral().await?;
+    } else {
+        ctx.defer().await?;
+    }
     let cotd_manager = &ctx.data().cotd_manager;
     let color_info;
 

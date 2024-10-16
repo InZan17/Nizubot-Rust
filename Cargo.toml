@@ -21,6 +21,7 @@ cc = "=1.0.69"
 chrono = "0.4.37"
 chrono-tz = { version = "0.10.0", features = ["case-insensitive"]}
 serenity = { version = "0.12.2", features = ["unstable_discord_api"] }
+webp = "0.3.0"
 
 [patch.crates-io]
 poise = {git = "https://github.com/fgardt/poise.git", branch = "feat/user_apps", checkout = "a8a987df8eee449a69c6ca3544347c2c2f3697e5"}
