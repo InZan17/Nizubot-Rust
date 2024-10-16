@@ -46,18 +46,77 @@ pub async fn sleep(
     #[max = 60]
     #[min = 0]
     wake_minute: i16,
+    #[description = "How many minutes does it take for you to fall asleep? (Default: 15)"]
+    #[max = 120]
+    #[min = 0]
+    sleep_duration: Option<i16>,
+    #[description = "How many minutes does a sleep cycle take for you? (Default: 90)"]
+    #[max = 720]
+    #[min = 0]
+    cycle_length: Option<i16>,
     #[description = "What format the time is in."] format: TimeFormat,
     #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
+    let sleep_duration = sleep_duration.unwrap_or(15);
+    let cycle_length = cycle_length.unwrap_or(90);
     let ephemeral = ephemeral.unwrap_or(false);
     let cycles = vec![
-        time_string(time_after_cycle(wake_hour, wake_minute, format, -0)),
-        time_string(time_after_cycle(wake_hour, wake_minute, format, -1)),
-        time_string(time_after_cycle(wake_hour, wake_minute, format, -2)),
-        time_string(time_after_cycle(wake_hour, wake_minute, format, -3)),
-        time_string(time_after_cycle(wake_hour, wake_minute, format, -4)),
-        time_string(time_after_cycle(wake_hour, wake_minute, format, -5)),
-        time_string(time_after_cycle(wake_hour, wake_minute, format, -6)),
+        time_string(time_after_cycle(
+            wake_hour,
+            wake_minute,
+            format,
+            sleep_duration,
+            cycle_length,
+            -0,
+        )),
+        time_string(time_after_cycle(
+            wake_hour,
+            wake_minute,
+            format,
+            sleep_duration,
+            cycle_length,
+            -1,
+        )),
+        time_string(time_after_cycle(
+            wake_hour,
+            wake_minute,
+            format,
+            sleep_duration,
+            cycle_length,
+            -2,
+        )),
+        time_string(time_after_cycle(
+            wake_hour,
+            wake_minute,
+            format,
+            sleep_duration,
+            cycle_length,
+            -3,
+        )),
+        time_string(time_after_cycle(
+            wake_hour,
+            wake_minute,
+            format,
+            sleep_duration,
+            cycle_length,
+            -4,
+        )),
+        time_string(time_after_cycle(
+            wake_hour,
+            wake_minute,
+            format,
+            sleep_duration,
+            cycle_length,
+            -5,
+        )),
+        time_string(time_after_cycle(
+            wake_hour,
+            wake_minute,
+            format,
+            sleep_duration,
+            cycle_length,
+            -6,
+        )),
     ];
 
     ctx.send(
@@ -81,18 +140,77 @@ pub async fn wake(
     #[max = 60]
     #[min = 0]
     sleep_minute: i16,
+    #[description = "How many minutes does it take for you to fall asleep? (Default: 15)"]
+    #[max = 120]
+    #[min = 0]
+    sleep_duration: Option<i16>,
+    #[description = "How many minutes does a sleep cycle take for you? (Default: 90)"]
+    #[max = 720]
+    #[min = 0]
+    cycle_length: Option<i16>,
     #[description = "What format the time is in."] format: TimeFormat,
     #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
+    let sleep_duration = sleep_duration.unwrap_or(15);
+    let cycle_length = cycle_length.unwrap_or(90);
     let ephemeral = ephemeral.unwrap_or(false);
     let cycles = vec![
-        time_string(time_after_cycle(sleep_hour, sleep_minute, format, 0)),
-        time_string(time_after_cycle(sleep_hour, sleep_minute, format, 1)),
-        time_string(time_after_cycle(sleep_hour, sleep_minute, format, 2)),
-        time_string(time_after_cycle(sleep_hour, sleep_minute, format, 3)),
-        time_string(time_after_cycle(sleep_hour, sleep_minute, format, 4)),
-        time_string(time_after_cycle(sleep_hour, sleep_minute, format, 5)),
-        time_string(time_after_cycle(sleep_hour, sleep_minute, format, 6)),
+        time_string(time_after_cycle(
+            sleep_hour,
+            sleep_minute,
+            format,
+            sleep_duration,
+            cycle_length,
+            0,
+        )),
+        time_string(time_after_cycle(
+            sleep_hour,
+            sleep_minute,
+            format,
+            sleep_duration,
+            cycle_length,
+            1,
+        )),
+        time_string(time_after_cycle(
+            sleep_hour,
+            sleep_minute,
+            format,
+            sleep_duration,
+            cycle_length,
+            2,
+        )),
+        time_string(time_after_cycle(
+            sleep_hour,
+            sleep_minute,
+            format,
+            sleep_duration,
+            cycle_length,
+            3,
+        )),
+        time_string(time_after_cycle(
+            sleep_hour,
+            sleep_minute,
+            format,
+            sleep_duration,
+            cycle_length,
+            4,
+        )),
+        time_string(time_after_cycle(
+            sleep_hour,
+            sleep_minute,
+            format,
+            sleep_duration,
+            cycle_length,
+            5,
+        )),
+        time_string(time_after_cycle(
+            sleep_hour,
+            sleep_minute,
+            format,
+            sleep_duration,
+            cycle_length,
+            6,
+        )),
     ];
 
     ctx.send(
@@ -139,6 +257,8 @@ fn time_after_cycle(
     mut hour: i16,
     mut minute: i16,
     mut format: TimeFormat,
+    sleep_duration: i16,
+    cycle_length: i16,
     cycles: i16,
 ) -> (i16, i16, TimeFormat) {
     //convert it to 24h format
@@ -157,15 +277,15 @@ fn time_after_cycle(
     }
 
     let minute_offset = if cycles > 0 {
-        15
+        sleep_duration
     } else if cycles < 0 {
-        -15
+        -sleep_duration
     } else {
         0
     };
 
-    minute = minute + minute_offset + 30 * cycles;
-    hour = (hour + cycles + minute / 60).rem_euclid(24);
+    minute = minute + minute_offset + cycle_length * cycles;
+    hour = (hour + minute / 60).rem_euclid(24);
     minute = minute.rem_euclid(60);
 
     //if user isnt using 24h format, convert back

@@ -31,7 +31,7 @@ pub async fn add(
     #[max_length = 500]
     #[description = "What I will respond with after detecting it."]
     response: String,
-    #[description = "If my detection should be case-sensitive. (default: False)"]
+    #[description = "If my detection should be case-sensitive. (Default: False)"]
     case_sensitive: Option<bool>,
 ) -> Result<(), Error> {
     let case_sensitive = case_sensitive.unwrap_or(false);
