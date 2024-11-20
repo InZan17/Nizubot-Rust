@@ -1,5 +1,3 @@
-#![feature(slice_pattern)]
-
 mod commands;
 mod managers;
 mod tokens;
