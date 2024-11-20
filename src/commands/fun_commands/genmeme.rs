@@ -3,12 +3,13 @@ use crate::{
     Context, Error,
 };
 use poise::{
-    serenity_prelude::{Attachment, CreateAttachment, CreateEmbed, CreateEmbedFooter, User},
+    serenity_prelude::{
+        Attachment, AttachmentId, CreateAttachment, CreateEmbed, CreateEmbedFooter, User, UserId,
+    },
     CreateReply,
 };
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use serenity::all::{AttachmentId, UserId};
 use tokio::fs;
 use webp::BitstreamFeatures;
 

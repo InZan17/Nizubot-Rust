@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 crc32fast = "1.3.2"
-poise = {version = "0.6.1", features = ["cache", "unstable"]}
+poise = {version = "0.6.1", features = ["cache"]}
 rand = "0.8.5"
 reqwest = {version = "0.12.8", features = ["json"]}
 serde = "1.0.188"
@@ -20,8 +20,8 @@ openssl-sys = { version = "=0.9.92" }
 cc = "=1.0.69"
 chrono = "0.4.37"
 chrono-tz = { version = "0.10.0", features = ["case-insensitive"]}
-serenity = { version = "0.12.2", features = ["unstable_discord_api"] }
+# serenity = { version = "0.12.4", features = ["unstable_discord_api"] }
 webp = "0.3.0"
 
 [patch.crates-io]
-poise = {git = "https://github.com/fgardt/poise.git", branch = "feat/user_apps", checkout = "a8a987df8eee449a69c6ca3544347c2c2f3697e5"}
+poise = {git = "https://github.com/serenity-rs/poise.git", branch = "current", checkout = "22b5b01ba54f7eb74f8fd2f3d52032fd7ef2dc01"}
