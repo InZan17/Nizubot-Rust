@@ -19,6 +19,7 @@ openssl = { version = "0.10.68", features = ["vendored"] }
 chrono = "0.4.37"
 chrono-tz = { version = "0.10.0", features = ["case-insensitive"]}
 webp = "0.3.0"
+mlua = { version = "0.10.2", default-features = false, features = ["luau", "vendored", "async", "send"]}
 
 [patch.crates-io]
 poise = {git = "https://github.com/serenity-rs/poise.git", branch = "current", checkout = "22b5b01ba54f7eb74f8fd2f3d52032fd7ef2dc01"}

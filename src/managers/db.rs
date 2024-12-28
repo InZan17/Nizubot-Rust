@@ -13,6 +13,7 @@ use crate::{
 use super::{
     cotd_manager::{ColorInfo, CotdRoleData, CotdRoleDataQuery},
     detector_manager::DetectorInfo,
+    lua_manager::LuaCommandInfo,
     message_manager::StoredMessageData,
     remind_manager::RemindInfo,
 };
@@ -203,6 +204,64 @@ pub struct StoredData {
 }
 
 impl SurrealClient {
+    pub async fn get_all_guild_lua_commands(
+        &self,
+        guild_id: GuildId,
+    ) -> Result<Vec<LuaCommandInfo>, crate::Error> {
+        let lua_command_infos: Option<Vec<LuaCommandInfo>> = self
+            .query(format!(
+                "SELECT VALUE lua_commands FROM guild:{guild_id} WHERE lua_commands;"
+            ))
+            .await?
+            .take(0)?;
+
+        Ok(lua_command_infos.unwrap_or_default())
+    }
+
+    pub async fn add_guild_lua_command(
+        &self,
+        lua_command_info: &LuaCommandInfo,
+        guild_id: GuildId,
+    ) -> Result<(), crate::Error> {
+        let lua_command_info_string = serde_json::to_string(&lua_command_info)?;
+
+        //TODO: Perhaps check for error.
+        let _responses = self
+            .query(format!(
+                "UPDATE guild:{guild_id} SET lua_commands += {lua_command_info_string};"
+            ))
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn remove_guild_lua_command(
+        &self,
+        guild_id: GuildId,
+        index: usize,
+    ) -> Result<(), Error> {
+        let err = self
+            .query(format!(
+            "LET $commands = (SELECT VALUE lua_commands FROM guild:{guild_id} WHERE lua_commands);
+
+            IF array::len($commands) == 0 {{
+                THROW \"Index isn't valid.\";
+            }} ELSE IF array::len($commands[0]) <= {index} {{
+                THROW \"Index isn't valid.\";
+            }} ELSE {{
+                RETURN (UPDATE guild:{guild_id} SET lua_commands = array::remove(lua_commands, {index}));
+            }};"
+            ))
+            .await?
+            .take_err(1);
+
+        if let Some(err) = err {
+            return Err(err);
+        }
+
+        Ok(())
+    }
+
     pub async fn get_guild_cotd_role(
         &self,
         guild_id: GuildId,
@@ -335,7 +394,7 @@ impl SurrealClient {
             IF array::len($detectors) == 0 {{
                 THROW \"Index isn't valid.\";
             }} ELSE IF array::len($detectors[0]) <= {index} {{
-                RETURN \"Index isn't valid.\";
+                THROW \"Index isn't valid.\";
             }} ELSE {{
                 RETURN (UPDATE {table_id} SET message_detectors = array::remove(message_detectors, {index}));
             }};"

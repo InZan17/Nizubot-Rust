@@ -13,10 +13,14 @@ use managers::{
     currency_manager::CurrencyManager,
     db::SurrealClient,
     log_manager::{LogManager, LogSource, LogType},
+    lua_manager::LuaManager,
     remind_manager::{remind_manager_loop, RemindManager},
     storage_manager::{storage_manager_loop, StorageManager},
 };
-use poise::serenity_prelude::{self as serenity, FullEvent, Webhook};
+use poise::serenity_prelude::{
+    self as serenity, CreateInteractionResponse, CreateInteractionResponseMessage, FullEvent,
+    Webhook,
+};
 use utils::IdType;
 
 use crate::managers::{
@@ -32,6 +36,7 @@ pub struct Data {
     detector_manager: Arc<DetectorManager>,
     reaction_manager: Arc<ReactionManager>,
     currency_manager: Arc<CurrencyManager>,
+    lua_manager: Arc<LuaManager>,
     log_manager: Arc<LogManager>,
     db: Arc<SurrealClient>,
 } // User data, which is stored and accessible in all command invocations
@@ -154,6 +159,58 @@ async fn event_handler<'thing>(
                     .await;
             }
         }
+        FullEvent::InteractionCreate { interaction } => {
+            match interaction {
+                serenity::Interaction::Command(command_interaction) => {
+                    if let Some(guild_id) = command_interaction.data.guild_id {
+                        let result = data
+                            .lua_manager
+                            .execute_command(guild_id, command_interaction.clone())
+                            .await;
+
+                        match result {
+                            Ok(did_reply) => {
+                                if !did_reply {
+                                    command_interaction
+                                        .create_response(
+                                            ctx,
+                                            CreateInteractionResponse::Message(
+                                                CreateInteractionResponseMessage::new()
+                                                    .content("This command has executed, but didn't send a reply."),
+                                            ),
+                                        )
+                                        .await?;
+                                }
+                            }
+                            Err(err) => {
+                                command_interaction
+                                    .create_response(
+                                        ctx,
+                                        CreateInteractionResponse::Message(
+                                            CreateInteractionResponseMessage::new().content(
+                                                format!(
+                                            "An error occured while executing this command: {err}"
+                                        ),
+                                            ),
+                                        ),
+                                    )
+                                    .await?
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+
+            /*
+            if cmd.data.name == "whatsup" {
+                cmd.create_interaction_response(ctx, |r| {
+                    r.interaction_response_data(|d| d.content("whassup"))
+                })
+                .await
+                .unwrap();
+            } */
+        }
         _ => {}
     }
     Ok(())
@@ -171,11 +228,11 @@ async fn main() {
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             commands: commands::get_commands(),
-            event_handler: |_ctx: &serenity::Context,
+            event_handler: |ctx: &serenity::Context,
                             event: &serenity::FullEvent,
-                            _framework,
-                            _data| {
-                Box::pin(event_handler(_ctx, event, _framework, _data))
+                            framework,
+                            data| {
+                Box::pin(event_handler(ctx, event, framework, data))
             },
             ..Default::default()
         })
@@ -200,6 +257,7 @@ async fn main() {
                     remind_manager: Arc::new(RemindManager::new(db.clone())),
                     detector_manager: Arc::new(DetectorManager::new(db.clone())),
                     reaction_manager: Arc::new(ReactionManager::new(db.clone())),
+                    lua_manager: Arc::new(LuaManager::new(db.clone(), arc_ctx.clone())),
                     currency_manager: Arc::new(
                         CurrencyManager::new(bot_settings.open_exchange_rates_token).await,
                     ),
