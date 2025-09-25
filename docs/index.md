@@ -1,21 +1,9 @@
-# Welcome to MkDocs
+# About Nizubot
+Nizubot aims to be a kitchen sink discord bot. That means it tries to do as much as possible. You can add Nizubot to your discord server, or use it as a user app.
 
-For full documentation visit [mkdocs.org](https://www.mkdocs.org).
+To start using this bot, click [here](https://discord.com/oauth2/authorize?client_id=949830429760950292){:target="_blank"}.
 
-## Commands
+## User app commands
+Not all commands are available if you use Nizubot as a user app. If a command is available on the user app, it will say so in the commands page.
 
-* `mkdocs new [dir-name]` - Create a new project.
-* `mkdocs serve` - Start the live-reloading docs server.
-* `mkdocs build` - Build the documentation site.
-* `mkdocs -h` - Print help message and exit.
-
-## Project layout
-
-    mkdocs.yml    # The configuration file.
-    docs/
-        index.md  # The documentation homepage.
-        ...       # Other markdown pages, images and other files.
-
-```py
-print("hello world")
-```
+Most user app commands also has an optional `ephemeral` field which decides if the message should be hidden from others. Defaults to `False`, so other users will see it. If there is no ephemeral option and the command is on the user app, it will always be hidden.

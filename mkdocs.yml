@@ -22,6 +22,14 @@ theme:
       primary: blue
       accent: deep orange
 
+nav:
+  - About Nizubot: index.md
+  - Utility Commands:
+      - /currency: commands/utility/currency.md
+      - /remind: commands/utility/remind.md
+      - /time_format: commands/utility/time_format.md
+      - /timezone: commands/utility/timezone.md
+
 markdown_extensions:
   - attr_list
   - admonition
@@ -48,3 +56,5 @@ extra:
   social:
     - icon: simple/discord
       link: https://discord.com/invite/aF3sqRN5Ja
+    - icon: simple/github
+      link: https://github.com/InZan17/Nizubot-Rust
