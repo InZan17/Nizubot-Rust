@@ -29,6 +29,8 @@ nav:
       - /remind: commands/utility/remind.md
       - /time_format: commands/utility/time_format.md
       - /timezone: commands/utility/timezone.md
+  - Fun Commands:
+      - /genmeme: commands/fun/genmeme.md
 
 markdown_extensions:
   - attr_list
