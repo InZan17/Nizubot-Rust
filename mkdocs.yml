@@ -24,6 +24,7 @@ theme:
 
 nav:
   - About Nizubot: index.md
+  - Reading the docs: reading_docs.md
   - Utility Commands:
       - /currency: commands/utility/currency.md
       - /remind: commands/utility/remind.md

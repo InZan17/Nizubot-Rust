@@ -7,7 +7,7 @@ Command is available on the user app.
 Lists a few popular currencies. For a full list of supported currencies, click [here](https://docs.openexchangerates.org/reference/supported-currencies){:target="_blank"}.
 
 
-## `/currency convert <amount> <from> <to>`
+## `/currency convert`
 **Parameters**
 
 - `amount` — Amount of currency you wanna convert.

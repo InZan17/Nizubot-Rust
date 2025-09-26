@@ -3,33 +3,29 @@ This command is used to generate memes.
 
 Command is available on the user app.
 
-## `/genmeme brick <user? | image>`
+## `/genmeme brick`
 **Parameters**
 
-- `user` — The user to throw the brick. (Can't be used if `image` is used)
-- `image` — The image to throw the brick. (Can't be used if `user` is used)
+- `user? | image` — The user/image to throw the brick.
 
-Generates a gif of someone throwing a brick. You cannot use the `user` and `image` parameter at the same time. If none are picked, the `user` parameter will default to you.
+Generates a gif of someone throwing a brick.
 
 
-## `/genmeme petpet <user? | image>`
+## `/genmeme petpet`
 **Parameters**
 
-- `user` — The user to be petted. (Can't be used if `image` is used)
-- `image` — The image to be petted. (Can't be used if `user` is used)
+- `user? | image` — The user/image to be petted.
 
-Generates a gif of someone getting petted. You cannot use the `user` and `image` parameter at the same time. If none are picked, the `user` parameter will default to you.
+Generates a gif of someone getting petted.
 
 
-## `/genmeme caption <caption_type> <user | image> [upper_text | bottom_text] <font_size?> <break_height?> <padding?>`
+## `/genmeme caption`
 **Parameters**
 
 - `caption_type` — The type of caption you want. (`WHAT`, `White boxes` and `Overlay text` available)
-- `user` — The user you want to be captioned. (Can't be used if `image` is used)
-- `image` — The image you want to be captioned. (Can't be used if `user` is used)
-- `upper_text` — The text at the top. (Optional if `bottom_text` is used)
-- `bottom_text` — The text at the bottom. (Optional if `upper_text` is used)
-- `font_size` — The size of the font. 
+- `user | image` — The user/image you want to be captioned.
+- `[ upper_text | bottom_text ]` — The text written at the top and bottom.
+- `font_size?` — The size of the font. 
 
     Defaults:
 
@@ -40,9 +36,9 @@ Generates a gif of someone getting petted. You cannot use the `user` and `image`
     - `caption_type` = `Overlay text`: height / 10
 
 
-- `break_height` — Height of the space between new lines. (Default: font_size / 4)
+- `break_height?` — Height of the space between new lines. (Default: font_size / 4)
 
-- `padding` — Empty space around the text.
+- `padding?` — Empty space around the text.
 
     Defaults:
 
@@ -52,7 +48,7 @@ Generates a gif of someone getting petted. You cannot use the `user` and `image`
     
     - `caption_type` = `Overlay text`: height / 30
 
-Adds captions to an image / users pfp. You must pick only one of the `user` and `image` parameters, you cannot pick both or none. You must also select at least one of the `upper_text` and `bottom_text` parameters, you may pick both if you want.
+Adds captions to an image / users pfp.
 
 ### Caption types
 === "WHAT"

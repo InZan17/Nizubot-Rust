@@ -2,17 +2,17 @@
 This command is used to create/manage reminders.
 
 
-## `/remind add <duration> <message?> <looped?>`
+## `/remind add`
 **Parameters**
 
 - `duration` — When the reminder should go off. (Example: 1s 2m 3h 4d 5w 6y)
-- `message` — Message to send with the reminder. (Optional)
-- `looped` — If the reminder should restart once finished. (Default: False)
+- `message?` — Message to send with the reminder.
+- `looped?` — If the reminder should restart once finished. (Default: False)
 
 Create a new reminder.
 
 
-## `/remind remove <index>`
+## `/remind remove`
 **Parameters**
 
 - `index` — The index of the reminder.

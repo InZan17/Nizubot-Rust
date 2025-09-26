@@ -4,7 +4,7 @@ This command is used to check the time on different timezones.
 Command is available on the user app.
 
 
-## `/timezone set <timezone>`
+## `/timezone set`
 **Parameters**
 
 - `timezone` — Your timezone.
@@ -16,15 +16,15 @@ Sets your timezone.
 Removes your timezone.
 
 
-## `/timezone user <user?>`
+## `/timezone user`
 **Parameters**
 
-- `user` — User to check the timezone for. (Default: you)
+- `user?` — User to check the timezone for. (Default: you)
 
 Gets your/someones timezone.
 
 
-## `/timezone check <timezone>`
+## `/timezone check`
 **Parameters**
 
 - `timezone` — The timezone to check the time for.
