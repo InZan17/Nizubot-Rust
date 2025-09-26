@@ -10,6 +10,10 @@ Command is available on the user app.
 
 Generates a gif of someone throwing a brick.
 
+### Brick example
+![brick](/assets/brick_preview.gif){ align=center }
+
+<br>
 
 ## `/genmeme petpet`
 **Parameters**
@@ -18,11 +22,15 @@ Generates a gif of someone throwing a brick.
 
 Generates a gif of someone getting petted.
 
+### Petpet example
+![petpet](/assets/petpet_preview.gif){ align=center }
+
+<br>
 
 ## `/genmeme caption`
 **Parameters**
 
-- `caption_type` — The type of caption you want. (`WHAT`, `White boxes` and `Overlay text` available)
+- `caption_type` — The type of caption you want. (`WHAT` | `White boxes` | `Overlay text`)
 - `user | image` — The user/image you want to be captioned.
 - `[ upper_text | bottom_text ]` — The text written at the top and bottom.
 - `font_size?` — The size of the font. 
@@ -50,7 +58,7 @@ Generates a gif of someone getting petted.
 
 Adds captions to an image / users pfp.
 
-### Caption types
+### Caption examples
 === "WHAT"
     ![WHAT](/assets/what_preview.png){ align=left width=500 }
 === "White boxes"

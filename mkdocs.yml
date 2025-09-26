@@ -32,6 +32,10 @@ nav:
       - /timezone: commands/utility/timezone.md
   - Fun Commands:
       - /genmeme: commands/fun/genmeme.md
+  - Admin Commands:
+      - /clear_data: commands/admin/clear_data.md
+      - /cotd_role: commands/admin/cotd_role.md
+      - /detect_message: commands/admin/detect_message.md
 
 markdown_extensions:
   - attr_list
