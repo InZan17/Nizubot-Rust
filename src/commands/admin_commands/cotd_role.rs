@@ -14,7 +14,7 @@ use poise::{
     guild_only,
     default_member_permissions = "ADMINISTRATOR"
 )]
-pub async fn cotdrole(_ctx: Context<'_>) -> Result<(), Error> {
+pub async fn cotd_role(_ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
@@ -23,9 +23,9 @@ pub async fn cotdrole(_ctx: Context<'_>) -> Result<(), Error> {
 pub async fn create(
     ctx: Context<'_>,
     #[max_length = 100]
-    #[description = "The name of the role. <cotd> is replaced by the name of the color. (Default: <cotd>)"]
+    #[description = "What should the name of the role be? (Default: \"<cotd>\")"]
     name: Option<String>,
-    #[description = "If you have an existing role you wanna change instead of creating a new one."]
+    #[description = "Which existing role should I be updating? (If you pick none I will create a new role)"]
     role: Option<Role>,
 ) -> Result<(), Error> {
     let name = name.unwrap_or("<cotd>".to_owned());
@@ -107,7 +107,8 @@ pub async fn create(
 #[poise::command(slash_command)]
 pub async fn remove(
     ctx: Context<'_>,
-    #[description = "If you wanna delete the role from the guild or not. (Default: False)"] delete: Option<bool>,
+    #[description = "Do you want me to delete the role from the guild? (Default: False)"]
+    delete: Option<bool>,
 ) -> Result<(), Error> {
     let data = ctx.data();
 

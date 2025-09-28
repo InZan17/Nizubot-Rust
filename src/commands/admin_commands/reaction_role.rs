@@ -26,9 +26,9 @@ pub async fn reaction_role(_ctx: Context<'_>) -> Result<(), Error> {
 )]
 pub async fn add(
     ctx: Context<'_>,
-    #[description = "ID of the message."] message_id: Message,
-    #[description = "The emoji to react with."] emoji: ReactionType,
-    #[description = "Role to give."] role: Role,
+    #[description = "Which message do you wanna add a reaction role to?"] message_id: Message,
+    #[description = "Which emoji do you want me to react with?"] emoji: ReactionType,
+    #[description = "Which role do you want me to give?"] role: Role,
 ) -> Result<(), Error> {
     if let Err(err) = message_id.react(ctx, emoji.clone()).await {
         ctx.send(CreateReply::default().content(format!("Sorry, I couldn't react with the emoji you provided. Please make sure to provide an actual emoji.\n\nHere's the error: {}", err)).ephemeral(true)
@@ -63,7 +63,7 @@ pub async fn add(
         return Ok(());
     }
 
-    ctx.send(CreateReply::default().content(format!("Sucessfully added reaction role!\nTo remove the reaction role, simply remove my reaction or run `/reaction_role remove`.")).ephemeral(true)
+    ctx.send(CreateReply::default().content(format!("Successfully added reaction role!\nTo remove the reaction role, simply remove my reaction or run `/reaction_role remove`.")).ephemeral(true)
     ).await?;
 
     Ok(())
@@ -76,9 +76,9 @@ pub async fn add(
 )]
 pub async fn remove(
     ctx: Context<'_>,
-    #[description = "ID of the message."] message_id: Message,
-    #[description = "The emoji to remove."] emoji: Option<ReactionType>,
-    #[description = "The role to remove."] role: Option<RoleId>,
+    #[description = "Which message do you wanna remove a reaction role from?"] message_id: Message,
+    #[description = "What emoji does the reaction role use?"] emoji: Option<ReactionType>,
+    #[description = "What role does the reaction role use?"] role: Option<RoleId>,
 ) -> Result<(), Error> {
     if role.is_some() && emoji.is_some() {
         ctx.send(
@@ -150,7 +150,12 @@ pub async fn remove(
 
 /// List all reaction roles in this guild or for a message.
 #[poise::command(slash_command)]
-pub async fn list(ctx: Context<'_>, message_id: Option<MessageId>) -> Result<(), Error> {
+pub async fn list(
+    ctx: Context<'_>,
+    #[description = "Which message do you wanna check reaction role for?"] message_id: Option<
+        MessageId,
+    >,
+) -> Result<(), Error> {
     let guild_id = ctx.guild_id().unwrap();
 
     if let Some(message_id) = message_id {

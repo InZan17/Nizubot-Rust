@@ -12,7 +12,7 @@ use poise::{
 )]
 pub async fn cotd(
     ctx: Context<'_>,
-    #[description = "The day you wanna get the color of."] day: Option<u64>,
+    #[description = "Which day do you wanna check the color for?"] day: Option<u64>,
     #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
     let ephemeral = ephemeral.unwrap_or(false);

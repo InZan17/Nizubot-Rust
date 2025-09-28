@@ -12,7 +12,7 @@ use crate::{Context, Error};
 pub async fn eval(
     ctx: Context<'_>,
     #[max_length = 200]
-    #[description = "The math expression"]
+    #[description = "What's the math expression you want me to solve?"]
     expression: String,
     #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {

@@ -42,7 +42,7 @@ pub async fn get(ctx: Context<'_>) -> Result<(), Error> {
 #[poise::command(slash_command)]
 pub async fn add(
     ctx: Context<'_>,
-    #[description = "What to add."] add: String,
+    #[description = "What should I add to the log?"] message: String,
 ) -> Result<(), Error> {
     let id;
     let log_type;
@@ -59,7 +59,7 @@ pub async fn add(
         .log_manager
         .add_log(
             &id,
-            add,
+            message,
             LogType::Info,
             LogSource::Custom(ctx.author().id.to_string()),
         )

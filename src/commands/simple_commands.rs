@@ -4,10 +4,10 @@ mod cotd;
 mod echo;
 mod eval;
 mod icon;
-mod joinorder;
+mod join_order;
 mod ping;
 mod rng;
-mod sleepcalc;
+mod sleep_calc;
 
 pub fn get_commands() -> Commands {
     return vec![
@@ -15,8 +15,8 @@ pub fn get_commands() -> Commands {
         rng::rng(),
         icon::icon(),
         echo::echo(),
-        sleepcalc::sleepcalc(),
-        joinorder::joinorder(),
+        sleep_calc::sleep_calc(),
+        join_order::join_order(),
         cotd::cotd(),
         eval::eval(),
     ];

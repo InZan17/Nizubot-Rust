@@ -245,12 +245,12 @@ pub async fn genmeme(_ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-/// Generate a gif of some user throwing a brick.
+/// Generate a gif of someone throwing a brick.
 #[poise::command(slash_command)]
 pub async fn brick(
     ctx: Context<'_>,
-    #[description = "The user to throw the brick."] user: Option<User>,
-    #[description = "The image to throw the brick."] image: Option<Attachment>,
+    #[description = "Which user should throw the brick?"] user: Option<User>,
+    #[description = "Which image should throw the brick?"] image: Option<Attachment>,
     #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
     let ephemeral = ephemeral.unwrap_or(false);
@@ -303,12 +303,12 @@ pub async fn brick(
 
 const PETPET_TITLES: [&str; 3] = ["PETTHE<USER>", "rt to pet <user>", "mmmm myes pet <user>"];
 
-/// Generate a gif of some user getting petted.
+/// Generate a gif of someone getting petted.
 #[poise::command(slash_command)]
 pub async fn petpet(
     ctx: Context<'_>,
-    #[description = "The user to be petted."] user: Option<User>,
-    #[description = "The image to be petted."] image: Option<Attachment>,
+    #[description = "Which user should be petted?"] user: Option<User>,
+    #[description = "Which image should be petted?"] image: Option<Attachment>,
     #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
     let ephemeral = ephemeral.unwrap_or(false);
@@ -391,17 +391,18 @@ impl CaptionType {
 #[poise::command(slash_command)]
 pub async fn caption(
     ctx: Context<'_>,
-    #[description = "Which type of caption you want."] caption_type: CaptionType,
-    #[description = "The profile picture to be captioned."] user: Option<User>,
-    #[description = "The image to be captioned."] image: Option<Attachment>,
-    #[description = "What the upper text should be. (type \"\\n\" to make a new line.)"] upper_text: Option<String>,
-    #[description = "What the bottom text should be. (type \"\\n\" to make a new line.)"]
+    #[description = "Which type of caption do you want?"] caption_type: CaptionType,
+    #[description = "Which user should be captioned?"] user: Option<User>,
+    #[description = "Which image should be captioned?"] image: Option<Attachment>,
+    #[description = "What should the text at the top be? (type \"\\n\" to make a new line.)"]
+    upper_text: Option<String>,
+    #[description = "What should the text at the bottom be? (type \"\\n\" to make a new line.)"]
     bottom_text: Option<String>,
-    #[description = "Size of the font. (WHAT: width/7, Boxes: width/10, Overlay: height/10)"]
+    #[description = "What should the size of the font be? (WHAT: width/7, Boxes: width/10, Overlay: height/10)"]
     font_size: Option<String>,
-    #[description = "How big the space between new lines should be. (Default: fontsize/4)"]
+    #[description = "How big should the space between new lines be? (Default: font_size/4)"]
     break_height: Option<String>,
-    #[description = "Amount of empty space around the text. (WHAT: width/9, Boxes: width/20, Overlay: height/30)"]
+    #[description = "How much empty space should be around the text? (WHAT: width/9, Boxes: width/20, Overlay: height/30)"]
     padding: Option<String>,
     #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {

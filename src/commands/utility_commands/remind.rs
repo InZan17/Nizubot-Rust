@@ -25,10 +25,10 @@ pub async fn remind(_: Context<'_>) -> Result<(), Error> {
 pub async fn add(
     ctx: Context<'_>,
     #[max_length = 50]
-    #[description = "When do you want me to remind you? Example: 1s 2m 3h 4d 5w 6y"]
+    #[description = "When do you want me to remind you? (Example: 1s 2m 3h 4d 5w 6y)"]
     duration: String,
     #[max_length = 128]
-    #[description = "Message of the reminder."]
+    #[description = "What do you want me to say in the reminder?"]
     message: Option<String>,
     #[description = "Should I put this reminder on a loop? (Default: False)"] looped: Option<bool>,
 ) -> Result<(), Error> {
@@ -133,7 +133,7 @@ pub async fn add(
 #[poise::command(slash_command)]
 pub async fn remove(
     ctx: Context<'_>,
-    #[description = "Which reminder to remove. (See reminders with /remind list)"] index: u8,
+    #[description = "Which reminder should I remove? (See reminders with /remind list)"] index: u8,
 ) -> Result<(), Error> {
     let guild_id = ctx.guild_id();
 

@@ -24,14 +24,14 @@ pub async fn detect_message(_ctx: Context<'_>) -> Result<(), Error> {
 )]
 pub async fn add(
     ctx: Context<'_>,
-    #[description = "How the detection will work."] detect_type: DetectType,
+    #[description = "How should the detection happen?"] detect_type: DetectType,
     #[max_length = 50]
-    #[description = "What I will detect."]
+    #[description = "What should I detect?"]
     key: String,
     #[max_length = 500]
-    #[description = "What I will respond with after detecting it."]
+    #[description = "What will I respond with after detecting it?"]
     response: String,
-    #[description = "If my detection should be case-sensitive. (Default: False)"]
+    #[description = "Should my detection be case-sensitive? (Default: False)"]
     case_sensitive: Option<bool>,
 ) -> Result<(), Error> {
     let case_sensitive = case_sensitive.unwrap_or(false);
@@ -84,7 +84,7 @@ pub async fn add(
 #[poise::command(slash_command)]
 pub async fn remove(
     ctx: Context<'_>,
-    #[description = "Which detector you wanna remove."] index: u8,
+    #[description = "Which detector do you want me to remove?"] index: u8,
 ) -> Result<(), Error> {
     let id;
 

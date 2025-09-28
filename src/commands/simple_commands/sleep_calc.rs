@@ -30,22 +30,23 @@ impl TimeFormat {
     install_context = "Guild|User",
     interaction_context = "Guild|BotDm|PrivateChannel"
 )]
-pub async fn sleepcalc(_ctx: Context<'_>) -> Result<(), Error> {
+pub async fn sleep_calc(_ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-/// Calculate the best time to go to sleep.
+/// Calculates the best time to go to sleep.
 #[poise::command(slash_command)]
 pub async fn sleep(
     ctx: Context<'_>,
-    #[description = "Hour of the time you wanna wake up."]
+    #[description = "At what hour do you wanna wake up?"]
     #[max = 24]
     #[min = 0]
     wake_hour: i16,
-    #[description = "Miniute of the time you wanna wake up."]
+    #[description = "At what minute do you wanna wake up?"]
     #[max = 60]
     #[min = 0]
     wake_minute: i16,
+    #[description = "What format is the time in?"] time_format: TimeFormat,
     #[description = "How many minutes does it take for you to fall asleep? (Default: 15)"]
     #[max = 120]
     #[min = 0]
@@ -54,7 +55,6 @@ pub async fn sleep(
     #[max = 720]
     #[min = 0]
     cycle_length: Option<i16>,
-    #[description = "What format the time is in."] format: TimeFormat,
     #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
     let sleep_duration = sleep_duration.unwrap_or(15);
@@ -64,7 +64,7 @@ pub async fn sleep(
         time_string(time_after_cycle(
             wake_hour,
             wake_minute,
-            format,
+            time_format,
             sleep_duration,
             cycle_length,
             -0,
@@ -72,7 +72,7 @@ pub async fn sleep(
         time_string(time_after_cycle(
             wake_hour,
             wake_minute,
-            format,
+            time_format,
             sleep_duration,
             cycle_length,
             -1,
@@ -80,7 +80,7 @@ pub async fn sleep(
         time_string(time_after_cycle(
             wake_hour,
             wake_minute,
-            format,
+            time_format,
             sleep_duration,
             cycle_length,
             -2,
@@ -88,7 +88,7 @@ pub async fn sleep(
         time_string(time_after_cycle(
             wake_hour,
             wake_minute,
-            format,
+            time_format,
             sleep_duration,
             cycle_length,
             -3,
@@ -96,7 +96,7 @@ pub async fn sleep(
         time_string(time_after_cycle(
             wake_hour,
             wake_minute,
-            format,
+            time_format,
             sleep_duration,
             cycle_length,
             -4,
@@ -104,7 +104,7 @@ pub async fn sleep(
         time_string(time_after_cycle(
             wake_hour,
             wake_minute,
-            format,
+            time_format,
             sleep_duration,
             cycle_length,
             -5,
@@ -112,7 +112,7 @@ pub async fn sleep(
         time_string(time_after_cycle(
             wake_hour,
             wake_minute,
-            format,
+            time_format,
             sleep_duration,
             cycle_length,
             -6,
@@ -128,18 +128,19 @@ pub async fn sleep(
     Ok(())
 }
 
-/// Calculate the best time to wake up.
+/// Calculates the best time to wake up.
 #[poise::command(slash_command)]
 pub async fn wake(
     ctx: Context<'_>,
-    #[description = "Hour of the time you wanna go to sleep."]
+    #[description = "At what hour do you wanna go to sleep?"]
     #[max = 24]
     #[min = 0]
     sleep_hour: i16,
-    #[description = "Miniute of the time you wanna go to sleep."]
+    #[description = "At what minute do you wanna go to sleep?"]
     #[max = 60]
     #[min = 0]
     sleep_minute: i16,
+    #[description = "What format is the time in?"] time_format: TimeFormat,
     #[description = "How many minutes does it take for you to fall asleep? (Default: 15)"]
     #[max = 120]
     #[min = 0]
@@ -148,7 +149,6 @@ pub async fn wake(
     #[max = 720]
     #[min = 0]
     cycle_length: Option<i16>,
-    #[description = "What format the time is in."] format: TimeFormat,
     #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
     let sleep_duration = sleep_duration.unwrap_or(15);
@@ -158,7 +158,7 @@ pub async fn wake(
         time_string(time_after_cycle(
             sleep_hour,
             sleep_minute,
-            format,
+            time_format,
             sleep_duration,
             cycle_length,
             0,
@@ -166,7 +166,7 @@ pub async fn wake(
         time_string(time_after_cycle(
             sleep_hour,
             sleep_minute,
-            format,
+            time_format,
             sleep_duration,
             cycle_length,
             1,
@@ -174,7 +174,7 @@ pub async fn wake(
         time_string(time_after_cycle(
             sleep_hour,
             sleep_minute,
-            format,
+            time_format,
             sleep_duration,
             cycle_length,
             2,
@@ -182,7 +182,7 @@ pub async fn wake(
         time_string(time_after_cycle(
             sleep_hour,
             sleep_minute,
-            format,
+            time_format,
             sleep_duration,
             cycle_length,
             3,
@@ -190,7 +190,7 @@ pub async fn wake(
         time_string(time_after_cycle(
             sleep_hour,
             sleep_minute,
-            format,
+            time_format,
             sleep_duration,
             cycle_length,
             4,
@@ -198,7 +198,7 @@ pub async fn wake(
         time_string(time_after_cycle(
             sleep_hour,
             sleep_minute,
-            format,
+            time_format,
             sleep_duration,
             cycle_length,
             5,
@@ -206,7 +206,7 @@ pub async fn wake(
         time_string(time_after_cycle(
             sleep_hour,
             sleep_minute,
-            format,
+            time_format,
             sleep_duration,
             cycle_length,
             6,

@@ -9,10 +9,10 @@ use crate::{Context, Error};
 
 /// See what order people joined at.
 #[poise::command(slash_command, guild_only)]
-pub async fn joinorder(
+pub async fn join_order(
     ctx: Context<'_>,
-    #[description = "Which user you wanna check."] user: Option<UserId>,
-    #[description = "Which index you wanna check."] index: Option<usize>,
+    #[description = "Which user do you wanna check?"] user: Option<UserId>,
+    #[description = "Which which index you wanna check?"] index: Option<usize>,
 ) -> Result<(), Error> {
     if user.is_some() && index.is_some() {
         ctx.send(

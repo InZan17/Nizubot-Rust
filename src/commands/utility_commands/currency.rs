@@ -17,13 +17,13 @@ pub async fn currency(_: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-/// Convert currencies from one to another.
+/// Convert currencies from one currency to another.
 #[poise::command(slash_command)]
 pub async fn convert(
     ctx: Context<'_>,
-    #[description = "The amount of currency you wanna convert."] amount: f64,
-    #[description = "Currency to convert from."] from: String,
-    #[description = "Currency to convert to."] to: String,
+    #[description = "How much currency do you wanna convert?"] amount: f64,
+    #[description = "Which currency do you wanna convert from?"] from: String,
+    #[description = "Which currency do you wanna convert to?"] to: String,
     #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
     let ephemeral = ephemeral.unwrap_or(false);

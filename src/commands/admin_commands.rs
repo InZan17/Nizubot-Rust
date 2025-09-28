@@ -12,7 +12,7 @@ mod reaction_role;
 pub fn get_commands() -> Commands {
     return vec![
         message::message(),
-        cotd_role::cotdrole(),
+        cotd_role::cotd_role(),
         lua_command::lua_command(),
         clear_data::clear_data(),
         log::log(),

@@ -20,7 +20,7 @@ pub async fn icon(_ctx: Context<'_>) -> Result<(), Error> {
 #[poise::command(slash_command)]
 pub async fn user(
     ctx: Context<'_>,
-    #[description = "The user to get the profile picture from."] user: Option<User>,
+    #[description = "Which user do you want the pfp from?"] user: Option<User>,
     #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
     let ephemeral = ephemeral.unwrap_or(false);
@@ -100,7 +100,7 @@ pub async fn guild(
 #[poise::command(slash_command)]
 pub async fn emoji(
     ctx: Context<'_>,
-    #[description = "The custom emoji to get the icon from."] emoji: Emoji,
+    #[description = "Which custom emoji do you want the icon from?"] emoji: Emoji,
     #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
     let ephemeral = ephemeral.unwrap_or(false);

@@ -10,8 +10,8 @@ use rand::Rng;
 )]
 pub async fn rng(
     ctx: Context<'_>,
-    #[description = "Smallest possible number."] min: Option<i32>,
-    #[description = "Biggest possible number."] max: Option<i32>,
+    #[description = "What should be the smallest possible number? (Default: 0)"] min: Option<i32>,
+    #[description = "What should be the biggest possible number? (Default: 0)"] max: Option<i32>,
     #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
     let ephemeral = ephemeral.unwrap_or(false);

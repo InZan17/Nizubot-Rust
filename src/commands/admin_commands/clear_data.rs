@@ -2,7 +2,23 @@ use crate::{utils::IdType, Context, Error};
 
 /// Clears all data I have on this guild/user. (Things such as reminders and other data will be reset.)
 #[poise::command(slash_command, default_member_permissions = "ADMINISTRATOR")]
-pub async fn clear_data(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn clear_data(
+    ctx: Context<'_>,
+    #[description = "Are you sure you want to clear the data?"] confirmation: Option<bool>,
+) -> Result<(), Error> {
+    let confirmation = confirmation.unwrap_or(false);
+
+    if !confirmation {
+        if ctx.guild_id().is_some() {
+            ctx.reply("Are you sure you wanna clear my data about this guild? Set the `confirmation` parameter to `True` to confirm.")
+                .await?;
+        } else {
+            ctx.reply("Are you sure you wanna clear my data about you? Set the `confirmation` parameter to `True` to confirm.")
+                .await?;
+        }
+        return Ok(());
+    }
+
     let db = &ctx.data().db;
 
     let id;

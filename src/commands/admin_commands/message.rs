@@ -25,7 +25,7 @@ pub async fn message(_ctx: Context<'_>) -> Result<(), Error> {
 )]
 pub async fn analyze(
     ctx: Context<'_>,
-    #[description = "The message you want to get information from."] message_id: Message,
+    #[description = "Which message do you want information from?"] message_id: Message,
 ) -> Result<(), Error> {
     let data = serde_json::to_string_pretty(&message_id).unwrap();
     let data_bytes = data.as_bytes();
@@ -43,9 +43,9 @@ pub async fn analyze(
 pub async fn send(
     ctx: Context<'_>,
     #[max_length = 2000]
-    #[description = "Contents of the message."]
+    #[description = "What should the content of the message be?"]
     content: Option<String>,
-    #[description = "Embeds of the message."] embeds: Option<String>,
+    #[description = "What embeds should the message have?"] embeds: Option<String>,
 ) -> Result<(), Error> {
     let empty_workaround = content.is_none() && embeds.is_none();
 
@@ -110,11 +110,11 @@ pub async fn send(
 )]
 pub async fn edit(
     ctx: Context<'_>,
-    #[description = "The message you want to edit."] mut message_id: Message,
+    #[description = "Which message do you wanna edit?"] mut message_id: Message,
     #[max_length = 2000]
-    #[description = "Contents of the message."]
+    #[description = "What should the content of the message be?"]
     content: Option<String>,
-    #[description = "Embeds of the message."] embeds: Option<String>,
+    #[description = "What embeds should the message have?"] embeds: Option<String>,
 ) -> Result<(), Error> {
     if message_id.author != **ctx.cache().current_user() {
         ctx.send(
@@ -129,7 +129,7 @@ pub async fn edit(
     if message_id.kind != MessageType::Regular {
         ctx.send(
             CreateReply::default()
-                .content("My message must not be from a command.")
+                .content("I can only edit messages that aren't replies / directly from a command.")
                 .ephemeral(true),
         )
         .await?;
@@ -174,7 +174,7 @@ pub async fn edit(
     if let Err(err) = message_result {
         ctx.send(
             CreateReply::default()
-                .content(format!("An error has occured:\n{}", err))
+                .content(format!("An error has occurred:\n{}", err))
                 .ephemeral(true),
         )
         .await?;

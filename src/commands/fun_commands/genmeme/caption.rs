@@ -44,9 +44,9 @@ pub async fn caption(
         return Err(Error::from("`font_size` cannot be a negative number."));
     }
 
-    evalexpr::eval_empty_with_context_mut(&format!("fontsize = {font_size}"), &mut context)?;
+    evalexpr::eval_empty_with_context_mut(&format!("font_size = {font_size}"), &mut context)?;
 
-    let break_height_expr = break_height_expr.unwrap_or_else(|| "fontsize/4".to_owned());
+    let break_height_expr = break_height_expr.unwrap_or_else(|| "font_size/4".to_owned());
     let break_height = match evalexpr::eval_number_with_context(&break_height_expr, &context) {
         Ok(ok) => ok,
         Err(err) => {
