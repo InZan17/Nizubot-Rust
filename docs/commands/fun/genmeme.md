@@ -6,7 +6,7 @@ Command is available on the user app.
 ## `/genmeme brick`
 **Parameters**
 
-- `user? | image` — The user/image to throw the brick.
+- `user? | image` — The user/image to throw the brick. (Default: `user`: You)
 
 Generates a gif of someone throwing a brick.
 
@@ -18,7 +18,7 @@ Generates a gif of someone throwing a brick.
 ## `/genmeme petpet`
 **Parameters**
 
-- `user? | image` — The user/image to be petted.
+- `user? | image` — The user/image to be petted. (Default: `user`: You)
 
 Generates a gif of someone getting petted.
 

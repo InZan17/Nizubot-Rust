@@ -40,6 +40,15 @@ nav:
       - /manage_reminders: commands/admin/manage_reminders.md
       - /message: commands/admin/message.md
       - /reaction_role: commands/admin/reaction_role.md
+  - Simple Commands:
+      - /cotd: commands/simple/cotd.md
+      - /echo: commands/simple/echo.md
+      - /eval: commands/simple/eval.md
+      - /icon: commands/simple/icon.md
+      - /join_order: commands/simple/join_order.md
+      - /ping: commands/simple/ping.md
+      - /rng: commands/simple/rng.md
+      - /sleep_calc: commands/simple/sleep_calc.md
 
 markdown_extensions:
   - attr_list

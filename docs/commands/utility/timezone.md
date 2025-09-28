@@ -19,7 +19,7 @@ Removes your timezone.
 ## `/timezone user`
 **Parameters**
 
-- `user?` — User to check the timezone for. (Default: you)
+- `user?` — User to check the timezone for. (Default: You)
 
 Gets your/someones timezone.
 

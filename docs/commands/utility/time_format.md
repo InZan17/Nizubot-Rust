@@ -19,6 +19,6 @@ Removes your preferred time format.
 ## `/time_format get`
 **Parameters**
 
-- `user?` — User to check the time format for. (Default: you)
+- `user?` — User to check the time format for. (Default: You)
 
 Gets your/someones preferred time format.
