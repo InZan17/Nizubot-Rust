@@ -37,24 +37,24 @@ Generates a gif of someone getting petted.
 
     Defaults:
 
-    - `caption_type` = `WHAT`: width / 7
+    - `caption_type` = `WHAT`: "width / 7"
 
-    - `caption_type` = `White boxes`: width / 10
+    - `caption_type` = `White boxes`: "width / 10"
     
-    - `caption_type` = `Overlay text`: height / 10
+    - `caption_type` = `Overlay text`: "height / 10"
 
 
-- `break_height?` — Height of the space between new lines. (Default: font_size / 4)
+- `break_height?` — Height of the space between new lines. (Default: "font_size / 4")
 
 - `padding?` — Empty space around the text.
 
     Defaults:
 
-    - `caption_type` = `WHAT`: width / 9
+    - `caption_type` = `WHAT`: "width / 9"
 
-    - `caption_type` = `White boxes`: width / 20
+    - `caption_type` = `White boxes`: "width / 20"
     
-    - `caption_type` = `Overlay text`: height / 30
+    - `caption_type` = `Overlay text`: "height / 30"
 
 Adds captions to an image / users pfp.
 
