@@ -1,10 +1,46 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    iter,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
+use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use openssl::string;
 use poise::{
-    serenity_prelude::{Attachment, CreateAttachment, Mentionable},
+    serenity_prelude::{self, Attachment, CreateAttachment, Mentionable},
     CreateReply,
 };
+
+async fn autocomplete_command_name(
+    ctx: Context<'_>,
+    partial: &str,
+) -> Vec<poise::serenity_prelude::AutocompleteChoice> {
+    let Some(guild_id) = ctx.guild_id() else {
+        return vec![];
+    };
+
+    let guild_lua_data = ctx.data().lua_manager.get_guild_lua_data(guild_id).await;
+
+    let mut commands_lock = guild_lua_data.commands.lock().await;
+
+    let Ok(commands) = commands_lock.get_commands(&ctx.data().db).await else {
+        return vec![];
+    };
+
+    let matcher = SkimMatcherV2::default().ignore_case();
+
+    let mut keys = commands
+        .keys()
+        .cloned()
+        .filter(|key| matcher.fuzzy_match(key, partial).is_some())
+        .collect::<Vec<_>>();
+
+    // calling fuzzy_match again for a second time is fine cause it does caching
+    keys.sort_by_key(|key| matcher.fuzzy_match(key, partial).unwrap_or(-1));
+
+    keys.into_iter()
+        .map(|key| serenity_prelude::AutocompleteChoice::new(key.to_string(), key))
+        .collect()
+}
 
 use crate::{managers::lua_manager::CommandOption, Context, Error};
 
@@ -96,7 +132,7 @@ pub async fn create(
 #[poise::command(slash_command)]
 pub async fn update(
     ctx: Context<'_>,
-    name: String,
+    #[autocomplete = "autocomplete_command_name"] name: String,
     description: String,
     params: Option<String>,
     lua_file: Attachment,
@@ -165,7 +201,10 @@ pub async fn update(
 
 /// Updates an existing custom command.
 #[poise::command(slash_command)]
-pub async fn delete(ctx: Context<'_>, command_name: String) -> Result<(), Error> {
+pub async fn delete(
+    ctx: Context<'_>,
+    #[autocomplete = "autocomplete_command_name"] command_name: String,
+) -> Result<(), Error> {
     let data = ctx.data();
 
     data.lua_manager
@@ -184,7 +223,10 @@ pub async fn delete(ctx: Context<'_>, command_name: String) -> Result<(), Error>
 
 /// Updates an existing custom command.
 #[poise::command(slash_command)]
-pub async fn download(ctx: Context<'_>, command_name: String) -> Result<(), Error> {
+pub async fn download(
+    ctx: Context<'_>,
+    #[autocomplete = "autocomplete_command_name"] command_name: String,
+) -> Result<(), Error> {
     let data = ctx.data();
 
     let guild_id = ctx.guild_id().unwrap();
