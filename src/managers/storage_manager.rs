@@ -15,13 +15,6 @@ use tokio::{
 
 use crate::{utils::get_seconds, Error};
 
-pub struct DataDirectories {}
-impl DataDirectories {
-    pub fn cotd_guilds() -> Vec<&'static str> {
-        vec!["cotd_guilds"]
-    }
-}
-
 //TODO simple docs for the functions
 
 pub fn storage_manager_loop(_arc_ctx: Arc<Context>, storage_manager: Arc<StorageManager>) {
