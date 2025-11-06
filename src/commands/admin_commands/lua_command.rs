@@ -38,6 +38,7 @@ async fn autocomplete_command_name(
     keys.sort_by_key(|key| matcher.fuzzy_match(key, partial).unwrap_or(-1));
 
     keys.into_iter()
+        .rev() // Reverse because higher score is better.
         .map(|key| serenity_prelude::AutocompleteChoice::new(key.to_string(), key))
         .collect()
 }
