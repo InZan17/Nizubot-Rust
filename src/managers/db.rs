@@ -207,8 +207,8 @@ impl SurrealClient {
     pub async fn get_all_guild_lua_commands(
         &self,
         guild_id: GuildId,
-    ) -> Result<Vec<LuaCommandInfo>, crate::Error> {
-        let lua_command_infos: Option<Vec<LuaCommandInfo>> = self
+    ) -> Result<HashMap<String, LuaCommandInfo>, crate::Error> {
+        let lua_command_infos: Option<_> = self
             .query(format!(
                 "SELECT VALUE lua_commands FROM guild:{guild_id} WHERE lua_commands;"
             ))
@@ -218,8 +218,24 @@ impl SurrealClient {
         Ok(lua_command_infos.unwrap_or_default())
     }
 
+    pub async fn get_guild_lua_command(
+        &self,
+        command_name: &str,
+        guild_id: GuildId,
+    ) -> Result<Option<LuaCommandInfo>, crate::Error> {
+        let lua_command_infos: Option<_> = self
+            .query(format!(
+                "SELECT VALUE lua_commands.{command_name} FROM guild:{guild_id} WHERE lua_commands.{command_name};"
+            ))
+            .await?
+            .take(0)?;
+
+        Ok(lua_command_infos.unwrap_or_default())
+    }
+
     pub async fn add_guild_lua_command(
         &self,
+        command_name: &str,
         lua_command_info: &LuaCommandInfo,
         guild_id: GuildId,
     ) -> Result<(), crate::Error> {
@@ -228,7 +244,7 @@ impl SurrealClient {
         //TODO: Perhaps check for error.
         let _responses = self
             .query(format!(
-                "UPDATE guild:{guild_id} SET lua_commands += {lua_command_info_string};"
+                "UPDATE guild:{guild_id} SET lua_commands.{command_name} = {lua_command_info_string};"
             ))
             .await?;
 
@@ -238,26 +254,13 @@ impl SurrealClient {
     pub async fn remove_guild_lua_command(
         &self,
         guild_id: GuildId,
-        index: usize,
+        command_name: &str,
     ) -> Result<(), Error> {
-        let err = self
+        let _responses = self
             .query(format!(
-            "LET $commands = (SELECT VALUE lua_commands FROM guild:{guild_id} WHERE lua_commands);
-
-            IF array::len($commands) == 0 {{
-                THROW \"Index isn't valid.\";
-            }} ELSE IF array::len($commands[0]) <= {index} {{
-                THROW \"Index isn't valid.\";
-            }} ELSE {{
-                RETURN (UPDATE guild:{guild_id} SET lua_commands = array::remove(lua_commands, {index}));
-            }};"
+                "UPDATE guild:{guild_id} SET lua_commands.{command_name} = NONE;"
             ))
-            .await?
-            .take_err(1);
-
-        if let Some(err) = err {
-            return Err(err);
-        }
+            .await?;
 
         Ok(())
     }

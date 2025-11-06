@@ -1,3 +1,5 @@
+#![feature(once_cell_try)]
+
 mod commands;
 mod managers;
 mod tokens;
@@ -5,7 +7,7 @@ pub mod utils;
 
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc,
+    Arc, RwLock,
 };
 
 use managers::{
@@ -25,7 +27,7 @@ use utils::IdType;
 
 use crate::managers::{
     detector_manager::DetectorManager, log_manager::log_manager_loop,
-    reaction_manager::ReactionManager,
+    lua_manager::lua_manager_loop, reaction_manager::ReactionManager,
 };
 
 pub struct Data {
@@ -71,6 +73,7 @@ async fn event_handler<'thing>(
                     data.remind_manager.clone(),
                     data.log_manager.clone(),
                 );
+                lua_manager_loop(data.lua_manager.clone());
                 data.started_loops.swap(true, Ordering::Relaxed);
             }
             // TODO: Look through all relevant data and check if its still valid.

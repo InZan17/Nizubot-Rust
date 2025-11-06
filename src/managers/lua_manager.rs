@@ -1,13 +1,20 @@
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    hint::assert_unchecked,
+    sync::{Arc, OnceLock},
+    time::Duration,
+};
 
-use mlua::{FromLua, IntoLua, Lua, UserData, UserDataMethods};
+use mlua::{AsChunk, FromLua, Function, IntoLua, Lua, UserData, UserDataMethods};
 use poise::serenity_prelude::{
     self, CacheHttp, CommandDataOptionValue, CommandInteraction, CommandOptionType, CreateCommand,
     CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseMessage, GuildId,
+    Http,
 };
 use serde::{Deserialize, Serialize};
+use tokio::sync::{Mutex, MutexGuard, RwLock};
 
-use crate::Error;
+use crate::{utils::TtlMap, Error};
 
 use super::db::SurrealClient;
 
@@ -20,44 +27,68 @@ pub struct CommandOption {
     pub required: bool,
 }
 
-impl FromLua for CommandOption {
-    fn from_lua(value: mlua::Value, _lua: &Lua) -> mlua::Result<Self> {
-        let Some(table) = value.as_table() else {
-            return Err(mlua::Error::FromLuaConversionError {
-                from: value.type_name(),
-                to: "CommandOption".to_string(),
-                message: Some("expected table".to_string()),
-            });
-        };
-        Ok(CommandOption {
-            kind: table.get("type")?,
-            name: table.get("name")?,
-            description: table.get("description")?,
-            required: table.get::<Option<_>>("required")?.unwrap_or(false),
-        })
-    }
-}
+impl CommandOption {
+    pub fn parse_string(string: &str) -> Result<Vec<Self>, Error> {
+        let mut options = Vec::new();
+        let params = string.split(';');
+        for param in params {
+            if param.is_empty() {
+                continue;
+            }
 
-pub struct LuaCommandData {
-    pub run: mlua::Function,
-    pub description: Option<String>,
-    pub options: Vec<CommandOption>,
-}
+            let properties = param.split(':');
 
-impl FromLua for LuaCommandData {
-    fn from_lua(value: mlua::Value, _lua: &Lua) -> mlua::Result<Self> {
-        let Some(table) = value.as_table() else {
-            return Err(mlua::Error::FromLuaConversionError {
-                from: value.type_name(),
-                to: "LuaCommandData".to_string(),
-                message: Some("expected table".to_string()),
+            let mut param_name = None;
+            let mut param_type = None;
+            let mut description = None;
+            let mut required = true;
+
+            for property in properties {
+                let Some((property_name, property_value)) = property.split_once('=') else {
+                    return Err("Ur parameters are incorrectly formatted.".into());
+                };
+
+                match property_name {
+                    "name" => param_name = Some(property_value),
+                    "type" => param_type = Some(property_value),
+                    "description" => description = Some(property_value),
+                    "required" => {
+                        let lower = property_value.to_lowercase();
+                        if lower == "true".to_string() {
+                            required = true;
+                        } else if lower == "false".to_string() {
+                            required = false;
+                        } else {
+                            return Err(
+                                format!("The value for \"required\" must be either \"true\" or \"false\". You provided \"{property_value}\".").into()
+                            );
+                        }
+                    }
+                    _ => return Err(format!("\"{property_name}\" is not a valid property.").into()),
+                }
+            }
+
+            let Some(param_name) = param_name else {
+                return Err(
+                    format!("\"name\" property is missing on one of the parameters.").into(),
+                );
+            };
+
+            let Some(param_type) = param_type else {
+                return Err(
+                    format!("\"type\" property is missing on one of the parameters.").into(),
+                );
+            };
+
+            options.push(CommandOption {
+                kind: param_type.to_string(),
+                name: param_name.to_string(),
+                description: description.map(|str| str.to_string()),
+                required,
             });
-        };
-        Ok(LuaCommandData {
-            run: table.get("run")?,
-            description: table.get("description")?,
-            options: table.get::<Option<_>>("options")?.unwrap_or(Vec::new()),
-        })
+        }
+
+        Ok(options)
     }
 }
 
@@ -65,18 +96,173 @@ impl FromLua for LuaCommandData {
 pub struct LuaCommandInfo {
     pub lua_code: String,
     pub filename: String,
-    pub sub_command_data: SubCommand,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct SubCommand {
-    pub name: String,
     pub description: String,
     pub options: Vec<CommandOption>,
 }
 
+pub struct GuildLuaData {
+    pub lua: OnceLock<Lua>,
+    // TODO: Make functions take a DB and make a function to return Some of commands used by other functions.
+    pub commands: Mutex<GuildLuaCommandsHolder>,
+}
+
+pub struct GuildLuaCommandsHolder {
+    pub guild_id: GuildId,
+    pub commands: Option<HashMap<String, (LuaCommandInfo, OnceLock<Function>)>>,
+}
+
+impl GuildLuaCommandsHolder {
+    pub async fn get_commands(
+        &mut self,
+        db: &SurrealClient,
+    ) -> Result<&mut HashMap<String, (LuaCommandInfo, OnceLock<Function>)>, Error> {
+        let commands_mut = &mut self.commands;
+        match commands_mut {
+            Some(commands) => return Ok(commands),
+            None => {
+                let fetched_commands = db.get_all_guild_lua_commands(self.guild_id).await?;
+                let mapped_commands = fetched_commands
+                    .into_iter()
+                    .map(|(k, v)| (k, (v, OnceLock::new())))
+                    .collect();
+
+                *commands_mut = Some(mapped_commands);
+                return Ok(commands_mut.as_mut().unwrap());
+            }
+        }
+    }
+
+    pub async fn add_or_replace_command(
+        &mut self,
+        command_name: String,
+        lua_command_info: LuaCommandInfo,
+        db: &SurrealClient,
+    ) -> Result<(), Error> {
+        let guild_id = self.guild_id;
+        let commands = self.get_commands(db).await?;
+        db.add_guild_lua_command(&command_name, &lua_command_info, guild_id)
+            .await?;
+        commands.insert(command_name, (lua_command_info, OnceLock::new()));
+        Ok(())
+    }
+
+    pub async fn delete_command(
+        &mut self,
+        command_name: String,
+        db: &SurrealClient,
+    ) -> Result<(), Error> {
+        let guild_id = self.guild_id;
+        let commands = self.get_commands(db).await?;
+        db.remove_guild_lua_command(guild_id, &command_name).await?;
+        commands.remove(&command_name);
+        Ok(())
+    }
+
+    pub async fn update_guild_commands(
+        &mut self,
+        db: &SurrealClient,
+        http: &Http,
+    ) -> Result<(), Error> {
+        let guild_id = self.guild_id;
+        let commands = self.get_commands(db).await?;
+        if commands.is_empty() {
+            let guild_commands = http.get_guild_commands(guild_id).await?;
+            if let Some(command) = guild_commands.iter().find(|command| &command.name == "c") {
+                http.delete_guild_command(guild_id, command.id).await?;
+                return Ok(());
+            };
+        }
+
+        let mut create_command = CreateCommand::new("c").description("Custom commands");
+        for (command_name, (command_info, _)) in commands {
+            let mut sub_command = CreateCommandOption::new(
+                CommandOptionType::SubCommand,
+                command_name,
+                command_info.description.clone(),
+            );
+
+            for option in command_info.options.iter() {
+                let description = option.description.clone().unwrap_or(option.name.clone());
+
+                sub_command = sub_command.add_sub_option(
+                    CreateCommandOption::new(
+                        get_command_option_type_from_str(&option.kind)?,
+                        option.name.clone(),
+                        description,
+                    )
+                    .required(option.required),
+                );
+            }
+
+            create_command = create_command.add_option(sub_command);
+        }
+
+        http.create_guild_command(guild_id, &create_command).await?;
+
+        Ok(())
+    }
+}
+
+impl GuildLuaData {
+    pub fn new(guild_id: GuildId) -> Self {
+        Self {
+            lua: OnceLock::new(),
+            commands: Mutex::new(GuildLuaCommandsHolder {
+                guild_id,
+                commands: None,
+            }),
+        }
+    }
+
+    pub fn get_lua(&self) -> Result<Lua, mlua::Error> {
+        self.lua
+            .get_or_try_init(|| {
+                let lua = Lua::new();
+                lua.sandbox(true)?;
+                Ok(lua)
+            })
+            .cloned()
+    }
+
+    pub async fn get_command_function(
+        &self,
+        command_name: &str,
+        db: &SurrealClient,
+    ) -> Result<(Function, Lua), Error> {
+        let lua = self.get_lua()?;
+
+        let mut commands_holder = self.commands.lock().await;
+
+        let commands = commands_holder.get_commands(db).await?;
+
+        let Some((command_info, command_function)) = commands.get(command_name) else {
+            return Err(format!("No command with name: {command_name}").into());
+        };
+
+        let function = command_function.get_or_try_init(|| {
+            lua.load(&command_info.lua_code)
+                .set_name(format!(
+                    "={} (Command: {command_name})",
+                    command_info.filename
+                ))
+                .into_function()
+        })?;
+
+        return Ok((function.clone(), lua));
+    }
+}
+
 pub struct LuaManager {
     db: Arc<SurrealClient>,
+    /// Holds data such as the guild commands and the lua instance and functions.
+    ///
+    /// GuildLuaData is inside of an Arc so that the RwLock gets locked as little as possible.
+    /// This is also fine because GuildLuaData uses interior mutability.
+    ///
+    /// As long as the Arc doesn't get saved anywhere / anything uses it for longer than the duration of the TtlMap,
+    /// everything will be fine. The concern otherwise would be that the entry gets removed,
+    /// and something still has an Arc from that entry and end up doing things that wont be properly saved.
+    guild_data: RwLock<TtlMap<GuildId, Arc<GuildLuaData>>>,
     arc_ctx: Arc<serenity_prelude::Context>,
 }
 
@@ -115,7 +301,29 @@ impl UserData for ContextContainer {
 
 impl LuaManager {
     pub fn new(db: Arc<SurrealClient>, arc_ctx: Arc<serenity_prelude::Context>) -> Self {
-        Self { db, arc_ctx }
+        Self {
+            db,
+            arc_ctx,
+            guild_data: RwLock::new(TtlMap::new(Duration::from_secs(60 * 60))),
+        }
+    }
+
+    /// NOTE: It is VERY IMPORTANT that you do not store this Arc anywhere for long term use!
+    pub async fn get_guild_lua_data(&self, guild_id: GuildId) -> Arc<GuildLuaData> {
+        if let Some(guild_lua_data) = self.guild_data.read().await.get(&guild_id).cloned() {
+            return guild_lua_data;
+        }
+
+        let mut guild_data_mut = self.guild_data.write().await;
+        if let Some(guild_lua_data) = guild_data_mut.get(&guild_id).cloned() {
+            return guild_lua_data;
+        }
+
+        let guild_lua_data = Arc::new(GuildLuaData::new(guild_id));
+
+        guild_data_mut.insert(guild_id, guild_lua_data.clone());
+
+        guild_lua_data
     }
 
     /// Registers a command and updates the guild command, but only if the guild hasnt reached the limit or if a command with a similar name doesn't exist.
@@ -123,25 +331,43 @@ impl LuaManager {
         &self,
         guild_id: GuildId,
         command_name: String,
+        description: String,
+        options: Vec<CommandOption>,
         lua_code: String,
         filename: String,
     ) -> Result<(), Error> {
-        let command_infos = self.db.get_all_guild_lua_commands(guild_id).await?;
+        let guild_info = self.get_guild_lua_data(guild_id).await;
 
-        if command_infos.len() >= 25 {
+        let mut commands_lock = guild_info.commands.lock().await;
+
+        let commands = commands_lock.get_commands(&self.db).await?;
+
+        if commands.len() >= 25 {
             return Err("You may only have up to 25 custom commands.".into());
         }
 
-        if command_infos
-            .iter()
-            .any(|c| c.sub_command_data.name == command_name)
-        {
+        if commands.contains_key(&command_name) {
             return Err(format!("A command with the name {command_name} already exists. Try updating or removing the command instead.").into());
         }
 
-        return self
-            .register_command_unchecked(guild_id, command_name, lua_code, filename, command_infos)
-            .await;
+        // Make sure the provided code is valid lua code.
+        self.try_parse_code(&lua_code)?;
+
+        let lua_command_info = LuaCommandInfo {
+            lua_code,
+            filename,
+            description,
+            options,
+        };
+
+        commands_lock
+            .add_or_replace_command(command_name, lua_command_info, &self.db)
+            .await?;
+        commands_lock
+            .update_guild_commands(&self.db, self.arc_ctx.http())
+            .await?;
+
+        Ok(())
     }
 
     /// Updates a command and updates the guild command, but only if the command it will update exists.
@@ -149,61 +375,46 @@ impl LuaManager {
         &self,
         guild_id: GuildId,
         command_name: String,
+        description: String,
+        options: Vec<CommandOption>,
         lua_code: String,
         filename: String,
     ) -> Result<(), Error> {
-        let mut command_infos = self.db.get_all_guild_lua_commands(guild_id).await?;
+        let guild_info = self.get_guild_lua_data(guild_id).await;
 
-        let old_len = command_infos.len();
+        let mut commands_lock = guild_info.commands.lock().await;
 
-        command_infos.retain(|command_info| command_info.sub_command_data.name != command_name);
+        let commands = commands_lock.get_commands(&self.db).await?;
 
-        if old_len == command_infos.len() {
+        if !commands.contains_key(&command_name) {
             return Err(format!("A command with the name {command_name} doesn't exists. Try creating a new command instead.").into());
         }
 
-        return self
-            .register_command_unchecked(guild_id, command_name, lua_code, filename, command_infos)
-            .await;
-    }
-
-    /// Registers a command and updates the guild command, but doesnt check if the guild has reached max commands, or if a command with same name exists.
-    ///
-    /// It's very important to make sure command_name doesnt exist inside command_infos before calling this function.
-    pub async fn register_command_unchecked(
-        &self,
-        guild_id: GuildId,
-        command_name: String,
-        lua_code: String,
-        filename: String,
-        mut command_infos: Vec<LuaCommandInfo>,
-    ) -> Result<(), Error> {
-        let lua = Lua::new();
-
-        lua.sandbox(true)?;
-
-        let chunk = lua.load(&lua_code).set_name(format!("={}", filename));
-        let command_data = chunk.eval::<LuaCommandData>()?;
+        // Make sure the provided code is valid lua code.
+        self.try_parse_code(&lua_code)?;
 
         let lua_command_info = LuaCommandInfo {
             lua_code,
             filename,
-            sub_command_data: SubCommand {
-                name: command_name,
-                description: command_data
-                    .description
-                    .unwrap_or("Custom command".to_string()),
-                options: command_data.options,
-            },
+            description,
+            options,
         };
 
-        command_infos.push(lua_command_info.clone());
-
-        self.update_guild_commands(guild_id, command_infos).await?;
-
-        self.db
-            .add_guild_lua_command(&lua_command_info, guild_id)
+        commands_lock
+            .add_or_replace_command(command_name, lua_command_info, &self.db)
             .await?;
+        commands_lock
+            .update_guild_commands(&self.db, self.arc_ctx.http())
+            .await?;
+        Ok(())
+    }
+
+    pub fn try_parse_code(&self, lua_code: &str) -> Result<(), Error> {
+        let lua = Lua::new();
+
+        let chunk = lua.load(lua_code);
+
+        chunk.into_function()?;
 
         Ok(())
     }
@@ -214,53 +425,19 @@ impl LuaManager {
         guild_id: GuildId,
         command_name: String,
     ) -> Result<(), Error> {
-        let mut command_infos = self.db.get_all_guild_lua_commands(guild_id).await?;
+        let guild_info = self.get_guild_lua_data(guild_id).await;
 
-        let Some(index) = command_infos
-            .iter()
-            .position(|c| c.sub_command_data.name == command_name)
-        else {
+        let mut commands_lock = guild_info.commands.lock().await;
+
+        let commands = commands_lock.get_commands(&self.db).await?;
+
+        if !commands.contains_key(&command_name) {
             return Err(format!("A command with the name {command_name} doesn't exists. If you can still see the command on discord and it's still there after a refresh, try running the refresh command.").into());
         };
 
-        command_infos.remove(index);
-
-        self.db.remove_guild_lua_command(guild_id, index).await?;
-
-        return self.update_guild_commands(guild_id, command_infos).await;
-    }
-
-    /// Updates the guild commands inside of discord.
-    pub async fn update_guild_commands(
-        &self,
-        guild_id: GuildId,
-        command_infos: Vec<LuaCommandInfo>,
-    ) -> Result<(), Error> {
-        let mut create_command = CreateCommand::new("c").description("Custom commands");
-        for command_info in command_infos {
-            let mut sub_command = CreateCommandOption::new(
-                CommandOptionType::SubCommand,
-                command_info.sub_command_data.name,
-                command_info.sub_command_data.description,
-            );
-
-            for option in command_info.sub_command_data.options {
-                sub_command = sub_command.add_sub_option(
-                    CreateCommandOption::new(
-                        get_command_option_type_from_str(&option.kind)?,
-                        option.name,
-                        option.description.unwrap_or("field".to_string()),
-                    )
-                    .required(option.required),
-                );
-            }
-
-            create_command = create_command.add_option(sub_command);
-        }
-
-        self.arc_ctx
-            .http()
-            .create_guild_command(guild_id, &create_command)
+        commands_lock.delete_command(command_name, &self.db).await?;
+        commands_lock
+            .update_guild_commands(&self.db, self.arc_ctx.http())
             .await?;
 
         Ok(())
@@ -271,57 +448,37 @@ impl LuaManager {
         guild_id: GuildId,
         command_interaction: CommandInteraction,
     ) -> Result<bool, Error> {
-        // TODO: make one which takes a name parameter and returns only 1 thing.
-        let command_infos = self.db.get_all_guild_lua_commands(guild_id).await?;
-
-        let mut lua_command = None;
-
-        println!("{:?}", command_interaction.data);
-
         if command_interaction.data.options.len() != 1 {
             return Err("Unexpected command options length.".into());
         }
 
-        let sub_command_option = &command_interaction.data.options[0];
-        let sub_command_name = &sub_command_option.name;
+        println!("{:?}", command_interaction.data);
 
-        for command_info in command_infos {
-            if command_info.sub_command_data.name == *sub_command_name {
-                lua_command = Some(command_info);
-                break;
-            }
-        }
+        let command_option = &command_interaction.data.options[0];
+        let command_name = &command_option.name;
 
-        let Some(lua_command) = lua_command else {
-            return Err("Couldn't find command info.".into());
-        };
+        let guild_info = self.get_guild_lua_data(guild_id).await;
 
-        let CommandDataOptionValue::SubCommand(sub_command_args) = &sub_command_option.value else {
+        let (function, lua) = guild_info
+            .get_command_function(command_name, &self.db)
+            .await?;
+
+        let CommandDataOptionValue::SubCommand(sub_command_args) = &command_option.value else {
             return Err("Option wasn't a subcommand.".into());
         };
-
-        let lua = Lua::new();
 
         let command_args_lua = lua.create_table()?;
 
         for argument in sub_command_args.iter() {
             let argument_value = match &argument.value {
                 CommandDataOptionValue::Boolean(v) => mlua::Value::Boolean(*v),
-                CommandDataOptionValue::Integer(v) => mlua::Value::Integer(*v as i32),
+                CommandDataOptionValue::Integer(v) => mlua::Value::Integer(*v as _),
                 CommandDataOptionValue::Number(v) => mlua::Value::Number(*v),
                 CommandDataOptionValue::String(v) => v.clone().into_lua(&lua)?,
                 _ => return Err("Unsupported command option type.".into()),
             };
             command_args_lua.set(argument.name.clone(), argument_value)?;
         }
-
-        lua.sandbox(true)?;
-
-        let chunk = lua
-            .load(&lua_command.lua_code)
-            .set_name(format!("={}", lua_command.filename));
-
-        let command_data = chunk.eval::<LuaCommandData>()?;
 
         let context_container = ContextContainer {
             arc_ctx: self.arc_ctx.clone(),
@@ -331,13 +488,27 @@ impl LuaManager {
 
         let context_container_userdata = lua.create_userdata(context_container)?;
 
-        command_data
-            .run
+        function
             .call_async::<mlua::Value>((&context_container_userdata, command_args_lua))
             .await?;
 
         let context_container = context_container_userdata.borrow::<ContextContainer>()?;
 
-        return Ok(context_container.sent_reply);
+        let sent_reply = context_container.sent_reply;
+
+        drop(context_container);
+        let _ = context_container_userdata.destroy();
+
+        return Ok(sent_reply);
     }
+}
+
+pub fn lua_manager_loop(lua_manager: Arc<LuaManager>) {
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_secs(30 * 60)).await;
+            let mut guild_data_write = lua_manager.guild_data.write().await;
+            guild_data_write.clear_expired();
+        }
+    });
 }
