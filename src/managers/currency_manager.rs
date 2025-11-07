@@ -17,6 +17,8 @@ pub struct CurrencyRates {
 pub struct CurrenciesInfo {
     rates: CurrencyRates,
     names: HashMap<String, String>,
+    /// First string is the label, second string is the value
+    pub names_vec: Vec<(String, String)>,
     rates_last_updated: u64,
     names_last_updated: u64,
 }
@@ -161,7 +163,12 @@ impl CurrencyManager {
 
         if !names_updated {
             let new_names = self.get_names().await?;
+            let names_vec = new_names
+                .iter()
+                .map(|(k, v)| (format!("{k} ({v})"), k.to_string()))
+                .collect();
             currency_info_mut.names = new_names;
+            currency_info_mut.names_vec = names_vec;
             currency_info_mut.names_last_updated = get_seconds();
 
             drop(currency_info_mut); //we drop it for the update_embed method
@@ -178,11 +185,13 @@ impl CurrencyManager {
     ///
     /// Returns (f64, u64).
     /// The first element is the converted amount and the second is the last time it was updated.
+    ///
+    /// The strings will be modified to be correct.
     pub async fn convert(
         &self,
         amount: f64,
-        from: &String,
-        to: &String,
+        from: &mut String,
+        to: &mut String,
     ) -> Result<(f64, u64), Error> {
         self.update_data().await?;
 
@@ -192,13 +201,20 @@ impl CurrencyManager {
 
         let rates = &currencies_info_read.rates.rates;
 
-        let Some(from_rate) = rates.get(&from.to_ascii_uppercase()) else {
+        let from_parsed = from.split(" ").next().unwrap_or("").to_ascii_uppercase();
+
+        let Some(from_rate) = rates.get(&from_parsed) else {
             return Err(Error::from(format!("{from} does not exist.")));
         };
 
-        let Some(to_rate) = rates.get(&to.to_ascii_uppercase()) else {
+        let to_parsed = to.split(" ").next().unwrap_or("").to_ascii_uppercase();
+
+        let Some(to_rate) = rates.get(&to_parsed) else {
             return Err(Error::from(format!("{to} does not exist.")));
         };
+
+        *from = from_parsed;
+        *to = to_parsed;
 
         let converted = amount / from_rate * to_rate;
 

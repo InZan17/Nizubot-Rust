@@ -1,9 +1,41 @@
+use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use poise::{
-    serenity_prelude::{CreateEmbed, CreateEmbedFooter, Timestamp},
+    serenity_prelude::{self, CreateEmbed, CreateEmbedFooter, Timestamp},
     CreateReply,
 };
 
 use crate::{Context, Error};
+
+pub async fn autocomplete_currencies(
+    ctx: Context<'_>,
+    partial: &str,
+) -> Vec<poise::serenity_prelude::AutocompleteChoice> {
+    let currency_manager = &ctx.data().currency_manager;
+    let _ = currency_manager.update_data().await;
+
+    let matcher = SkimMatcherV2::default().ignore_case();
+
+    let names_vec = currency_manager
+        .currency_info
+        .read()
+        .await
+        .names_vec
+        .clone();
+
+    let mut filtered_names = names_vec
+        .into_iter()
+        .filter(|(key, _)| matcher.fuzzy_match(key, partial).is_some())
+        .collect::<Vec<_>>();
+
+    // calling fuzzy_match again for a second time is fine cause it does caching
+    filtered_names.sort_by_key(|(key, _)| matcher.fuzzy_match(key, partial).unwrap_or(-1));
+
+    filtered_names
+        .into_iter()
+        .rev() // Reverse because higher score is better.
+        .map(|(label, value)| serenity_prelude::AutocompleteChoice::new(label, value))
+        .collect()
+}
 
 /// Command about converting currencies.
 #[poise::command(
@@ -22,14 +54,18 @@ pub async fn currency(_: Context<'_>) -> Result<(), Error> {
 pub async fn convert(
     ctx: Context<'_>,
     #[description = "How much currency do you wanna convert?"] amount: f64,
-    #[description = "Which currency do you wanna convert from?"] from: String,
-    #[description = "Which currency do you wanna convert to?"] to: String,
+    #[description = "Which currency do you wanna convert from?"]
+    #[autocomplete = "autocomplete_currencies"]
+    mut from: String,
+    #[description = "Which currency do you wanna convert to?"]
+    #[autocomplete = "autocomplete_currencies"]
+    mut to: String,
     #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
     let ephemeral = ephemeral.unwrap_or(false);
     let currency_manager = &ctx.data().currency_manager;
 
-    let (converted, timestamp) = currency_manager.convert(amount, &from, &to).await?;
+    let (converted, timestamp) = currency_manager.convert(amount, &mut from, &mut to).await?;
 
     let from_name;
 
