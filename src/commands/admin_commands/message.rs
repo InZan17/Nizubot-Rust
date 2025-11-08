@@ -29,8 +29,10 @@ pub async fn analyze(
 ) -> Result<(), Error> {
     let data = serde_json::to_string_pretty(&message_id).unwrap();
     let data_bytes = data.as_bytes();
-    ctx.send(CreateReply::default().attachment(CreateAttachment::bytes(data_bytes, "message.txt")))
-        .await?;
+    ctx.send(
+        CreateReply::default().attachment(CreateAttachment::bytes(data_bytes, "message.json")),
+    )
+    .await?;
 
     Ok(())
 }
