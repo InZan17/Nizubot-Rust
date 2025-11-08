@@ -1,18 +1,13 @@
-use std::{
-    collections::HashMap,
-    hint::assert_unchecked,
-    sync::{Arc, OnceLock},
-    time::Duration,
-};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use mlua::{AsChunk, FromLua, Function, IntoLua, Lua, UserData, UserDataMethods};
+use mlua::{Function, IntoLua, Lua, UserData, UserDataMethods};
 use poise::serenity_prelude::{
     self, CacheHttp, CommandDataOptionValue, CommandInteraction, CommandOptionType, CreateCommand,
     CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseMessage, GuildId,
     Http,
 };
 use serde::{Deserialize, Serialize};
-use tokio::sync::{Mutex, MutexGuard, RwLock};
+use tokio::sync::{Mutex, RwLock};
 
 use crate::{utils::TtlMap, Error};
 
@@ -101,21 +96,36 @@ pub struct LuaCommandInfo {
 }
 
 pub struct GuildLuaData {
-    pub lua: OnceLock<Lua>,
-    // TODO: Make functions take a DB and make a function to return Some of commands used by other functions.
-    pub commands: Mutex<GuildLuaCommandsHolder>,
+    lua: Option<Lua>,
+    guild_id: GuildId,
+    commands: Option<HashMap<String, (LuaCommandInfo, Option<Function>)>>,
 }
 
-pub struct GuildLuaCommandsHolder {
-    pub guild_id: GuildId,
-    pub commands: Option<HashMap<String, (LuaCommandInfo, OnceLock<Function>)>>,
-}
+impl GuildLuaData {
+    pub fn new(guild_id: GuildId) -> Self {
+        Self {
+            lua: None,
+            guild_id,
+            commands: None,
+        }
+    }
 
-impl GuildLuaCommandsHolder {
+    pub fn get_lua(&mut self) -> Result<Lua, mlua::Error> {
+        if let Some(lua) = &self.lua {
+            return Ok(lua.clone());
+        };
+
+        let lua = Lua::new();
+        lua.sandbox(true)?;
+        self.lua = Some(lua.clone());
+
+        Ok(lua)
+    }
+
     pub async fn get_commands(
         &mut self,
         db: &SurrealClient,
-    ) -> Result<&mut HashMap<String, (LuaCommandInfo, OnceLock<Function>)>, Error> {
+    ) -> Result<&mut HashMap<String, (LuaCommandInfo, Option<Function>)>, Error> {
         let commands_mut = &mut self.commands;
         match commands_mut {
             Some(commands) => return Ok(commands),
@@ -123,7 +133,7 @@ impl GuildLuaCommandsHolder {
                 let fetched_commands = db.get_all_guild_lua_commands(self.guild_id).await?;
                 let mapped_commands = fetched_commands
                     .into_iter()
-                    .map(|(k, v)| (k, (v, OnceLock::new())))
+                    .map(|(k, v)| (k, (v, None)))
                     .collect();
 
                 *commands_mut = Some(mapped_commands);
@@ -142,7 +152,7 @@ impl GuildLuaCommandsHolder {
         let commands = self.get_commands(db).await?;
         db.add_guild_lua_command(&command_name, &lua_command_info, guild_id)
             .await?;
-        commands.insert(command_name, (lua_command_info, OnceLock::new()));
+        commands.insert(command_name, (lua_command_info, None));
         Ok(())
     }
 
@@ -201,54 +211,35 @@ impl GuildLuaCommandsHolder {
 
         Ok(())
     }
-}
-
-impl GuildLuaData {
-    pub fn new(guild_id: GuildId) -> Self {
-        Self {
-            lua: OnceLock::new(),
-            commands: Mutex::new(GuildLuaCommandsHolder {
-                guild_id,
-                commands: None,
-            }),
-        }
-    }
-
-    pub fn get_lua(&self) -> Result<Lua, mlua::Error> {
-        self.lua
-            .get_or_try_init(|| {
-                let lua = Lua::new();
-                lua.sandbox(true)?;
-                Ok(lua)
-            })
-            .cloned()
-    }
 
     pub async fn get_command_function(
-        &self,
+        &mut self,
         command_name: &str,
         db: &SurrealClient,
     ) -> Result<(Function, Lua), Error> {
         let lua = self.get_lua()?;
 
-        let mut commands_holder = self.commands.lock().await;
+        let commands = self.get_commands(db).await?;
 
-        let commands = commands_holder.get_commands(db).await?;
-
-        let Some((command_info, command_function)) = commands.get(command_name) else {
+        let Some((command_info, command_function)) = commands.get_mut(command_name) else {
             return Err(format!("No command with name: {command_name}").into());
         };
 
-        let function = command_function.get_or_try_init(|| {
-            lua.load(&command_info.lua_code)
-                .set_name(format!(
-                    "={} (Command: {command_name})",
-                    command_info.filename
-                ))
-                .into_function()
-        })?;
+        if let Some(function) = command_function {
+            return Ok((function.clone(), lua));
+        };
 
-        return Ok((function.clone(), lua));
+        let function = lua
+            .load(&command_info.lua_code)
+            .set_name(format!(
+                "={} (Command: {command_name})",
+                command_info.filename
+            ))
+            .into_function()?;
+
+        *command_function = Some(function.clone());
+
+        return Ok((function, lua));
     }
 }
 
@@ -262,7 +253,7 @@ pub struct LuaManager {
     /// As long as the Arc doesn't get saved anywhere / anything uses it for longer than the duration of the TtlMap,
     /// everything will be fine. The concern otherwise would be that the entry gets removed,
     /// and something still has an Arc from that entry and end up doing things that wont be properly saved.
-    guild_data: RwLock<TtlMap<GuildId, Arc<GuildLuaData>>>,
+    guild_data: RwLock<TtlMap<GuildId, Arc<Mutex<GuildLuaData>>>>,
     arc_ctx: Arc<serenity_prelude::Context>,
 }
 
@@ -309,7 +300,7 @@ impl LuaManager {
     }
 
     /// NOTE: It is VERY IMPORTANT that you do not store this Arc anywhere for long term use!
-    pub async fn get_guild_lua_data(&self, guild_id: GuildId) -> Arc<GuildLuaData> {
+    pub async fn get_guild_lua_data(&self, guild_id: GuildId) -> Arc<Mutex<GuildLuaData>> {
         if let Some(guild_lua_data) = self.guild_data.read().await.get(&guild_id).cloned() {
             return guild_lua_data;
         }
@@ -319,7 +310,7 @@ impl LuaManager {
             return guild_lua_data;
         }
 
-        let guild_lua_data = Arc::new(GuildLuaData::new(guild_id));
+        let guild_lua_data = Arc::new(Mutex::new(GuildLuaData::new(guild_id)));
 
         guild_data_mut.insert(guild_id, guild_lua_data.clone());
 
@@ -337,10 +328,9 @@ impl LuaManager {
         filename: String,
     ) -> Result<(), Error> {
         let guild_info = self.get_guild_lua_data(guild_id).await;
+        let mut locked_guild_info = guild_info.lock().await;
 
-        let mut commands_lock = guild_info.commands.lock().await;
-
-        let commands = commands_lock.get_commands(&self.db).await?;
+        let commands = locked_guild_info.get_commands(&self.db).await?;
 
         if commands.len() >= 25 {
             return Err("You may only have up to 25 custom commands.".into());
@@ -360,10 +350,10 @@ impl LuaManager {
             options,
         };
 
-        commands_lock
+        locked_guild_info
             .add_or_replace_command(command_name, lua_command_info, &self.db)
             .await?;
-        commands_lock
+        locked_guild_info
             .update_guild_commands(&self.db, self.arc_ctx.http())
             .await?;
 
@@ -381,10 +371,9 @@ impl LuaManager {
         filename: String,
     ) -> Result<(), Error> {
         let guild_info = self.get_guild_lua_data(guild_id).await;
+        let mut locked_guild_info = guild_info.lock().await;
 
-        let mut commands_lock = guild_info.commands.lock().await;
-
-        let commands = commands_lock.get_commands(&self.db).await?;
+        let commands = locked_guild_info.get_commands(&self.db).await?;
 
         if !commands.contains_key(&command_name) {
             return Err(format!("A command with the name {command_name} doesn't exists. Try creating a new command instead.").into());
@@ -400,10 +389,10 @@ impl LuaManager {
             options,
         };
 
-        commands_lock
+        locked_guild_info
             .add_or_replace_command(command_name, lua_command_info, &self.db)
             .await?;
-        commands_lock
+        locked_guild_info
             .update_guild_commands(&self.db, self.arc_ctx.http())
             .await?;
         Ok(())
@@ -426,17 +415,18 @@ impl LuaManager {
         command_name: String,
     ) -> Result<(), Error> {
         let guild_info = self.get_guild_lua_data(guild_id).await;
+        let mut locked_guild_info = guild_info.lock().await;
 
-        let mut commands_lock = guild_info.commands.lock().await;
-
-        let commands = commands_lock.get_commands(&self.db).await?;
+        let commands = locked_guild_info.get_commands(&self.db).await?;
 
         if !commands.contains_key(&command_name) {
             return Err(format!("A command with the name {command_name} doesn't exists. If you can still see the command on discord and it's still there after a refresh, try running the refresh command.").into());
         };
 
-        commands_lock.delete_command(command_name, &self.db).await?;
-        commands_lock
+        locked_guild_info
+            .delete_command(command_name, &self.db)
+            .await?;
+        locked_guild_info
             .update_guild_commands(&self.db, self.arc_ctx.http())
             .await?;
 
@@ -459,9 +449,14 @@ impl LuaManager {
 
         let guild_info = self.get_guild_lua_data(guild_id).await;
 
-        let (function, lua) = guild_info
+        let mut locked_guild_info = guild_info.lock().await;
+
+        let (function, lua) = locked_guild_info
             .get_command_function(command_name, &self.db)
             .await?;
+
+        drop(locked_guild_info);
+        drop(guild_info);
 
         let CommandDataOptionValue::SubCommand(sub_command_args) = &command_option.value else {
             return Err("Option wasn't a subcommand.".into());
