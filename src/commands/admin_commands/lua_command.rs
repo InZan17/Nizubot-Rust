@@ -1,12 +1,6 @@
-use std::{
-    iter,
-    time::{SystemTime, UNIX_EPOCH},
-};
-
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
-use openssl::string;
 use poise::{
-    serenity_prelude::{self, Attachment, CreateAttachment, Mentionable},
+    serenity_prelude::{self, Attachment, CreateAttachment},
     CreateReply,
 };
 
@@ -54,7 +48,7 @@ use crate::{managers::lua_manager::CommandOption, Context, Error};
     subcommand_required,
     default_member_permissions = "ADMINISTRATOR"
 )]
-pub async fn lua_command(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn lua_command(_ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
@@ -62,7 +56,7 @@ pub async fn lua_command(ctx: Context<'_>) -> Result<(), Error> {
 #[poise::command(slash_command)]
 pub async fn create(
     ctx: Context<'_>,
-    name: String,
+    command_name: String,
     description: String,
     params: Option<String>,
     lua_file: Attachment,
@@ -109,7 +103,7 @@ pub async fn create(
     data.lua_manager
         .register_command(
             ctx.guild_id().unwrap(),
-            name.clone(),
+            command_name.clone(),
             description,
             params,
             lua_code,
@@ -120,7 +114,7 @@ pub async fn create(
     ctx.send(
         CreateReply::default()
             .content(format!(
-                "Successfully created custom command! Try it out using `/c {name}`",
+                "Successfully created custom command! Try it out using `/c {command_name}`",
             ))
             .ephemeral(true),
     )
@@ -133,7 +127,7 @@ pub async fn create(
 #[poise::command(slash_command)]
 pub async fn update(
     ctx: Context<'_>,
-    #[autocomplete = "autocomplete_command_name"] name: String,
+    #[autocomplete = "autocomplete_command_name"] command_name: String,
     description: String,
     params: Option<String>,
     lua_file: Attachment,
@@ -180,7 +174,7 @@ pub async fn update(
     data.lua_manager
         .update_command(
             ctx.guild_id().unwrap(),
-            name.clone(),
+            command_name.clone(),
             description,
             params,
             lua_code,
@@ -191,7 +185,7 @@ pub async fn update(
     ctx.send(
         CreateReply::default()
             .content(format!(
-                "Successfully updated the custom command! Try it out using /c {name}",
+                "Successfully updated the custom command! Try it out using /c {command_name}",
             ))
             .ephemeral(true),
     )
