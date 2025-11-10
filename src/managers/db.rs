@@ -38,7 +38,7 @@ impl<T> OptionOrVec for Vec<T> {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct DbResponse {
     pub result: Value,
     pub status: String,
@@ -53,6 +53,7 @@ pub struct DbError {
     pub information: String,
 }
 
+#[derive(Debug)]
 pub struct Responses(Vec<DbResponse>);
 
 impl Responses {
@@ -524,7 +525,7 @@ impl SurrealClient {
         Ok(())
     }
 
-    pub async fn list_user_reminders(&self, user_id: &UserId) -> Result<Vec<RemindInfo>, Error> {
+    pub async fn list_user_reminders(&self, user_id: UserId) -> Result<Vec<RemindInfo>, Error> {
         let user_reminders: Vec<RemindInfo> = self
             .query(format!(
                 "
@@ -543,7 +544,8 @@ impl SurrealClient {
         Ok(user_reminders)
     }
 
-    pub async fn add_user_reminder(&self, remind_info: &RemindInfo) -> Result<(), Error> {
+    /// Adds a user reminder to the database. Also assigns the id field onto the RemindInfo
+    pub async fn add_user_reminder(&self, remind_info: &mut RemindInfo) -> Result<(), Error> {
         let remind_info_json = serde_json::to_string(&remind_info)?;
 
         let user_id = remind_info.user_id;
@@ -558,8 +560,9 @@ impl SurrealClient {
             "RETURN;RETURN;".to_owned()
         };
 
-        self.query(format!(
-            "
+        let remind_info_id = self
+            .query(format!(
+                "
         BEGIN TRANSACTION;
 
         LET $reminder = (CREATE reminder CONTENT {remind_info_json});
@@ -569,10 +572,15 @@ impl SurrealClient {
 
         {guild_relate_statement}
 
+        RETURN $reminder.id;
+
         COMMIT TRANSACTION;
         "
-        ))
-        .await?;
+            ))
+            .await?
+            .take(0)?;
+
+        remind_info.id = remind_info_id;
 
         Ok(())
     }

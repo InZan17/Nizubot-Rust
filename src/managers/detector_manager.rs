@@ -91,7 +91,6 @@ impl DetectorsData {
         match detectors_mut {
             Some(detectors) => return Ok(detectors),
             None => {
-                println!("fetching stuff");
                 let fetched_detectors = db.get_all_message_detectors(self.id).await?;
 
                 *detectors_mut = Some(fetched_detectors);

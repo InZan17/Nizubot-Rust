@@ -34,17 +34,6 @@ pub async fn remove(
         .remove_reminder(user_id, guild_id, index as usize)
         .await?;
 
-    let Some(removed_reminder) = removed_reminder else {
-        ctx.send(
-            CreateReply::default()
-                .content("Failed to remove reminder. Are you using a valid index?")
-                .ephemeral(true),
-        )
-        .await?;
-
-        return Ok(());
-    };
-
     let message_ending;
 
     if let Some(message) = removed_reminder.message {
@@ -74,21 +63,30 @@ pub async fn peek(
     #[description = "Which user to check the reminders for?"] user: User,
 ) -> Result<(), Error> {
     let remind_manager = &ctx.data().remind_manager;
+    let db = &ctx.data().db;
 
     let guild_id = ctx.guild_id();
     let user_id = user.id;
 
-    let reminders = remind_manager.list_reminders(user_id, guild_id).await?;
+    let reminders_data = remind_manager.get_reminders_data(user_id).await;
+    let mut locked_reminders_data = reminders_data.lock().await;
+
+    let user_reminders = locked_reminders_data.get_reminders(&db).await?;
+
+    let filtered_reminders = user_reminders
+        .iter()
+        .filter(|remind_info| remind_info.guild_id == guild_id)
+        .collect::<Vec<_>>();
 
     let mut create_embed = CreateEmbed::new()
         .title("Reminders")
         .description(format!("All of {}s reminders on this guild.", user.name))
         .footer(CreateEmbedFooter::new(format!(
             "Total reminders: {}",
-            reminders.len()
+            filtered_reminders.len()
         )));
 
-    for (index, reminder) in reminders.iter().enumerate() {
+    for (index, reminder) in filtered_reminders.into_iter().enumerate() {
         let mut ending = format!(" <#{}>", reminder.channel_id);
 
         if reminder.looping {

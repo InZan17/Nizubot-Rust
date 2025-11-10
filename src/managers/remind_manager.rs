@@ -1,22 +1,104 @@
-use std::{future::Future, sync::Arc};
+use std::{future::Future, sync::Arc, time::Duration};
 
 use poise::serenity_prelude::{
     ChannelId, Context, CreateAllowedMentions, CreateMessage, GuildId, MessageId, MessageReference,
     UserId,
 };
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 
 use crate::{
     managers::log_manager::{LogSource, LogType},
-    utils::{get_seconds, IdType},
+    utils::{get_seconds, IdType, TtlMap},
     Error,
 };
 
 use super::{db::SurrealClient, log_manager::LogManager};
 
+pub struct RemindersData {
+    user_id: UserId,
+    reminders: Option<Vec<RemindInfo>>,
+}
+
+impl RemindersData {
+    pub fn new(user_id: UserId) -> Self {
+        Self {
+            user_id,
+            reminders: None,
+        }
+    }
+
+    pub async fn get_reminders(
+        &mut self,
+        db: &SurrealClient,
+    ) -> Result<&mut Vec<RemindInfo>, Error> {
+        let reminders_mut = &mut self.reminders;
+        match reminders_mut {
+            Some(reminders) => return Ok(reminders),
+            None => {
+                let fetched_reminders = db.list_user_reminders(self.user_id).await?;
+
+                *reminders_mut = Some(fetched_reminders);
+                return Ok(reminders_mut.as_mut().unwrap());
+            }
+        }
+    }
+
+    pub async fn add_reminder(
+        &mut self,
+        mut remind_info: RemindInfo,
+        db: &SurrealClient,
+    ) -> Result<(), Error> {
+        let user_id = self.user_id;
+        assert_eq!(user_id, remind_info.user_id);
+        let reminders = self.get_reminders(db).await?;
+        db.add_user_reminder(&mut remind_info).await?;
+        reminders.push(remind_info);
+        Ok(())
+    }
+
+    pub async fn delete_reminder(
+        &mut self,
+        removal_index: usize,
+        guild_id: Option<GuildId>,
+        db: &SurrealClient,
+    ) -> Result<RemindInfo, Error> {
+        let reminders = self.get_reminders(db).await?;
+
+        let mut reminders_index = 0;
+        let mut reminders_guild_index = 0;
+        let mut found = false;
+
+        for (current_index, reminder) in reminders.iter().enumerate() {
+            reminders_index = current_index;
+            if reminder.guild_id == guild_id {
+                if reminders_guild_index == removal_index {
+                    found = true;
+                    break;
+                }
+                reminders_guild_index += 1;
+            }
+        }
+
+        if !found {
+            return Err("Failed to remove reminder. Are you using a valid index?".into());
+        }
+
+        let removing_reminder = &reminders[reminders_index];
+
+        let Some(reminder_id) = &removing_reminder.id else {
+            return Err("Reminder is missing a database id.".into());
+        };
+
+        db.delete_table_id(reminder_id).await?;
+
+        Ok(reminders.remove(removal_index))
+    }
+}
+
 pub struct RemindManager {
     db: Arc<SurrealClient>,
+    pub reminders_data: RwLock<TtlMap<UserId, Arc<Mutex<RemindersData>>>>,
     pub wait_until: Mutex<u64>,
 }
 
@@ -40,8 +122,27 @@ impl RemindManager {
     pub fn new(db: Arc<SurrealClient>) -> Self {
         RemindManager {
             db,
+            reminders_data: RwLock::new(TtlMap::new(Duration::from_secs(60 * 60))),
             wait_until: Mutex::new(0),
         }
+    }
+
+    /// NOTE: It is VERY IMPORTANT that you do not store this Arc anywhere for long term use!
+    pub async fn get_reminders_data(&self, user_id: UserId) -> Arc<Mutex<RemindersData>> {
+        if let Some(reminders_data) = self.reminders_data.read().await.get(&user_id).cloned() {
+            return reminders_data;
+        }
+
+        let mut reminders_data_mut = self.reminders_data.write().await;
+        if let Some(reminders_data) = reminders_data_mut.get(&user_id).cloned() {
+            return reminders_data;
+        }
+
+        let reminders_data = Arc::new(Mutex::new(RemindersData::new(user_id)));
+
+        reminders_data_mut.insert(user_id, reminders_data.clone());
+
+        reminders_data
     }
 
     /// Adds reminder
@@ -54,7 +155,7 @@ impl RemindManager {
     /// Max total reminders = 50
     ///
     /// Max reminders per guild = 10
-    pub async fn add_reminder<'a, F, Fut>(
+    pub async fn add_reminder<F, Fut>(
         &self,
         guild_id: Option<GuildId>,
         channel_id: ChannelId,
@@ -71,11 +172,14 @@ impl RemindManager {
     {
         let db = &self.db;
 
-        let user_reminders = db.list_user_reminders(&user_id).await?;
+        let reminders_data = self.get_reminders_data(user_id).await;
+        let mut locked_reminders_data = reminders_data.lock().await;
+
+        let user_reminders = locked_reminders_data.get_reminders(&db).await?;
 
         if user_reminders.len() >= 50 {
             return Err(Error::from(
-                "You've already got a total of 50 reminders. Consider removing some.",
+                "You've already got a total of 50 reminders, including other guilds. Consider removing some, or perhaps consider using a calendar, or some reminder app.",
             ));
         }
 
@@ -112,7 +216,8 @@ impl RemindManager {
             looping,
         };
 
-        self.db.add_user_reminder(&remind_info).await?;
+        locked_reminders_data.add_reminder(remind_info, &db).await?;
+        drop(locked_reminders_data);
 
         let mut mut_wait_until = self.wait_until.lock().await;
         *mut_wait_until = mut_wait_until.min(finish_time);
@@ -131,64 +236,17 @@ impl RemindManager {
         user_id: UserId,
         guild_id: Option<GuildId>,
         removal_index: usize,
-    ) -> Result<Option<RemindInfo>, Error> {
+    ) -> Result<RemindInfo, Error> {
         let db = &self.db;
 
-        let mut reminders = db.list_user_reminders(&user_id).await?;
+        let reminders_data = self.get_reminders_data(user_id).await;
+        let mut locked_reminders_data = reminders_data.lock().await;
 
-        let mut reminders_index = 0;
-        let mut reminders_guild_index = 0;
-        let mut found = false;
+        let removed_reminder = locked_reminders_data
+            .delete_reminder(removal_index, guild_id, db)
+            .await?;
 
-        for (index, reminder) in reminders.iter().enumerate() {
-            reminders_index = index;
-            if reminder.guild_id == guild_id {
-                if reminders_guild_index == removal_index {
-                    found = true;
-                    break;
-                }
-                reminders_guild_index += 1;
-            }
-        }
-
-        if !found {
-            return Ok(None);
-        }
-
-        let removed_reminder = reminders.swap_remove(reminders_index);
-
-        let Some(reminder_id) = &removed_reminder.id else {
-            return Err("Reminder didn't have a database id.".into());
-        };
-
-        db.delete_table_id(reminder_id).await?;
-
-        return Ok(Some(removed_reminder));
-    }
-
-    /// Lists reminders
-    ///
-    /// If guild_id is None it will list reminders from dms. Else it will list reminders from the guild.
-    ///
-    /// Will error if unable to communicate with db or if callback errors.
-    pub async fn list_reminders(
-        &self,
-        user_id: UserId,
-        guild_id: Option<GuildId>,
-    ) -> Result<Vec<RemindInfo>, Error> {
-        let db = &self.db;
-
-        let reminders = db.list_user_reminders(&user_id).await?;
-
-        let mut specific_reminders = vec![];
-
-        for reminder in reminders.iter() {
-            if reminder.guild_id == guild_id {
-                specific_reminders.push(reminder.clone());
-            }
-        }
-
-        Ok(specific_reminders)
+        return Ok(removed_reminder);
     }
 }
 
@@ -201,8 +259,19 @@ pub fn remind_manager_loop(
     tokio::spawn(async move {
         let db = &remind_manager.db;
 
+        let ttl_clear_cooldown = 30 * 60;
+
+        let mut time_since_last_ttl_clear = 0;
+
         loop {
             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+            time_since_last_ttl_clear += 1;
+
+            if time_since_last_ttl_clear > ttl_clear_cooldown {
+                time_since_last_ttl_clear = 0;
+                remind_manager.reminders_data.write().await.clear_expired();
+            }
 
             let current_time = get_seconds();
 
@@ -384,6 +453,14 @@ pub fn remind_manager_loop(
                         tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
                     }
                 }
+
+                // Reset the cache for the user whose reminder just happened.
+                remind_manager
+                    .get_reminders_data(reminder_info.user_id)
+                    .await
+                    .lock()
+                    .await
+                    .reminders = None;
             }
 
             let next_wait_until;
