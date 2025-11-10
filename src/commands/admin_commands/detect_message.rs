@@ -32,18 +32,19 @@ async fn autocomplete_detector_index(
     let mut detector_names = detectors
         .iter()
         .enumerate()
+        .rev()
         .map(|(index, value)| {
             (
                 format!(
-                    "{index}: {} {} -> {}{}",
+                    "{index}: {} {}{} -> {}",
                     value.detect_type.to_sentence(),
                     value.key,
-                    value.response,
                     if value.case_sensitive {
                         " (case-sensitive)"
                     } else {
                         ""
-                    }
+                    },
+                    value.response,
                 ),
                 index,
             )

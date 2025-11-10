@@ -28,6 +28,7 @@ async fn autocomplete_reminder_index(
     let mut reminder_names = reminders
         .iter()
         .enumerate()
+        .rev()
         .map(|(index, value)| {
             let date = DateTime::from_timestamp(value.finish_time as i64, 0)
                 .map(|date| date.format("%Y-%m-%d_%H:%M").to_string())
