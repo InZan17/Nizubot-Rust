@@ -1,11 +1,70 @@
 use std::ops::Add;
 
+use chrono::{DateTime, NaiveDateTime};
+use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use poise::{
-    serenity_prelude::{CreateAllowedMentions, CreateEmbed, CreateEmbedFooter},
+    serenity_prelude::{self, CreateAllowedMentions, CreateEmbed, CreateEmbedFooter},
     CreateReply,
 };
 
 use crate::{utils::get_seconds, Context, Error};
+
+async fn autocomplete_reminder_index(
+    ctx: Context<'_>,
+    partial: &str,
+) -> Vec<poise::serenity_prelude::AutocompleteChoice> {
+    let user_id = ctx.author().id;
+
+    let reminders_data = ctx.data().remind_manager.get_reminders_data(user_id).await;
+
+    let mut locked_reminders_data = reminders_data.lock().await;
+
+    let Ok(reminders) = locked_reminders_data.get_reminders(&ctx.data().db).await else {
+        return vec![];
+    };
+
+    let matcher = SkimMatcherV2::default().ignore_case();
+
+    let mut reminder_names = reminders
+        .iter()
+        .enumerate()
+        .map(|(index, value)| {
+            let date = DateTime::from_timestamp(value.finish_time as i64, 0)
+                .map(|date| date.format("%Y-%m-%d_%H:%M").to_string())
+                .unwrap_or_else(|| "(broken date)".to_string());
+
+            let message = if let Some(mut message) = value.message.clone() {
+                if message.len() > 20 {
+                    message = message.chars().take(30).collect::<String>();
+                    message = message.trim_end().to_string();
+                    message.push_str("...");
+                }
+                format!("-> {message}")
+            } else {
+                String::new()
+            };
+            (
+                format!(
+                    "{index}: {date}{}{}",
+                    if value.looping { " (looped) " } else { " " },
+                    message
+                ),
+                index,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    reminder_names.retain(|(key, _)| matcher.fuzzy_match(key, partial).is_some());
+
+    // calling fuzzy_match again for a second time is fine cause it does caching
+    reminder_names.sort_by_key(|(key, _)| matcher.fuzzy_match(key, partial).unwrap_or(-1));
+
+    reminder_names
+        .into_iter()
+        .rev() // Reverse because higher score is better.
+        .map(|(key, index)| serenity_prelude::AutocompleteChoice::new(key.to_string(), index))
+        .collect()
+}
 
 /// Command for reminders.
 #[poise::command(
@@ -133,7 +192,9 @@ pub async fn add(
 #[poise::command(slash_command)]
 pub async fn remove(
     ctx: Context<'_>,
-    #[description = "Which reminder should I remove? (See reminders with /remind list)"] index: u8,
+    #[autocomplete = "autocomplete_reminder_index"]
+    #[description = "Which reminder should I remove? (See reminders with /remind list)"]
+    index: u8,
 ) -> Result<(), Error> {
     let guild_id = ctx.guild_id();
 
