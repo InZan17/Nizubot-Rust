@@ -14,7 +14,7 @@ async fn autocomplete_command_name(
 
     let guild_lua_data = ctx.data().lua_manager.get_guild_lua_data(guild_id).await;
 
-    let mut commands_lock = guild_lua_data.commands.lock().await;
+    let mut commands_lock = guild_lua_data.lock().await;
 
     let Ok(commands) = commands_lock.get_commands(&ctx.data().db).await else {
         return vec![];
@@ -228,7 +228,7 @@ pub async fn download(
 
     let guild_lua_data = data.lua_manager.get_guild_lua_data(guild_id).await;
 
-    let mut commands_lock = guild_lua_data.commands.lock().await;
+    let mut commands_lock = guild_lua_data.lock().await;
 
     let commands = commands_lock.get_commands(&data.db).await?;
 
@@ -261,7 +261,6 @@ pub async fn refresh(ctx: Context<'_>) -> Result<(), Error> {
     let guild_lua_data = data.lua_manager.get_guild_lua_data(guild_id).await;
 
     guild_lua_data
-        .commands
         .lock()
         .await
         .update_guild_commands(&data.db, ctx.http())
