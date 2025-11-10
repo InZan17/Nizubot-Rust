@@ -129,7 +129,14 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
         id = IdType::UserId(ctx.author().id);
     }
 
-    let detectors = match ctx.data().detector_manager.get_message_detects(id).await {
+    let data = ctx.data();
+    let db = &data.db;
+
+    let detector_data = ctx.data().detector_manager.get_detectors_data(id).await;
+    let mut locked_detector_data = detector_data.lock().await;
+    let detectors_result = locked_detector_data.get_detectors(&db).await;
+
+    let detectors = match detectors_result {
         Ok(ok) => ok,
         Err(err) => {
             ctx.send(

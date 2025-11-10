@@ -1,5 +1,4 @@
 use std::{
-    cell::Cell,
     collections::HashMap,
     hash::Hash,
     sync::Mutex,
@@ -16,7 +15,7 @@ pub fn get_seconds() -> u64 {
 
     since_the_epoch.as_secs()
 }
-#[derive(Eq, Hash, PartialEq, Clone)]
+#[derive(Eq, Hash, PartialEq, Clone, Copy)]
 pub enum IdType {
     UserId(UserId),
     GuildId(GuildId),

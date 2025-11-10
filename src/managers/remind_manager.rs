@@ -291,7 +291,7 @@ pub fn remind_manager_loop(
                                 let id = IdType::GuildId(guild_id);
                                 let _ = log_manager
                                     .add_log(
-                                        &id,
+                                        id,
                                         add_log.clone(),
                                         LogType::Error,
                                         LogSource::Reminder,
@@ -301,7 +301,7 @@ pub fn remind_manager_loop(
 
                             let id = IdType::UserId(reminder_info.user_id);
                             let _ = log_manager
-                                .add_log(&id, add_log, LogType::Error, LogSource::Reminder)
+                                .add_log(id, add_log, LogType::Error, LogSource::Reminder)
                                 .await;
                             let _ = db.delete_table_id(&reminder_id).await;
                         }
@@ -361,7 +361,7 @@ pub fn remind_manager_loop(
                                 let id = IdType::GuildId(guild_id);
                                 let _ = log_manager
                                     .add_log(
-                                        &id,
+                                        id,
                                         add_log.clone(),
                                         LogType::Error,
                                         LogSource::Reminder,
@@ -371,7 +371,7 @@ pub fn remind_manager_loop(
 
                             let id = IdType::UserId(reminder_info.user_id);
                             let _ = log_manager
-                                .add_log(&id, add_log, LogType::Error, LogSource::Reminder)
+                                .add_log(id, add_log, LogType::Error, LogSource::Reminder)
                                 .await;
                         }
                     }

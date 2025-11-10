@@ -26,8 +26,10 @@ use poise::serenity_prelude::{
 use utils::IdType;
 
 use crate::managers::{
-    detector_manager::DetectorManager, log_manager::log_manager_loop,
-    lua_manager::lua_manager_loop, reaction_manager::ReactionManager,
+    detector_manager::{detector_manager_loop, DetectorManager},
+    log_manager::log_manager_loop,
+    lua_manager::lua_manager_loop,
+    reaction_manager::ReactionManager,
 };
 
 pub struct Data {
@@ -74,6 +76,7 @@ async fn event_handler<'thing>(
                     data.log_manager.clone(),
                 );
                 lua_manager_loop(data.lua_manager.clone());
+                detector_manager_loop(data.detector_manager.clone());
                 data.started_loops.swap(true, Ordering::Relaxed);
             }
             // TODO: Look through all relevant data and check if its still valid.
@@ -96,7 +99,7 @@ async fn event_handler<'thing>(
                 let _ = data
                     .log_manager
                     .add_log(
-                        &id,
+                        id,
                         err.to_string(),
                         LogType::Warning,
                         LogSource::MessageDetector,
@@ -125,7 +128,7 @@ async fn event_handler<'thing>(
                 let _ = data
                     .log_manager
                     .add_log(
-                        &id,
+                        id,
                         err.to_string(),
                         LogType::Warning,
                         LogSource::ReactionRole,
@@ -154,7 +157,7 @@ async fn event_handler<'thing>(
                 let _ = data
                     .log_manager
                     .add_log(
-                        &id,
+                        id,
                         err.to_string(),
                         LogType::Warning,
                         LogSource::ReactionRole,

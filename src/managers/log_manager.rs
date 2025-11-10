@@ -94,7 +94,7 @@ impl LogSource {
 }
 
 impl LogManager {
-    pub async fn load_state(&self, id: &IdType) -> LogState {
+    pub async fn load_state(&self, id: IdType) -> LogState {
         let mut new_path = self.log_path.clone();
         new_path.push(LogManager::get_file_name(id));
 
@@ -130,7 +130,7 @@ impl LogManager {
         }
     }
 
-    async fn write_log(&self, id: &IdType, data: &str) -> Result<(), Error> {
+    async fn write_log(&self, id: IdType, data: &str) -> Result<(), Error> {
         let mut new_path = self.log_path.clone();
         new_path.push(LogManager::get_file_name(id));
 
@@ -163,7 +163,7 @@ impl LogManager {
 
                 let joined = lock_log.logs.join("\n");
 
-                if let Err(err) = self.write_log(id, &joined).await {
+                if let Err(err) = self.write_log(*id, &joined).await {
                     latest_err = err;
                     err_count += 1;
                     continue;
@@ -183,17 +183,17 @@ impl LogManager {
         }
     }
 
-    pub fn get_file_name(id: &IdType) -> String {
+    pub fn get_file_name(id: IdType) -> String {
         match id {
             IdType::UserId(user_id) => format!("user_{user_id}.log"),
             IdType::GuildId(guild_id) => format!("guild_{guild_id}.log"),
         }
     }
 
-    pub async fn get_logs(&self, id: &IdType) -> Result<String, Error> {
+    pub async fn get_logs(&self, id: IdType) -> Result<String, Error> {
         let mut logs_read = self.logs.read().await;
         let log_state = {
-            if let Some(log_state) = logs_read.get(id) {
+            if let Some(log_state) = logs_read.get(&id) {
                 log_state
             } else {
                 drop(logs_read);
@@ -201,7 +201,7 @@ impl LogManager {
                 logs_write.insert(id.clone(), Mutex::new(self.load_state(id).await));
                 drop(logs_write);
                 logs_read = self.logs.read().await;
-                logs_read.get(id).unwrap_or_else(|| panic!())
+                logs_read.get(&id).unwrap_or_else(|| panic!())
             }
         };
 
@@ -222,7 +222,7 @@ impl LogManager {
         for owner_id in self.owner_user_ids.iter() {
             let res = self
                 .add_log(
-                    &IdType::UserId(*owner_id),
+                    IdType::UserId(*owner_id),
                     add_log.clone(),
                     log_type,
                     log_source.clone(),
@@ -261,14 +261,14 @@ impl LogManager {
 
     pub async fn add_log(
         &self,
-        id: &IdType,
+        id: IdType,
         add_log: String,
         log_type: LogType,
         log_source: LogSource,
     ) -> Result<(), Error> {
         let mut logs_read = self.logs.read().await;
         let log_state = {
-            if let Some(log_state) = logs_read.get(id) {
+            if let Some(log_state) = logs_read.get(&id) {
                 log_state
             } else {
                 drop(logs_read);
@@ -276,7 +276,7 @@ impl LogManager {
                 logs_write.insert(id.clone(), Mutex::new(self.load_state(id).await));
                 drop(logs_write);
                 logs_read = self.logs.read().await;
-                logs_read.get(id).unwrap_or_else(|| panic!())
+                logs_read.get(&id).unwrap_or_else(|| panic!())
             }
         };
 
@@ -290,10 +290,10 @@ impl LogManager {
         Ok(())
     }
 
-    pub async fn clear_log(&self, id: &IdType) -> Result<(), Error> {
+    pub async fn clear_log(&self, id: IdType) -> Result<(), Error> {
         let mut logs_read = self.logs.read().await;
         let log_state = {
-            if let Some(log_state) = logs_read.get(id) {
+            if let Some(log_state) = logs_read.get(&id) {
                 log_state
             } else {
                 drop(logs_read);
@@ -301,7 +301,7 @@ impl LogManager {
                 logs_write.insert(id.clone(), Mutex::new(self.load_state(id).await));
                 drop(logs_write);
                 logs_read = self.logs.read().await;
-                logs_read.get(id).unwrap_or_else(|| panic!())
+                logs_read.get(&id).unwrap_or_else(|| panic!())
             }
         };
 
@@ -337,7 +337,7 @@ pub fn log_manager_loop(_arc_ctx: Arc<Context>, log_manager: Arc<LogManager>) {
 
                     let joined = lock_log.logs.join("\n");
 
-                    if let Err(err) = log_manager.write_log(id, &joined).await {
+                    if let Err(err) = log_manager.write_log(*id, &joined).await {
                         latest_err = err;
                         err_count += 1;
                         continue;

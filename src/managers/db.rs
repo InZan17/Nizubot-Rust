@@ -354,25 +354,22 @@ impl SurrealClient {
         }
     }
 
-    pub async fn get_all_message_detectors(
-        &self,
-        id: &IdType,
-    ) -> Result<Option<Vec<DetectorInfo>>, Error> {
+    pub async fn get_all_message_detectors(&self, id: IdType) -> Result<Vec<DetectorInfo>, Error> {
         let table_id = id.into_db_table();
 
-        let res = self
+        let res: Option<Vec<DetectorInfo>> = self
             .query(format!(
                 "SELECT VALUE message_detectors FROM {table_id} WHERE message_detectors"
             ))
             .await?
             .take(0)?;
 
-        Ok(res)
+        Ok(res.unwrap_or_default())
     }
 
     pub async fn add_message_detector(
         &self,
-        id: &IdType,
+        id: IdType,
         detect_info: &DetectorInfo,
     ) -> Result<(), Error> {
         let table_id = id.into_db_table();
@@ -387,7 +384,7 @@ impl SurrealClient {
         Ok(())
     }
 
-    pub async fn remove_message_detector(&self, id: &IdType, index: usize) -> Result<(), Error> {
+    pub async fn remove_message_detector(&self, id: IdType, index: usize) -> Result<(), Error> {
         let table_id = id.into_db_table();
 
         let err = self
@@ -441,7 +438,7 @@ impl SurrealClient {
 
     pub async fn clear_message_data(
         &self,
-        id: &IdType,
+        id: IdType,
         message_id: &MessageId,
     ) -> Result<(), Error> {
         let table_id = id.into_db_table();

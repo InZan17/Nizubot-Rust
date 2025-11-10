@@ -98,7 +98,7 @@ pub struct LuaCommandInfo {
 pub struct GuildLuaData {
     lua: Option<Lua>,
     guild_id: GuildId,
-    commands: Option<HashMap<String, (LuaCommandInfo, Option<Function>)>>,
+    pub commands: Option<HashMap<String, (LuaCommandInfo, Option<Function>)>>,
 }
 
 impl GuildLuaData {

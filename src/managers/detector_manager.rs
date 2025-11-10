@@ -1,9 +1,13 @@
-use std::{sync::Arc, vec};
+use std::{sync::Arc, time::Duration, vec};
 
 use poise::serenity_prelude::{self, CreateMessage, Message};
 use serde::{Deserialize, Serialize};
+use tokio::sync::{Mutex, RwLock};
 
-use crate::{utils::IdType, Error};
+use crate::{
+    utils::{IdType, TtlMap},
+    Error,
+};
 
 use super::db::SurrealClient;
 
@@ -66,13 +70,94 @@ impl DetectorError {
     }
 }
 
+pub struct DetectorsData {
+    id: IdType,
+    detectors: Option<Vec<DetectorInfo>>,
+}
+
+impl DetectorsData {
+    pub fn new(id: IdType) -> Self {
+        Self {
+            id,
+            detectors: None,
+        }
+    }
+
+    pub async fn get_detectors(
+        &mut self,
+        db: &SurrealClient,
+    ) -> Result<&mut Vec<DetectorInfo>, Error> {
+        let detectors_mut = &mut self.detectors;
+        match detectors_mut {
+            Some(detectors) => return Ok(detectors),
+            None => {
+                println!("fetching stuff");
+                let fetched_detectors = db.get_all_message_detectors(self.id).await?;
+
+                *detectors_mut = Some(fetched_detectors);
+                return Ok(detectors_mut.as_mut().unwrap());
+            }
+        }
+    }
+
+    pub async fn add_detector(
+        &mut self,
+        detect_info: DetectorInfo,
+        db: &SurrealClient,
+    ) -> Result<(), Error> {
+        let id = self.id;
+        let detectors = self.get_detectors(db).await?;
+        db.add_message_detector(id, &detect_info).await?;
+        detectors.push(detect_info);
+        Ok(())
+    }
+
+    pub async fn delete_detector(&mut self, index: usize, db: &SurrealClient) -> Result<(), Error> {
+        let id = self.id;
+        let detectors = self.get_detectors(db).await?;
+        db.remove_message_detector(id, index).await?;
+        detectors.remove(index);
+        Ok(())
+    }
+}
+
 pub struct DetectorManager {
     pub db: Arc<SurrealClient>,
+    /// Holds detectors for different guilds/users.
+    ///
+    /// DetectorsData is inside of an Arc so that the RwLock gets locked as little as possible.
+    /// This is also fine because DetectorsData uses interior mutability.
+    ///
+    /// As long as the Arc doesn't get saved anywhere / anything uses it for longer than the duration of the TtlMap,
+    /// everything will be fine. The concern otherwise would be that the entry gets removed,
+    /// and something still has an Arc from that entry and end up doing things that wont be properly saved.
+    detectors_data: RwLock<TtlMap<IdType, Arc<Mutex<DetectorsData>>>>,
 }
 
 impl DetectorManager {
     pub fn new(db: Arc<SurrealClient>) -> Self {
-        Self { db }
+        Self {
+            db,
+            detectors_data: RwLock::new(TtlMap::new(Duration::from_secs(60 * 60))),
+        }
+    }
+
+    /// NOTE: It is VERY IMPORTANT that you do not store this Arc anywhere for long term use!
+    pub async fn get_detectors_data(&self, id: IdType) -> Arc<Mutex<DetectorsData>> {
+        if let Some(detectors_data) = self.detectors_data.read().await.get(&id).cloned() {
+            return detectors_data;
+        }
+
+        let mut detectors_data_mut = self.detectors_data.write().await;
+        if let Some(detectors_data) = detectors_data_mut.get(&id).cloned() {
+            return detectors_data;
+        }
+
+        let detectors_data = Arc::new(Mutex::new(DetectorsData::new(id)));
+
+        detectors_data_mut.insert(id, detectors_data.clone());
+
+        detectors_data
     }
 
     /// Adds a detector to a guild / user dm.
@@ -87,22 +172,19 @@ impl DetectorManager {
         case_sensitive: bool,
         id: IdType,
     ) -> Result<(), DetectorError> {
+        let detectors_data = self.get_detectors_data(id).await;
+        let mut locked_detectors_data = detectors_data.lock().await;
         let db = &self.db;
 
-        let detectors_option = match db.get_all_message_detectors(&id).await {
-            Ok(ok) => ok,
-            Err(err) => {
-                return Err(DetectorError::Database(
-                    err,
-                    "Couldn't fetch detectors from guild.".to_string(),
-                ))
-            }
-        };
+        let detectors = locked_detectors_data
+            .get_detectors(db)
+            .await
+            .map_err(|err| {
+                DetectorError::Database(err, "Couldn't fetch detectors from guild.".to_string())
+            })?;
 
-        if let Some(detectors) = detectors_option {
-            if detectors.len() >= 10 {
-                return Err(DetectorError::Max10Detectors);
-            }
+        if detectors.len() >= 10 {
+            return Err(DetectorError::Max10Detectors);
         }
 
         let detector_info = DetectorInfo {
@@ -112,12 +194,12 @@ impl DetectorManager {
             case_sensitive,
         };
 
-        if let Err(err) = db.add_message_detector(&id, &detector_info).await {
-            return Err(DetectorError::Database(
-                err,
-                "Couldn't add detector to guild.".to_string(),
-            ));
-        }
+        locked_detectors_data
+            .add_detector(detector_info, db)
+            .await
+            .map_err(|err| {
+                DetectorError::Database(err, "Couldn't add detector to guild.".to_string())
+            })?;
 
         Ok(())
     }
@@ -131,37 +213,29 @@ impl DetectorManager {
         index: usize,
         id: IdType,
     ) -> Result<(), DetectorError> {
+        let detectors_data = self.get_detectors_data(id).await;
+        let mut locked_detectors_data = detectors_data.lock().await;
         let db = &self.db;
 
-        if let Err(err) = db.remove_message_detector(&id, index).await {
-            return Err(DetectorError::Database(
-                err,
-                "Couldn't remove detector from guild.".to_string(),
-            ));
+        let detectors = locked_detectors_data
+            .get_detectors(db)
+            .await
+            .map_err(|err| {
+                DetectorError::Database(err, "Couldn't fetch detectors from guild.".to_string())
+            })?;
+
+        if index >= detectors.len() {
+            return Err(DetectorError::InvalidIndex);
         }
 
-        return Ok(());
-    }
+        locked_detectors_data
+            .delete_detector(index, db)
+            .await
+            .map_err(|err| {
+                DetectorError::Database(err, "Couldn't delete detector from guild.".to_string())
+            })?;
 
-    /// Gets all detectors from a guild / user dm.
-    ///
-    /// Will error if database isn't connected or communication doesn't work.
-    /// May also error if unable to parse response or if database returns an error.
-    pub async fn get_message_detects(
-        &self,
-        id: IdType,
-    ) -> Result<Vec<DetectorInfo>, DetectorError> {
-        let db = &self.db;
-
-        match db.get_all_message_detectors(&id).await {
-            Ok(detectors_option) => return Ok(detectors_option.unwrap_or(vec![])),
-            Err(err) => {
-                return Err(DetectorError::Database(
-                    err,
-                    "Failed to get message detectors.".to_string(),
-                ))
-            }
-        };
+        Ok(())
     }
 
     /// Responds to message if it matches a detector.
@@ -179,8 +253,6 @@ impl DetectorManager {
             return Ok(());
         }
 
-        let db = &self.db;
-
         let id;
 
         if let Some(guild_id) = message.guild_id {
@@ -189,19 +261,16 @@ impl DetectorManager {
             id = IdType::UserId(message.author.id);
         }
 
-        let detectors_option = match db.get_all_message_detectors(&id).await {
-            Ok(ok) => ok,
-            Err(err) => {
-                return Err(DetectorError::Database(
-                    err,
-                    "Failed to get message detectors.".to_string(),
-                ))
-            }
-        };
+        let detectors_data = self.get_detectors_data(id).await;
+        let mut locked_detectors_data = detectors_data.lock().await;
+        let db = &self.db;
 
-        let Some(detectors) = detectors_option else {
-            return Ok(());
-        };
+        let detectors = locked_detectors_data
+            .get_detectors(db)
+            .await
+            .map_err(|err| {
+                DetectorError::Database(err, "Failed to get message detectors.".to_string())
+            })?;
 
         for detector_info in detectors.iter() {
             let key = {
@@ -233,20 +302,31 @@ impl DetectorManager {
                 continue;
             }
 
-            let res = message
-                .channel_id
-                .send_message(ctx, CreateMessage::new().content(&detector_info.response))
-                .await;
+            let create_message = CreateMessage::new().content(&detector_info.response);
 
-            if let Err(err) = res {
-                return Err(DetectorError::Serenity(
-                    err,
-                    "Couldn't send detector response.".to_string(),
-                ));
-            }
+            drop(locked_detectors_data);
+
+            message
+                .channel_id
+                .send_message(ctx, create_message)
+                .await
+                .map_err(|err| {
+                    DetectorError::Serenity(err, "Couldn't send detector response.".to_string())
+                })?;
+
             break;
         }
 
         return Ok(());
     }
+}
+
+pub fn detector_manager_loop(detector_manager: Arc<DetectorManager>) {
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_secs(30 * 60)).await;
+            let mut guild_data_write = detector_manager.detectors_data.write().await;
+            guild_data_write.clear_expired();
+        }
+    });
 }

@@ -254,7 +254,7 @@ pub fn cotd_manager_loop(
 
                 if cotd_is_late {
                     let _ = log_manager.add_log(
-                        &IdType::GuildId(guild_id),
+                        IdType::GuildId(guild_id),
                         "The cotd role update was late due to issues talking to database. I apologize.".to_string(),
                         LogType::Warning,
                         LogSource::CotdRole,
@@ -266,7 +266,7 @@ pub fn cotd_manager_loop(
                     Err(err) => {
                         let _ = log_manager
                             .add_log(
-                                &IdType::GuildId(guild_id),
+                                IdType::GuildId(guild_id),
                                 format!("Couldn't update cotd role. {}", err.to_string()),
                                 LogType::Warning,
                                 LogSource::CotdRole,
@@ -290,7 +290,7 @@ pub fn cotd_manager_loop(
                 if let Err(err) = result {
                     let _ = log_manager
                         .add_log(
-                            &IdType::GuildId(guild_id),
+                            IdType::GuildId(guild_id),
                             err.to_string(),
                             LogType::Warning,
                             LogSource::CotdRole,

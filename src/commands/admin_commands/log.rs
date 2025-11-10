@@ -27,11 +27,11 @@ pub async fn get(ctx: Context<'_>) -> Result<(), Error> {
         id = IdType::UserId(ctx.author().id)
     }
 
-    let logs = ctx.data().log_manager.get_logs(&id).await?;
+    let logs = ctx.data().log_manager.get_logs(id).await?;
 
     ctx.send(CreateReply::default().attachment(CreateAttachment::bytes(
         logs.as_bytes(),
-        LogManager::get_file_name(&id),
+        LogManager::get_file_name(id),
     )))
     .await?;
 
@@ -58,7 +58,7 @@ pub async fn add(
     ctx.data()
         .log_manager
         .add_log(
-            &id,
+            id,
             message,
             LogType::Info,
             LogSource::Custom(ctx.author().id.to_string()),
@@ -79,7 +79,7 @@ pub async fn clear(ctx: Context<'_>) -> Result<(), Error> {
         id = IdType::UserId(ctx.author().id)
     }
 
-    ctx.data().log_manager.clear_log(&id).await?;
+    ctx.data().log_manager.clear_log(id).await?;
     ctx.say("Cleared!").await?;
     return Ok(());
 }
