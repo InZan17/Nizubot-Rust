@@ -1,10 +1,66 @@
 use std::vec;
 
 use crate::{managers::detector_manager::DetectType, utils::IdType, Context, Error};
+use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use poise::{
-    serenity_prelude::{CreateEmbed, CreateEmbedFooter},
+    serenity_prelude::{self, CreateEmbed, CreateEmbedFooter},
     CreateReply,
 };
+
+async fn autocomplete_detector_index(
+    ctx: Context<'_>,
+    partial: &str,
+) -> Vec<poise::serenity_prelude::AutocompleteChoice> {
+    let id;
+
+    if let Some(guild_id) = ctx.guild_id() {
+        id = IdType::GuildId(guild_id);
+    } else {
+        id = IdType::UserId(ctx.author().id);
+    }
+
+    let detectors_data = ctx.data().detector_manager.get_detectors_data(id).await;
+
+    let mut locked_detectors_data = detectors_data.lock().await;
+
+    let Ok(detectors) = locked_detectors_data.get_detectors(&ctx.data().db).await else {
+        return vec![];
+    };
+
+    let matcher = SkimMatcherV2::default().ignore_case();
+
+    let mut detector_names = detectors
+        .iter()
+        .enumerate()
+        .map(|(index, value)| {
+            (
+                format!(
+                    "{index}: {} {} -> {}{}",
+                    value.detect_type.to_sentence(),
+                    value.key,
+                    value.response,
+                    if value.case_sensitive {
+                        " (case-sensitive)"
+                    } else {
+                        ""
+                    }
+                ),
+                index,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    detector_names.retain(|(key, _)| matcher.fuzzy_match(key, partial).is_some());
+
+    // calling fuzzy_match again for a second time is fine cause it does caching
+    detector_names.sort_by_key(|(key, _)| matcher.fuzzy_match(key, partial).unwrap_or(-1));
+
+    detector_names
+        .into_iter()
+        .rev() // Reverse because higher score is better.
+        .map(|(key, index)| serenity_prelude::AutocompleteChoice::new(key.to_string(), index))
+        .collect()
+}
 
 /// Events for when bot detects a message.
 #[poise::command(
@@ -84,7 +140,9 @@ pub async fn add(
 #[poise::command(slash_command)]
 pub async fn remove(
     ctx: Context<'_>,
-    #[description = "Which detector do you want me to remove?"] index: u8,
+    #[description = "Which detector do you want me to remove?"]
+    #[autocomplete = "autocomplete_detector_index"]
+    index: u8,
 ) -> Result<(), Error> {
     let id;
 
