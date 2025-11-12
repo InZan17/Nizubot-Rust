@@ -18,8 +18,6 @@ async fn autocomplete_reminder_index(
         return vec![];
     };
 
-    println!("{:?}", application_context.args);
-
     let Some(poise::serenity_prelude::ResolvedValue::Unresolved(Unresolved::User(user_id))) =
         application_context
             .args
@@ -27,7 +25,6 @@ async fn autocomplete_reminder_index(
             .find(|arg| arg.name == "user")
             .map(|arg| arg.value.clone())
     else {
-        println!("blegh");
         return vec![];
     };
 
