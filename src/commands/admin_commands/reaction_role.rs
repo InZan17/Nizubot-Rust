@@ -1,9 +1,160 @@
+use std::{collections::HashMap, str::FromStr};
+
+use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use poise::{
     serenity_prelude::{
-        CreateEmbed, CreateEmbedFooter, Message, MessageId, ReactionType, Role, RoleId,
+        self, CreateEmbed, CreateEmbedFooter, EmojiId, MessageId, ReactionType, Role, RoleId,
     },
-    CodeBlock, CreateReply,
+    CreateReply,
 };
+
+async fn autocomplete_message_id(
+    ctx: Context<'_>,
+    partial: &str,
+) -> Vec<poise::serenity_prelude::AutocompleteChoice> {
+    let Some(guild_id) = ctx.guild_id() else {
+        return vec![];
+    };
+
+    let messages_data = ctx
+        .data()
+        .reaction_manager
+        .get_messages_data(guild_id)
+        .await;
+
+    let mut locked_messages_data = messages_data.lock().await;
+
+    let Ok(messages) = locked_messages_data.get_messages(&ctx.data().db).await else {
+        return vec![];
+    };
+
+    let channel_id = ctx.channel_id();
+
+    messages
+        .iter()
+        .filter(|(k, v)| {
+            (v.channel_id.is_none() || v.channel_id == Some(channel_id))
+                && k.to_string().starts_with(partial)
+        })
+        .map(|(k, _)| serenity_prelude::AutocompleteChoice::new(k.to_string(), k.to_string()))
+        .collect::<Vec<_>>()
+}
+
+async fn autocomplete_message_id_unrestricted(
+    ctx: Context<'_>,
+    partial: &str,
+) -> Vec<poise::serenity_prelude::AutocompleteChoice> {
+    let Some(guild_id) = ctx.guild_id() else {
+        return vec![];
+    };
+
+    let messages_data = ctx
+        .data()
+        .reaction_manager
+        .get_messages_data(guild_id)
+        .await;
+
+    let mut locked_messages_data = messages_data.lock().await;
+
+    let Ok(messages) = locked_messages_data.get_messages(&ctx.data().db).await else {
+        return vec![];
+    };
+
+    messages
+        .iter()
+        .filter(|(k, _)| k.to_string().starts_with(partial))
+        .map(|(k, _)| serenity_prelude::AutocompleteChoice::new(k.to_string(), k.to_string()))
+        .collect::<Vec<_>>()
+}
+
+async fn autocomplete_emoji(
+    ctx: Context<'_>,
+    partial: &str,
+) -> Vec<poise::serenity_prelude::AutocompleteChoice> {
+    let Some(guild_id) = ctx.guild_id() else {
+        return vec![];
+    };
+
+    let poise::Context::Application(application_context) = ctx else {
+        return vec![];
+    };
+
+    let Some(serenity_prelude::ResolvedValue::String(message_id_string)) = application_context
+        .args
+        .iter()
+        .find(|arg| arg.name == "message_id")
+        .map(|arg| arg.value.clone())
+    else {
+        return vec![];
+    };
+
+    let Ok(message_id) = MessageId::from_str(message_id_string) else {
+        return vec![];
+    };
+
+    let messages_data = ctx
+        .data()
+        .reaction_manager
+        .get_messages_data(guild_id)
+        .await;
+
+    let mut locked_messages_data = messages_data.lock().await;
+
+    let Ok(messages) = locked_messages_data.get_messages(&ctx.data().db).await else {
+        return vec![];
+    };
+
+    let Some(message) = messages.get(&message_id) else {
+        return vec![];
+    };
+
+    let channel_id = ctx.channel_id();
+
+    if message.channel_id.is_some() && message.channel_id != Some(channel_id) {
+        return vec![];
+    }
+
+    let guild_emojis = if let Some(guild) = ctx.guild() {
+        guild
+            .emojis
+            .iter()
+            .map(|(k, v)| (*k, v.name.clone()))
+            .collect()
+    } else {
+        HashMap::new()
+    };
+
+    let matcher = SkimMatcherV2::default().ignore_case();
+
+    let mut emojis = message
+        .reaction_roles
+        .iter()
+        .map(|(k, _)| {
+            let is_custom_emoji = k.chars().all(char::is_numeric);
+
+            if is_custom_emoji {
+                let mut final_emoji_name = "custom";
+
+                if let Ok(emoji_id) = EmojiId::from_str(k) {
+                    if let Some(emoji_name) = guild_emojis.get(&emoji_id) {
+                        final_emoji_name = emoji_name;
+                    }
+                }
+                format!("<:{final_emoji_name}:{k}>")
+            } else {
+                k.clone()
+            }
+        })
+        .filter(|key| matcher.fuzzy_match(key, partial).is_some())
+        .collect::<Vec<_>>();
+
+    emojis.sort_by_key(|key| matcher.fuzzy_match(key, partial).unwrap_or(-1));
+
+    emojis
+        .into_iter()
+        .map(|key| serenity_prelude::AutocompleteChoice::new(key.clone(), key))
+        .collect()
+}
 
 use crate::{managers::reaction_manager::ReactionTypeOrRoleId, Context, Error};
 
@@ -26,10 +177,12 @@ pub async fn reaction_role(_ctx: Context<'_>) -> Result<(), Error> {
 )]
 pub async fn add(
     ctx: Context<'_>,
-    #[description = "Which message do you wanna add a reaction role to?"] message_id: Message,
+    #[description = "Which message do you wanna add a reaction role to?"] message_id: MessageId,
     #[description = "Which emoji do you want me to react with?"] emoji: ReactionType,
     #[description = "Which role do you want me to give?"] role: Role,
 ) -> Result<(), Error> {
+    let message = ctx.channel_id().message(ctx, message_id).await.map_err(|err| format!("Failed to get the message. Have you tried running this command in the channel the message is located?\n\n{err}"))?;
+
     let cloned_guild = {
         let Some(guild) = ctx.guild() else {
             return Err("Not in a guild.".into());
@@ -58,7 +211,7 @@ pub async fn add(
         return Ok(());
     }
 
-    if let Err(err) = message_id.react(ctx, emoji.clone()).await {
+    if let Err(err) = message.react(ctx, emoji.clone()).await {
         ctx.send(CreateReply::default().content(format!("Sorry, I couldn't react with the emoji you provided. Please make sure to provide an actual emoji.\n\nHere's the error: {}", err)).ephemeral(true)
         ).await?;
         return Ok(());
@@ -69,13 +222,7 @@ pub async fn add(
     let res = ctx
         .data()
         .reaction_manager
-        .add_reaction(
-            emoji,
-            role.id,
-            guild_id,
-            message_id.channel_id,
-            message_id.id,
-        )
+        .add_reaction(emoji, role.id, guild_id, message.channel_id, message.id)
         .await;
 
     if let Err(err) = res {
@@ -104,13 +251,19 @@ pub async fn add(
 )]
 pub async fn remove(
     ctx: Context<'_>,
-    #[description = "Which message do you wanna remove a reaction role from?"] message_id: Message,
-    #[description = "What emoji does the reaction role use?"] emoji: Option<ReactionType>,
+    #[autocomplete = "autocomplete_message_id"]
+    #[description = "Which message do you wanna remove a reaction role from?"]
+    message_id: MessageId,
+    #[autocomplete = "autocomplete_emoji"]
+    #[description = "What emoji does the reaction role use?"]
+    emoji: Option<ReactionType>,
     #[description = "What role does the reaction role use?"] role: Option<RoleId>,
     #[description = "Should I remove all reaction roles from the message?"] remove_all: Option<
         bool,
     >,
 ) -> Result<(), Error> {
+    let message = ctx.channel_id().message(ctx, message_id).await.map_err(|err| format!("Failed to get the message. Have you tried running this command in the channel the message is located?\n\n{err}"))?;
+
     if role.is_some() as u8 + emoji.is_some() as u8 + remove_all.is_some() as u8 > 1 {
         ctx.send(
             CreateReply::default()
@@ -150,19 +303,19 @@ pub async fn remove(
     }
 
     let guild_id = ctx.guild_id().unwrap();
-    let message_id_id = message_id.id;
+    let message_id = message.id;
 
     if let Some(emoji_or_role) = emoji_or_role {
         let removed_role_res = ctx
             .data()
             .reaction_manager
-            .remove_reaction_role(emoji_or_role, guild_id, message_id_id)
+            .remove_reaction_role(emoji_or_role, guild_id, message_id)
             .await;
 
         match removed_role_res {
             Ok(removed_role) => {
                 if let Some(emoji) = emoji {
-                    let _ = message_id
+                    let _ = message
                         .delete_reaction(ctx, Some(ctx.framework().bot_id), emoji)
                         .await;
                 }
@@ -193,7 +346,7 @@ pub async fn remove(
         if let Err(err) = ctx
             .data()
             .reaction_manager
-            .remove_all_reaction_roles(guild_id, message_id_id)
+            .remove_all_reaction_roles(guild_id, message_id)
             .await
         {
             ctx.send(
@@ -222,9 +375,9 @@ pub async fn remove(
 #[poise::command(slash_command)]
 pub async fn list(
     ctx: Context<'_>,
-    #[description = "Which message do you wanna check reaction role for?"] message_id: Option<
-        MessageId,
-    >,
+    #[autocomplete = "autocomplete_message_id_unrestricted"]
+    #[description = "Which message do you wanna check reaction role for?"]
+    message_id: Option<MessageId>,
 ) -> Result<(), Error> {
     let guild_id = ctx.guild_id().unwrap();
 
