@@ -165,6 +165,66 @@ async fn event_handler<'thing>(
                     .await;
             }
         }
+        FullEvent::ReactionRemoveAll {
+            channel_id,
+            removed_from_message_id,
+        } => {
+            let channel = channel_id.to_channel(ctx).await?;
+            let Some(guild) = channel.guild() else {
+                return Ok(());
+            };
+
+            let message_id = *removed_from_message_id;
+
+            let guild_id = guild.guild_id;
+            let res = data
+                .reaction_manager
+                .reaction_remove_all(guild_id, message_id)
+                .await;
+
+            if let Err(err) = res {
+                let id = IdType::GuildId(guild_id);
+
+                let _ = data
+                    .log_manager
+                    .add_log(
+                        id,
+                        err.to_string(),
+                        LogType::Warning,
+                        LogSource::ReactionRole,
+                    )
+                    .await;
+            }
+        }
+        FullEvent::ReactionRemoveEmoji { removed_reactions } => {
+            let res = data
+                .reaction_manager
+                .reaction_remove_emoji(removed_reactions)
+                .await;
+
+            if let Err(err) = res {
+                let id;
+
+                if let Some(guild_id) = removed_reactions.guild_id {
+                    id = IdType::GuildId(guild_id)
+                } else {
+                    let Some(user_id) = removed_reactions.user_id else {
+                        return Ok(());
+                    };
+                    id = IdType::UserId(user_id)
+                }
+
+                let _ = data
+                    .log_manager
+                    .add_log(
+                        id,
+                        err.to_string(),
+                        LogType::Warning,
+                        LogSource::ReactionRole,
+                    )
+                    .await;
+            }
+        }
         FullEvent::InteractionCreate { interaction } => {
             match interaction {
                 serenity::Interaction::Command(command_interaction) => {

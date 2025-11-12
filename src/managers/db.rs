@@ -410,31 +410,16 @@ impl SurrealClient {
         Ok(())
     }
 
-    pub async fn get_guild_message(
-        &self,
-        guild_id: &GuildId,
-        message_id: &MessageId,
-    ) -> Result<Option<StoredMessageData>, Error> {
-        let res = self
-            .query(format!(
-                "SELECT VALUE messages.{message_id} from guild:{guild_id};"
-            ))
-            .await?
-            .take(0)?;
-
-        Ok(res)
-    }
-
     pub async fn get_guild_messages(
         &self,
-        guild_id: &GuildId,
-    ) -> Result<Option<HashMap<MessageId, StoredMessageData>>, Error> {
+        guild_id: GuildId,
+    ) -> Result<HashMap<MessageId, StoredMessageData>, Error> {
         let res = self
             .query(format!("SELECT VALUE messages from guild:{guild_id};"))
             .await?
-            .take(0)?;
+            .take::<Option<_>>(0)?;
 
-        Ok(res)
+        Ok(res.unwrap_or_default())
     }
 
     pub async fn clear_message_data(
@@ -458,13 +443,25 @@ impl SurrealClient {
 
     pub async fn set_guild_message(
         &self,
-        guild_id: &GuildId,
-        message_id: &MessageId,
-        message_data: Option<&StoredMessageData>,
+        guild_id: GuildId,
+        message_id: MessageId,
+        message_data: &StoredMessageData,
     ) -> Result<(), Error> {
         let message_data_json = serde_json::to_string(&message_data).unwrap();
         self.query(format!(
             "UPDATE guild:{guild_id} SET messages.{message_id} = {message_data_json}"
+        ))
+        .await?;
+        Ok(())
+    }
+
+    pub async fn remove_guild_message(
+        &self,
+        guild_id: GuildId,
+        message_id: MessageId,
+    ) -> Result<(), Error> {
+        self.query(format!(
+            "UPDATE guild:{guild_id} SET messages.{message_id} = NONE"
         ))
         .await?;
         Ok(())

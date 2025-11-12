@@ -2,7 +2,7 @@ use poise::{
     serenity_prelude::{
         CreateEmbed, CreateEmbedFooter, Message, MessageId, ReactionType, Role, RoleId,
     },
-    CreateReply,
+    CodeBlock, CreateReply,
 };
 
 use crate::{managers::reaction_manager::ReactionTypeOrRoleId, Context, Error};
@@ -30,13 +30,41 @@ pub async fn add(
     #[description = "Which emoji do you want me to react with?"] emoji: ReactionType,
     #[description = "Which role do you want me to give?"] role: Role,
 ) -> Result<(), Error> {
+    let cloned_guild = {
+        let Some(guild) = ctx.guild() else {
+            return Err("Not in a guild.".into());
+        };
+
+        guild.clone()
+    };
+
+    let bot_id = ctx.serenity_context().cache.current_user().id;
+
+    let bot_member = cloned_guild
+        .member(ctx, bot_id)
+        .await
+        .map_err(|err| format!("Bot member (self) not found. {err}"))?;
+
+    let highest_role_position = bot_member
+        .roles
+        .iter()
+        .filter_map(|role_id| Some(cloned_guild.roles.get(role_id)?.position as i32))
+        .max()
+        .unwrap_or(-1);
+
+    if role.position as i32 >= highest_role_position {
+        ctx.send(CreateReply::default().content("Sorry, this role is not lower than my highest role and I wont be able to assign it to anyone.").ephemeral(true)
+        ).await?;
+        return Ok(());
+    }
+
     if let Err(err) = message_id.react(ctx, emoji.clone()).await {
         ctx.send(CreateReply::default().content(format!("Sorry, I couldn't react with the emoji you provided. Please make sure to provide an actual emoji.\n\nHere's the error: {}", err)).ephemeral(true)
         ).await?;
         return Ok(());
     }
 
-    let guild_id = ctx.guild_id().unwrap();
+    let guild_id = cloned_guild.id;
 
     let res = ctx
         .data()
@@ -79,11 +107,14 @@ pub async fn remove(
     #[description = "Which message do you wanna remove a reaction role from?"] message_id: Message,
     #[description = "What emoji does the reaction role use?"] emoji: Option<ReactionType>,
     #[description = "What role does the reaction role use?"] role: Option<RoleId>,
+    #[description = "Should I remove all reaction roles from the message?"] remove_all: Option<
+        bool,
+    >,
 ) -> Result<(), Error> {
-    if role.is_some() && emoji.is_some() {
+    if role.is_some() as u8 + emoji.is_some() as u8 + remove_all.is_some() as u8 > 1 {
         ctx.send(
             CreateReply::default()
-                .content("Please make sure only one of the `emoji` and `role` parameters are used.")
+                .content("Please make sure only one of the `emoji`, `role` and `remove_all` parameters are used.")
                 .ephemeral(true),
         )
         .await?;
@@ -92,9 +123,22 @@ pub async fn remove(
 
     let emoji_or_role;
     if let Some(role) = role {
-        emoji_or_role = ReactionTypeOrRoleId::RoleId(role)
+        emoji_or_role = Some(ReactionTypeOrRoleId::RoleId(role))
     } else if let Some(emoji) = emoji.clone() {
-        emoji_or_role = ReactionTypeOrRoleId::ReactionType(emoji)
+        emoji_or_role = Some(ReactionTypeOrRoleId::ReactionType(emoji))
+    } else if let Some(remove_all) = remove_all {
+        if !remove_all {
+            ctx.send(
+                CreateReply::default()
+                    .content(
+                        "When using the `remove_all` parameter, make sure to set the value to `True` to confirm you wanna remove all reaction roles.",
+                    )
+                    .ephemeral(true),
+            )
+            .await?;
+            return Ok(());
+        }
+        emoji_or_role = None
     } else {
         ctx.send(
             CreateReply::default()
@@ -108,42 +152,68 @@ pub async fn remove(
     let guild_id = ctx.guild_id().unwrap();
     let message_id_id = message_id.id;
 
-    let removed_role_res = ctx
-        .data()
-        .reaction_manager
-        .remove_reaction(emoji_or_role, guild_id, message_id_id)
-        .await;
+    if let Some(emoji_or_role) = emoji_or_role {
+        let removed_role_res = ctx
+            .data()
+            .reaction_manager
+            .remove_reaction_role(emoji_or_role, guild_id, message_id_id)
+            .await;
 
-    match removed_role_res {
-        Ok(removed_role) => {
-            if let Some(emoji) = emoji {
-                let _ = message_id
-                    .delete_reaction(ctx, Some(ctx.framework().bot_id), emoji)
-                    .await;
+        match removed_role_res {
+            Ok(removed_role) => {
+                if let Some(emoji) = emoji {
+                    let _ = message_id
+                        .delete_reaction(ctx, Some(ctx.framework().bot_id), emoji)
+                        .await;
+                }
+
+                ctx.send(
+                    CreateReply::default()
+                        .content(format!(
+                            "Successfully removed reaction role! <@&{}>",
+                            removed_role
+                        ))
+                        .ephemeral(true),
+                )
+                .await?;
             }
-
-            ctx.send(
-                CreateReply::default()
-                    .content(format!(
-                        "Sucessfully removed reaction role! <@&{}>",
-                        removed_role
-                    ))
-                    .ephemeral(true),
-            )
-            .await?;
+            Err(err) => {
+                ctx.send(
+                    CreateReply::default()
+                        .content(format!(
+                            "Sorry, I wasn't able to remove that reaction role.\n\n{}",
+                            err.to_string()
+                        ))
+                        .ephemeral(true),
+                )
+                .await?;
+            }
         }
-        Err(err) => {
+    } else {
+        if let Err(err) = ctx
+            .data()
+            .reaction_manager
+            .remove_all_reaction_roles(guild_id, message_id_id)
+            .await
+        {
             ctx.send(
                 CreateReply::default()
                     .content(format!(
-                        "Sorry, I wasn't able to remove that reaction role.\n\n{}",
+                        "Sorry, I wasn't able to remove the reaction roles.\n\n{}",
                         err.to_string()
                     ))
                     .ephemeral(true),
             )
             .await?;
+        } else {
+            ctx.send(
+                CreateReply::default()
+                    .content("Successfully removed all reaction roles!")
+                    .ephemeral(true),
+            )
+            .await?;
         }
-    }
+    };
 
     Ok(())
 }
