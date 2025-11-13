@@ -1,14 +1,35 @@
 use chrono::{DateTime, TimeZone, Timelike, Utc};
 
-use chrono_tz::Tz;
+use chrono_tz::{Tz, TZ_VARIANTS};
+use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use poise::{
-    serenity_prelude::{CreateAllowedMentions, Mentionable, User},
+    serenity_prelude::{self, CreateAllowedMentions, Mentionable, User},
     CreateReply,
 };
 
 use crate::{Context, Error};
 
 use super::time_format::TimeFormat;
+
+pub async fn autocomplete_timezone(
+    _: Context<'_>,
+    partial: &str,
+) -> Vec<poise::serenity_prelude::AutocompleteChoice> {
+    let matcher = SkimMatcherV2::default().ignore_case();
+
+    let mut valid_timezones = TZ_VARIANTS
+        .into_iter()
+        .filter(|tz| matcher.fuzzy_match(tz.name(), partial).is_some())
+        .collect::<Vec<_>>();
+
+    valid_timezones.sort_by_key(|key| matcher.fuzzy_match(key.name(), partial).unwrap_or(-1));
+
+    valid_timezones
+        .into_iter()
+        .rev() // Reverse because higher score is better.
+        .map(|tz| serenity_prelude::AutocompleteChoice::new(tz.name(), tz.name()))
+        .collect()
+}
 
 /// Command for setting and getting timezones.
 #[poise::command(
@@ -27,6 +48,7 @@ pub async fn timezone(_: Context<'_>) -> Result<(), Error> {
 pub async fn set(
     ctx: Context<'_>,
     #[max_length = 100]
+    #[autocomplete = "autocomplete_timezone"]
     #[description = "What's your timezone?"]
     timezone: String,
 ) -> Result<(), Error> {
@@ -109,7 +131,9 @@ pub async fn user(
 #[poise::command(slash_command)]
 pub async fn check(
     ctx: Context<'_>,
-    #[description = "Which timezone do you wanna check?"] timezone: String,
+    #[autocomplete = "autocomplete_timezone"]
+    #[description = "Which timezone do you wanna check?"]
+    timezone: String,
     #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
     let ephemeral = ephemeral.unwrap_or(false);
