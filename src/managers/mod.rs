@@ -5,6 +5,7 @@ pub mod detector_manager;
 pub mod log_manager;
 pub mod lua_manager;
 pub mod message_manager;
+pub mod profile_manager;
 pub mod reaction_manager;
 pub mod remind_manager;
 pub mod storage_manager;

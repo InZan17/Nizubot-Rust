@@ -662,6 +662,16 @@ impl ReactionManager {
     }
 }
 
+pub fn reaction_manager_loop(reaction_manager: Arc<ReactionManager>) {
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_secs(30 * 60)).await;
+            let mut messages_data_write = reaction_manager.messages_data.write().await;
+            messages_data_write.clear_expired();
+        }
+    });
+}
+
 /// Returns the id of a custom emoji, not including its name.
 /// If it's an unicode emoji it will return the unicode emoji.
 fn get_emoji_id(emoji: &ReactionType) -> String {

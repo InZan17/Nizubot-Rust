@@ -1,15 +1,15 @@
 use super::Commands;
 
+pub mod check_timezone;
 mod currency;
+pub mod profile;
 mod remind;
-pub mod time_format;
-mod timezone;
 
 pub fn get_commands() -> Commands {
     return vec![
         remind::remind(),
         currency::currency(),
-        timezone::timezone(),
-        time_format::time_format(),
+        check_timezone::check_timezone(),
+        profile::profile(),
     ];
 }

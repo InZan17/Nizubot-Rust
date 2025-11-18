@@ -6,8 +6,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
-    commands::utility_commands::time_format::TimeFormat, tokens::SurrealDbSignInInfo,
-    utils::IdType, Error,
+    managers::profile_manager::ProfileData, tokens::SurrealDbSignInInfo, utils::IdType, Error,
 };
 
 use super::{
@@ -493,27 +492,36 @@ impl SurrealClient {
         Ok(())
     }
 
-    pub async fn get_user_time_format(
-        &self,
-        user_id: &UserId,
-    ) -> Result<Option<TimeFormat>, Error> {
-        let time_format: Option<TimeFormat> = self
-            .query(format!("SELECT VALUE time_format FROM user:{user_id};"))
+    pub async fn get_user_profile(&self, user_id: UserId) -> Result<ProfileData, Error> {
+        let profile: Option<ProfileData> = self
+            .query(format!("SELECT VALUE profile FROM user:{user_id};"))
             .await?
             .take(0)?;
-        Ok(time_format)
+
+        Ok(profile.unwrap_or_default())
     }
 
-    pub async fn set_user_time_format(
+    pub async fn set_user_profile(
         &self,
-        user_id: &UserId,
-        time_format: Option<TimeFormat>,
+        user_id: UserId,
+        profile: &ProfileData,
     ) -> Result<(), Error> {
-        let time_format_string = serde_json::to_string(&time_format).unwrap();
+        let profile_string = serde_json::to_string(&profile).unwrap();
         let err = self
             .query(format!(
-                "UPDATE user:{user_id} SET time_format = {time_format_string};"
+                "UPDATE user:{user_id} SET profile = {profile_string};"
             ))
+            .await?
+            .take_err(0);
+        if let Some(err) = err {
+            return Err(err);
+        }
+        Ok(())
+    }
+
+    pub async fn delete_user_profile(&self, user_id: UserId) -> Result<(), Error> {
+        let err = self
+            .query(format!("UPDATE user:{user_id} SET profile = NONE;"))
             .await?
             .take_err(0);
         if let Some(err) = err {

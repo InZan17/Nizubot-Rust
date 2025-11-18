@@ -29,7 +29,8 @@ use crate::managers::{
     detector_manager::{detector_manager_loop, DetectorManager},
     log_manager::log_manager_loop,
     lua_manager::lua_manager_loop,
-    reaction_manager::ReactionManager,
+    profile_manager::{profile_manager_loop, ProfileManager},
+    reaction_manager::{reaction_manager_loop, ReactionManager},
 };
 
 pub struct Data {
@@ -40,6 +41,7 @@ pub struct Data {
     detector_manager: Arc<DetectorManager>,
     reaction_manager: Arc<ReactionManager>,
     currency_manager: Arc<CurrencyManager>,
+    profile_manager: Arc<ProfileManager>,
     lua_manager: Arc<LuaManager>,
     log_manager: Arc<LogManager>,
     db: Arc<SurrealClient>,
@@ -77,6 +79,8 @@ async fn event_handler<'thing>(
                 );
                 lua_manager_loop(data.lua_manager.clone());
                 detector_manager_loop(data.detector_manager.clone());
+                reaction_manager_loop(data.reaction_manager.clone());
+                profile_manager_loop(data.profile_manager.clone());
                 data.started_loops.swap(true, Ordering::Relaxed);
             }
             // TODO: Look through all relevant data and check if its still valid.
@@ -327,6 +331,7 @@ async fn main() {
                     currency_manager: Arc::new(
                         CurrencyManager::new(bot_settings.open_exchange_rates_token).await,
                     ),
+                    profile_manager: Arc::new(ProfileManager::new(db.clone())),
                     log_manager: Arc::new(LogManager::new(
                         bot_settings.logs_directory,
                         bot_settings.owner_user_ids,
