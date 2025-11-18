@@ -31,7 +31,6 @@ impl ProfileData {
 }
 
 pub fn locale_time_format(locale: &str) -> TimeFormat {
-    println!("{locale}");
     match locale.to_ascii_lowercase().as_str() {
         "en-us" | "hi" | "zh-tw" | "ko" | "es-419" | "el" => TimeFormat::Twelve,
         _ => TimeFormat::TwentyFour,
