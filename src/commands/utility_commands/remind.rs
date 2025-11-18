@@ -1,13 +1,17 @@
 use std::ops::Add;
 
-use chrono::DateTime;
+use chrono::{DateTime, Datelike, NaiveDateTime, TimeZone, Utc};
+use chrono_tz::Tz;
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use poise::{
     serenity_prelude::{self, CreateAllowedMentions, CreateEmbed, CreateEmbedFooter},
     CreateReply,
 };
 
-use crate::{utils::get_seconds, Context, Error};
+use crate::{
+    commands::utility_commands::check_timezone::get_time_string,
+    managers::profile_manager::locale_time_format, utils::get_seconds, Context, Error,
+};
 
 async fn autocomplete_reminder_index(
     ctx: Context<'_>,
@@ -23,6 +27,24 @@ async fn autocomplete_reminder_index(
         return vec![];
     };
 
+    let (timezone, time_format) = {
+        let profile_data = ctx.data().profile_manager.get_profile_data(user_id).await;
+
+        let mut profile_lock = profile_data.lock().await;
+
+        match profile_lock.get_profile(&ctx.data().db).await {
+            Ok(profile) => {
+                let timezone = profile
+                    .get_timezone()
+                    .and_then(|(_, tz)| tz)
+                    .unwrap_or(Tz::UTC);
+                let time_format = profile.get_time_format_with_fallback(ctx.locale().unwrap());
+                (timezone, time_format)
+            }
+            Err(_) => (Tz::UTC, locale_time_format(ctx.locale().unwrap())),
+        }
+    };
+
     let matcher = SkimMatcherV2::default().ignore_case();
 
     let mut reminder_names = reminders
@@ -31,7 +53,18 @@ async fn autocomplete_reminder_index(
         .rev()
         .map(|(index, value)| {
             let date = DateTime::from_timestamp(value.finish_time as i64, 0)
-                .map(|date| date.format("%Y-%m-%d_%H:%M").to_string())
+                .map(|date| timezone.from_utc_datetime(&date.naive_utc()))
+                .map(|date| {
+                    let time = get_time_string(date, time_format);
+                    format!(
+                        "{}-{}-{} {} ({})",
+                        date.year(),
+                        date.month(),
+                        date.day(),
+                        time,
+                        timezone.name()
+                    )
+                })
                 .unwrap_or_else(|| "(broken date)".to_string());
 
             let message = if let Some(mut message) = value.message.clone() {

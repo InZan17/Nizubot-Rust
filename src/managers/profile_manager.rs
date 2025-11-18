@@ -26,10 +26,14 @@ impl ProfileData {
 
     pub fn get_time_format_with_fallback(&self, locale: &str) -> TimeFormat {
         self.time_format
-            .unwrap_or_else(|| match locale.to_ascii_lowercase().as_str() {
-                "en-us" | "hi" | "zh-tw" | "ko" => TimeFormat::Twelve,
-                _ => TimeFormat::TwentyFour,
-            })
+            .unwrap_or_else(|| locale_time_format(locale))
+    }
+}
+
+pub fn locale_time_format(locale: &str) -> TimeFormat {
+    match locale.to_ascii_lowercase().as_str() {
+        "en-us" | "hi" | "zh-tw" | "ko" => TimeFormat::Twelve,
+        _ => TimeFormat::TwentyFour,
     }
 }
 
