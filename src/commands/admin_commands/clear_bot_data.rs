@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use poise::serenity_prelude::UserId;
 
 use crate::{utils::IdType, Context, Error};
