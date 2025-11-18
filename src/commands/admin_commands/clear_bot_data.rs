@@ -34,7 +34,7 @@ pub async fn clear_bot_data(
     }
 
     let table_id = id.into_db_table();
-    let mut response: Option<Vec<UserId>> = db
+    let response: Option<Vec<UserId>> = db
         .query(format!(
             "
         BEGIN TRANSACTION;
