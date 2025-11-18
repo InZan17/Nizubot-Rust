@@ -253,7 +253,7 @@ pub struct LuaManager {
     /// As long as the Arc doesn't get saved anywhere / anything uses it for longer than the duration of the TtlMap,
     /// everything will be fine. The concern otherwise would be that the entry gets removed,
     /// and something still has an Arc from that entry and end up doing things that wont be properly saved.
-    guild_data: RwLock<TtlMap<GuildId, Arc<Mutex<GuildLuaData>>>>,
+    pub guild_data: RwLock<TtlMap<GuildId, Arc<Mutex<GuildLuaData>>>>,
     arc_ctx: Arc<serenity_prelude::Context>,
 }
 

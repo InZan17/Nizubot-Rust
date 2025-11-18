@@ -17,7 +17,7 @@ use super::{db::SurrealClient, log_manager::LogManager};
 
 pub struct RemindersData {
     user_id: UserId,
-    reminders: Option<Vec<RemindInfo>>,
+    pub reminders: Option<Vec<RemindInfo>>,
 }
 
 impl RemindersData {

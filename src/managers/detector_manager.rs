@@ -72,7 +72,7 @@ impl DetectorError {
 
 pub struct DetectorsData {
     id: IdType,
-    detectors: Option<Vec<DetectorInfo>>,
+    pub detectors: Option<Vec<DetectorInfo>>,
 }
 
 impl DetectorsData {
@@ -130,7 +130,7 @@ pub struct DetectorManager {
     /// As long as the Arc doesn't get saved anywhere / anything uses it for longer than the duration of the TtlMap,
     /// everything will be fine. The concern otherwise would be that the entry gets removed,
     /// and something still has an Arc from that entry and end up doing things that wont be properly saved.
-    detectors_data: RwLock<TtlMap<IdType, Arc<Mutex<DetectorsData>>>>,
+    pub detectors_data: RwLock<TtlMap<IdType, Arc<Mutex<DetectorsData>>>>,
 }
 
 impl DetectorManager {

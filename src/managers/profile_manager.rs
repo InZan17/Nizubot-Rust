@@ -81,7 +81,7 @@ impl ProfileDataHolder {
 
 pub struct ProfileManager {
     db: Arc<SurrealClient>,
-    profiles: RwLock<TtlMap<UserId, Arc<Mutex<ProfileDataHolder>>>>,
+    pub profiles: RwLock<TtlMap<UserId, Arc<Mutex<ProfileDataHolder>>>>,
 }
 
 impl ProfileManager {
