@@ -97,6 +97,18 @@ pub async fn clear_bot_data(
         .await?
         .take(0)?;
 
+    if let Some(lock) = lua_lock.as_mut() {
+        lock.allow_execution();
+        // Assign the commands to be Some so the function doesn't do a request to get the lua commands.
+        // The reason we don't do this for the other managers is because there may be a race condition
+        // when clearing the data and adding something at the same time.
+        // This doesn't happen for the lua manager because we hold the lock throughout the query.
+        lock.commands = Some(HashMap::new());
+    };
+
+    drop(lua_lock);
+    drop(guild_lua_data_for_lock);
+
     let mut affected_remind_user_ids = response.unwrap_or_default();
 
     affected_remind_user_ids.sort();
@@ -134,22 +146,18 @@ pub async fn clear_bot_data(
             if let Some(reactions_data) = reaction_manager_read.get(&guild_id) {
                 reactions_data.lock().await.messages = None;
             }
+
+            // The commands were already cleared earlier.
+            // Now we just update the guild commands os that the commands get removed.
+            let lua_manager = &ctx.data().lua_manager;
+            let guild_lua_data = lua_manager.get_guild_lua_data(guild_id).await;
+            guild_lua_data
+                .lock()
+                .await
+                .update_guild_commands(&ctx.data().db, ctx.http())
+                .await?;
         }
     }
-
-    if let Some(lock) = lua_lock.as_mut() {
-        lock.allow_execution();
-        // Assign the commands to be Some so the function doesn't do a request to get the lua commands.
-        // The reason we don't do this for the other managers is because there may be a race condition
-        // when clearing the data and adding something at the same time.
-        // This doesn't happen for the lua manager because we hold the lock throughout the query.
-        lock.commands = Some(HashMap::new());
-        lock.update_guild_commands(&ctx.data().db, ctx.http())
-            .await?;
-    };
-
-    drop(lua_lock);
-    drop(guild_lua_data_for_lock);
 
     if id.is_user() {
         ctx.reply("Successfully removed user data.").await?;
