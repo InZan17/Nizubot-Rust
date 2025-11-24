@@ -204,6 +204,45 @@ pub struct StoredData {
 }
 
 impl SurrealClient {
+    pub async fn get_data_store(
+        &self,
+        guild_id: GuildId,
+        data_store_name: &str,
+    ) -> Result<HashMap<String, serde_json::Value>, crate::Error> {
+        let data_store_name = serde_json::to_string(data_store_name)?;
+
+        let lua_command_infos: Option<_> = self
+            .query(format!(
+                "SELECT VALUE data_stores[{data_store_name}] FROM guild:{guild_id};"
+            ))
+            .await?
+            .take(0)?;
+
+        Ok(lua_command_infos.unwrap_or_default())
+    }
+
+    pub async fn set_data_store_value(
+        &self,
+        guild_id: GuildId,
+        data_store_name: &str,
+        data_store_key: &str,
+        value: &serde_json::Value,
+    ) -> Result<(), crate::Error> {
+        let data_store_name = serde_json::to_string(data_store_name)?;
+        let data_store_key = serde_json::to_string(data_store_key)?;
+        let value_json = serde_json::to_string(value)?;
+        if let Some(err) = self
+            .query(format!(
+                "UPDATE guild:{guild_id} SET data_stores[{data_store_name}][{data_store_key}] = {value_json};"
+            ))
+            .await?
+            .take_err(0) {
+                return Err(err)
+            }
+
+        Ok(())
+    }
+
     pub async fn get_all_guild_lua_commands(
         &self,
         guild_id: GuildId,

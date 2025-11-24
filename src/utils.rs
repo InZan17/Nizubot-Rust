@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     hash::Hash,
-    sync::Mutex,
+    sync::{Arc, Mutex},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -90,5 +90,76 @@ where
             self.map
                 .retain(|_, (_, last_accessed)| *last_accessed.lock().unwrap() >= invalid_before);
         }
+    }
+}
+
+pub struct TtlMapWithArcTokioMutex<K, V>
+where
+    K: Eq + Hash,
+{
+    map: HashMap<K, (Arc<tokio::sync::Mutex<V>>, Mutex<Option<Instant>>)>,
+    max_lifetime: Duration,
+}
+
+impl<K, V> TtlMapWithArcTokioMutex<K, V>
+where
+    K: Eq + Hash,
+{
+    pub fn new(max_lifetime: Duration) -> TtlMapWithArcTokioMutex<K, V> {
+        Self {
+            map: HashMap::new(),
+            max_lifetime,
+        }
+    }
+
+    pub fn get_raw_map(
+        &mut self,
+    ) -> &mut HashMap<K, (Arc<tokio::sync::Mutex<V>>, Mutex<Option<Instant>>)> {
+        &mut self.map
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
+
+    pub fn get(&self, k: &K) -> Option<Arc<tokio::sync::Mutex<V>>> {
+        self.map.get(k).map(|(value, last_accessed)| {
+            *last_accessed.lock().unwrap() = None;
+            value.clone()
+        })
+    }
+
+    pub fn insert(&mut self, k: K, v: V) -> Arc<tokio::sync::Mutex<V>> {
+        let value = Arc::new(tokio::sync::Mutex::new(v));
+        self.map
+            .insert(k, (value.clone(), Mutex::new(Some(Instant::now()))));
+        value
+    }
+
+    pub fn contains_key(&self, k: &K) -> bool {
+        self.map.contains_key(k)
+    }
+
+    pub fn clear_expired(&mut self) {
+        if let Some(invalid_before) = Instant::now().checked_sub(self.max_lifetime) {
+            self.map.retain(|_, (v, last_accessed)| {
+                let mut lock = last_accessed.lock().unwrap();
+
+                if let Some(instant) = *last_accessed.lock().unwrap() {
+                    return instant >= invalid_before;
+                };
+
+                if Arc::strong_count(v) > 1 {
+                    return true;
+                }
+
+                *lock = Some(Instant::now());
+                return true;
+            });
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.map.clear();
     }
 }

@@ -23,7 +23,7 @@ openssl = { version = "0.10.68", features = ["vendored"] }
 chrono = "0.4.37"
 chrono-tz = { version = "0.10.0", features = ["case-insensitive"] }
 webp = "0.3.0"
-mlua = { version = "0.10.2", default-features = false, features = [
+mlua = { version = "0.11.5", default-features = false, features = [
     "luau",
     "vendored",
     "async",

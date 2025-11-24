@@ -1,4 +1,7 @@
+use std::{collections::HashMap, sync::Arc, time::Duration};
+
 use poise::serenity_prelude::UserId;
+use tokio::time::sleep;
 
 use crate::{utils::IdType, Context, Error};
 
@@ -25,10 +28,50 @@ pub async fn clear_bot_data(
 
     let id;
 
+    let guild_lua_data_for_lock;
+    let mut lua_lock;
+
     if let Some(guild_id) = ctx.guild_id() {
         id = IdType::GuildId(guild_id);
+
+        // We have to handle the lua manager early here. This is because lua manager is special.
+        // When you run a normal command to change data, and at the same time someone calls clear_bot_data,
+        // it doesn't really matter if there was any race conditions that made it write the data anyway.
+        // But if someone runs a lua command that changes data_store data at the same time someone calls clear_bot_data,
+        // now you should expect the data to not have been written, because the command also gets deleted.
+        // But that wont always be the case in certain conditions, so we have to hold a lock to the lua data
+        // during the db query to make sure it doesn't write any data.
+
+        let lua_manager = &ctx.data().lua_manager;
+        let lua_manager_read = lua_manager.guild_data.read().await;
+
+        if let Some(guild_lua_data) = lua_manager_read.get(&guild_id).cloned() {
+            guild_lua_data_for_lock = Some(guild_lua_data);
+            let mut lock = guild_lua_data_for_lock.as_ref().unwrap().lock().await;
+            lock.stop_execution();
+            lock.commands = None;
+            lua_lock = Some(lock)
+        } else {
+            guild_lua_data_for_lock = None;
+            lua_lock = None;
+        }
+
+        let data_stores_read = lua_manager.data_stores.read().await;
+        if let Some(data_stores) = data_stores_read.get(&guild_id) {
+            let mut lock = data_stores.lock().await;
+            let raw_map = lock.get_raw_map();
+
+            // Remove data store whenever it has no more references, and keep doing it until it's all gone.
+            // That means Lua has been properly dropped.
+            while !raw_map.is_empty() {
+                sleep(Duration::from_millis(10)).await;
+                raw_map.retain(|_, v| Arc::strong_count(&v.0) > 1);
+            }
+        }
     } else {
         id = IdType::UserId(ctx.author().id);
+        guild_lua_data_for_lock = None;
+        lua_lock = None;
     }
 
     let table_id = id.into_db_table();
@@ -86,12 +129,6 @@ pub async fn clear_bot_data(
             }
         }
         IdType::GuildId(guild_id) => {
-            let lua_manager = &ctx.data().lua_manager;
-            let lua_manager_read = lua_manager.guild_data.read().await;
-            if let Some(guild_lua_data) = lua_manager_read.get(&guild_id) {
-                guild_lua_data.lock().await.commands = None;
-            }
-
             let reaction_manager = &ctx.data().reaction_manager;
             let reaction_manager_read = reaction_manager.messages_data.read().await;
             if let Some(reactions_data) = reaction_manager_read.get(&guild_id) {
@@ -99,6 +136,20 @@ pub async fn clear_bot_data(
             }
         }
     }
+
+    if let Some(lock) = lua_lock.as_mut() {
+        lock.allow_execution();
+        // Assign the commands to be Some so the function doesn't do a request to get the lua commands.
+        // The reason we don't do this for the other managers is because there may be a race condition
+        // when clearing the data and adding something at the same time.
+        // This doesn't happen for the lua manager because we hold the lock throughout the query.
+        lock.commands = Some(HashMap::new());
+        lock.update_guild_commands(&ctx.data().db, ctx.http())
+            .await?;
+    };
+
+    drop(lua_lock);
+    drop(guild_lua_data_for_lock);
 
     if id.is_user() {
         ctx.reply("Successfully removed user data.").await?;

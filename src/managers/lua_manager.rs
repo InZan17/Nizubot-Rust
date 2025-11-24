@@ -1,17 +1,37 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    ops::Deref,
+    sync::{
+        atomic::{AtomicBool, AtomicU64, Ordering},
+        Arc, Weak,
+    },
+    time::Duration,
+};
 
-use mlua::{Function, IntoLua, Lua, UserData, UserDataMethods};
+use mlua::{Function, IntoLua, Lua, UserData, UserDataMethods, VmState};
 use poise::serenity_prelude::{
     self, CacheHttp, CommandDataOptionValue, CommandInteraction, CommandOptionType, CreateCommand,
     CreateCommandOption, CreateInteractionResponse, CreateInteractionResponseMessage, GuildId,
     Http,
 };
 use serde::{Deserialize, Serialize};
-use tokio::sync::{Mutex, RwLock};
+use tokio::{
+    sync::{Mutex, Notify, RwLock},
+    time::sleep,
+};
 
-use crate::{utils::TtlMap, Error};
+use crate::{
+    managers::lua_manager::{
+        self,
+        serde_and_lua::{lua_to_serde, serde_to_lua},
+    },
+    utils::{TtlMap, TtlMapWithArcTokioMutex},
+    Error,
+};
 
 use super::db::SurrealClient;
+
+pub mod serde_and_lua;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct CommandOption {
@@ -95,19 +115,148 @@ pub struct LuaCommandInfo {
     pub options: Vec<CommandOption>,
 }
 
+pub struct DataStore {
+    guild_id: GuildId,
+    data_store_name: String,
+    db: Arc<SurrealClient>,
+    pub data: Option<HashMap<String, serde_json::Value>>,
+}
+
+impl DataStore {
+    pub fn new(guild_id: GuildId, data_store_name: String, db: Arc<SurrealClient>) -> Self {
+        Self {
+            guild_id,
+            data_store_name,
+            db,
+            data: None,
+        }
+    }
+
+    pub async fn get_data(&mut self) -> Result<&mut HashMap<String, serde_json::Value>, Error> {
+        let data_mut = &mut self.data;
+        match data_mut {
+            Some(data) => return Ok(data),
+            None => {
+                let fetched_data = self
+                    .db
+                    .get_data_store(self.guild_id, &self.data_store_name)
+                    .await?;
+
+                *data_mut = Some(fetched_data);
+                return Ok(data_mut.as_mut().unwrap());
+            }
+        }
+    }
+
+    pub async fn get(&mut self, key: &str) -> Result<serde_json::Value, Error> {
+        let data = self.get_data().await?;
+        Ok(data.get(key).unwrap_or(&serde_json::Value::Null).clone())
+    }
+
+    pub async fn set(
+        &mut self,
+        key: String,
+        value: serde_json::Value,
+    ) -> Result<serde_json::Value, Error> {
+        let guild_id = self.guild_id;
+        let data_store_name = self.data_store_name.clone();
+        let db = self.db.clone();
+        let data = self.get_data().await?;
+        db.set_data_store_value(guild_id, &data_store_name, &key, &value)
+            .await?;
+
+        Ok(data.insert(key, value).unwrap_or(serde_json::Value::Null))
+    }
+}
+
+pub struct DataStoreWrapper(Arc<Mutex<DataStore>>);
+
+impl From<Arc<Mutex<DataStore>>> for DataStoreWrapper {
+    fn from(value: Arc<Mutex<DataStore>>) -> Self {
+        Self(value)
+    }
+}
+
+impl Deref for DataStoreWrapper {
+    type Target = Arc<Mutex<DataStore>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl UserData for DataStoreWrapper {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {}
+
+    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_async_method("get", async |lua, this, key: String| {
+            let mut lock = this.lock().await;
+
+            let serde_value = lock
+                .get(&key)
+                .await
+                .map_err(|err| mlua::Error::runtime(err))?;
+
+            let lua_value = serde_to_lua(serde_value, &lua)?;
+
+            Ok(lua_value)
+        });
+
+        methods.add_async_method(
+            "set",
+            async |lua, this, (key, lua_value): (String, mlua::Value)| {
+                let serde_value =
+                    lua_to_serde(lua_value).map_err(|err| mlua::Error::runtime(err))?;
+
+                let mut lock = this.lock().await;
+
+                let previous_serde_value = lock
+                    .set(key, serde_value)
+                    .await
+                    .map_err(|err| mlua::Error::runtime(err))?;
+
+                let previous_lua_value = serde_to_lua(previous_serde_value, &lua)?;
+
+                Ok(previous_lua_value)
+            },
+        );
+    }
+}
+
+pub struct LuaAppData {
+    pub lua_manager: Weak<LuaManager>,
+    pub guild_id: GuildId,
+}
+
 pub struct GuildLuaData {
     lua: Option<Lua>,
     guild_id: GuildId,
+    stop_notify: Arc<Notify>,
+    stop_bool: Arc<AtomicBool>,
+    lua_manager: Weak<LuaManager>,
     pub commands: Option<HashMap<String, (LuaCommandInfo, Option<Function>)>>,
 }
 
 impl GuildLuaData {
-    pub fn new(guild_id: GuildId) -> Self {
+    pub fn new(guild_id: GuildId, lua_manager: Arc<LuaManager>) -> Self {
         Self {
             lua: None,
             guild_id,
+            stop_notify: Arc::new(Notify::new()),
+            stop_bool: Arc::new(AtomicBool::new(false)),
+            lua_manager: Arc::downgrade(&lua_manager),
             commands: None,
         }
+    }
+
+    pub fn stop_execution(&mut self) {
+        self.stop_bool.store(true, Ordering::Relaxed);
+        self.stop_notify.notify_waiters();
+        self.lua = None;
+    }
+
+    pub fn allow_execution(&mut self) {
+        self.stop_bool.store(false, Ordering::Relaxed);
     }
 
     pub fn get_lua(&mut self) -> Result<Lua, mlua::Error> {
@@ -116,7 +265,52 @@ impl GuildLuaData {
         };
 
         let lua = Lua::new();
+
+        let stop_bool = self.stop_bool.clone();
+        let count = Arc::new(AtomicU64::new(0));
+
+        let yield_frequency = 50;
+
+        lua.set_interrupt(move |_lua| {
+            if stop_bool.load(Ordering::SeqCst)
+                || count.fetch_add(1, Ordering::Relaxed) % yield_frequency == 0
+            {
+                Ok(VmState::Yield)
+            } else {
+                Ok(VmState::Continue)
+            }
+        });
+
+        // For debug purposes only.
+        lua.globals().set(
+            "wait",
+            lua.create_async_function(async |lua, wait: f32| {
+                sleep(Duration::from_secs_f32(wait)).await;
+                Ok(())
+            })?,
+        )?;
+
+        let lua_manager = self.lua_manager.clone();
+        let guild_id = self.guild_id;
+
+        lua.globals().set(
+            "get_data_store",
+            lua.create_async_function(move |_lua, data_store_name| {
+                let lua_manager = lua_manager.clone();
+                async move {
+                    let Some(lua_manager) = lua_manager.upgrade() else {
+                        return Err(mlua::Error::runtime("Failed to get LuaManager."));
+                    };
+
+                    Ok(DataStoreWrapper::from(
+                        lua_manager.get_data_store(guild_id, data_store_name).await,
+                    ))
+                }
+            })?,
+        )?;
+
         lua.sandbox(true)?;
+
         self.lua = Some(lua.clone());
 
         Ok(lua)
@@ -216,7 +410,7 @@ impl GuildLuaData {
         &mut self,
         command_name: &str,
         db: &SurrealClient,
-    ) -> Result<(Function, Lua), Error> {
+    ) -> Result<(Function, Lua, Arc<Notify>), Error> {
         let lua = self.get_lua()?;
 
         let commands = self.get_commands(db).await?;
@@ -226,7 +420,7 @@ impl GuildLuaData {
         };
 
         if let Some(function) = command_function {
-            return Ok((function.clone(), lua));
+            return Ok((function.clone(), lua, self.stop_notify.clone()));
         };
 
         let function = lua
@@ -239,7 +433,7 @@ impl GuildLuaData {
 
         *command_function = Some(function.clone());
 
-        return Ok((function, lua));
+        return Ok((function, lua, self.stop_notify.clone()));
     }
 }
 
@@ -254,6 +448,7 @@ pub struct LuaManager {
     /// everything will be fine. The concern otherwise would be that the entry gets removed,
     /// and something still has an Arc from that entry and end up doing things that wont be properly saved.
     pub guild_data: RwLock<TtlMap<GuildId, Arc<Mutex<GuildLuaData>>>>,
+    pub data_stores: RwLock<HashMap<GuildId, Mutex<TtlMapWithArcTokioMutex<String, DataStore>>>>,
     arc_ctx: Arc<serenity_prelude::Context>,
 }
 
@@ -296,11 +491,15 @@ impl LuaManager {
             db,
             arc_ctx,
             guild_data: RwLock::new(TtlMap::new(Duration::from_secs(60 * 60))),
+            data_stores: RwLock::new(HashMap::new()),
         }
     }
 
     /// NOTE: It is VERY IMPORTANT that you do not store this Arc anywhere for long term use!
-    pub async fn get_guild_lua_data(&self, guild_id: GuildId) -> Arc<Mutex<GuildLuaData>> {
+    pub async fn get_guild_lua_data(
+        self: &Arc<Self>,
+        guild_id: GuildId,
+    ) -> Arc<Mutex<GuildLuaData>> {
         if let Some(guild_lua_data) = self.guild_data.read().await.get(&guild_id).cloned() {
             return guild_lua_data;
         }
@@ -310,16 +509,68 @@ impl LuaManager {
             return guild_lua_data;
         }
 
-        let guild_lua_data = Arc::new(Mutex::new(GuildLuaData::new(guild_id)));
+        let guild_lua_data = Arc::new(Mutex::new(GuildLuaData::new(guild_id, self.clone())));
 
         guild_data_mut.insert(guild_id, guild_lua_data.clone());
 
         guild_lua_data
     }
 
+    pub async fn get_data_store(
+        &self,
+        guild_id: GuildId,
+        data_store_name: String,
+    ) -> Arc<Mutex<DataStore>> {
+        fn get_or_insert_data_store(
+            map: &mut TtlMapWithArcTokioMutex<String, DataStore>,
+            guild_id: GuildId,
+            data_store_name: String,
+            db: Arc<SurrealClient>,
+        ) -> Arc<Mutex<DataStore>> {
+            if let Some(data_store) = map.get(&data_store_name) {
+                return data_store;
+            };
+
+            return map.insert(
+                data_store_name.clone(),
+                DataStore::new(guild_id, data_store_name, db),
+            );
+        }
+
+        if let Some(data_stores_map) = self.data_stores.read().await.get(&guild_id) {
+            let mut data_stores_map_lock = data_stores_map.lock().await;
+            return get_or_insert_data_store(
+                &mut data_stores_map_lock,
+                guild_id,
+                data_store_name,
+                self.db.clone(),
+            );
+        }
+
+        let mut data_stores_mut = self.data_stores.write().await;
+        if let Some(data_stores_map) = data_stores_mut.get(&guild_id) {
+            let mut data_stores_map_lock = data_stores_map.lock().await;
+            return get_or_insert_data_store(
+                &mut data_stores_map_lock,
+                guild_id,
+                data_store_name,
+                self.db.clone(),
+            );
+        }
+
+        let mut map = TtlMapWithArcTokioMutex::new(Duration::from_secs(60 * 60));
+
+        let data_store =
+            get_or_insert_data_store(&mut map, guild_id, data_store_name, self.db.clone());
+
+        data_stores_mut.insert(guild_id, Mutex::new(map));
+
+        return data_store;
+    }
+
     /// Registers a command and updates the guild command, but only if the guild hasnt reached the limit or if a command with a similar name doesn't exist.
     pub async fn register_command(
-        &self,
+        self: &Arc<Self>,
         guild_id: GuildId,
         command_name: String,
         description: String,
@@ -362,7 +613,7 @@ impl LuaManager {
 
     /// Updates a command and updates the guild command, but only if the command it will update exists.
     pub async fn update_command(
-        &self,
+        self: &Arc<Self>,
         guild_id: GuildId,
         command_name: String,
         description: String,
@@ -410,7 +661,7 @@ impl LuaManager {
 
     /// Deletes a command and updates the guild command, but only if the command it will delete exists.
     pub async fn delete_command(
-        &self,
+        self: &Arc<Self>,
         guild_id: GuildId,
         command_name: String,
     ) -> Result<(), Error> {
@@ -434,7 +685,7 @@ impl LuaManager {
     }
 
     pub async fn execute_command(
-        &self,
+        self: &Arc<Self>,
         guild_id: GuildId,
         command_interaction: CommandInteraction,
     ) -> Result<bool, Error> {
@@ -451,7 +702,7 @@ impl LuaManager {
 
         let mut locked_guild_info = guild_info.lock().await;
 
-        let (function, lua) = locked_guild_info
+        let (function, lua, notify) = locked_guild_info
             .get_command_function(command_name, &self.db)
             .await?;
 
@@ -483,9 +734,14 @@ impl LuaManager {
 
         let context_container_userdata = lua.create_userdata(context_container)?;
 
-        function
+        let _result = tokio::select! {
+            _ = notify.notified() => {
+                Err(mlua::Error::runtime("Operation cancelled by a higher being."))
+            }
+            result = function
             .call_async::<mlua::Value>((&context_container_userdata, command_args_lua))
-            .await?;
+            => result,
+        }?;
 
         let context_container = context_container_userdata.borrow::<ContextContainer>()?;
 
@@ -502,8 +758,22 @@ pub fn lua_manager_loop(lua_manager: Arc<LuaManager>) {
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(tokio::time::Duration::from_secs(30 * 60)).await;
-            let mut guild_data_write = lua_manager.guild_data.write().await;
-            guild_data_write.clear_expired();
+            {
+                let mut guild_data_write = lua_manager.guild_data.write().await;
+                guild_data_write.clear_expired();
+            }
+            {
+                let mut data_store_write = lua_manager.data_stores.write().await;
+                data_store_write.retain(|_guild_id, ttl_map| {
+                    let Ok(mut lock) = ttl_map.try_lock() else {
+                        // This should always successfully lock.
+                        // I have a write lock on data_stores which makes it so I'm the only holder.
+                        return true;
+                    };
+                    lock.clear_expired();
+                    !lock.is_empty()
+                });
+            }
         }
     });
 }
