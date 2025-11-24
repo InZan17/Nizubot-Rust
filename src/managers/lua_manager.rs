@@ -694,8 +694,6 @@ impl LuaManager {
             return Err("Unexpected command options length.".into());
         }
 
-        println!("{:?}", command_interaction.data);
-
         let command_option = &command_interaction.data.options[0];
         let command_name = &command_option.name;
 
