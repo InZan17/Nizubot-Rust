@@ -60,7 +60,7 @@ impl CommandOption {
 
             for property in properties {
                 let Some((property_name, property_value)) = property.split_once('=') else {
-                    return Err("Ur parameters are incorrectly formatted.".into());
+                    return Err("Your parameters are incorrectly formatted.".into());
                 };
 
                 match property_name {
@@ -423,13 +423,14 @@ impl GuildLuaData {
             return Ok((function.clone(), lua, self.stop_notify.clone()));
         };
 
-        let function = lua
+        let function: Function = lua
             .load(&command_info.lua_code)
             .set_name(format!(
                 "={} (Command: {command_name})",
                 command_info.filename
             ))
-            .into_function()?;
+            .eval_async()
+            .await?;
 
         *command_function = Some(function.clone());
 
