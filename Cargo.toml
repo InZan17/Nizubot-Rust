@@ -32,4 +32,5 @@ mlua = { version = "0.11.5", default-features = false, features = [
 fuzzy-matcher = "0.3.7"
 
 [patch.crates-io]
-poise = { git = "https://github.com/serenity-rs/poise.git", branch = "current", checkout = "22b5b01ba54f7eb74f8fd2f3d52032fd7ef2dc01" }
+poise = { git = "https://github.com/serenity-rs/poise.git", branch = "current", checkout = "518ff0564865bca2abf01ae8995b77340f439ef9" }
+serenity = { git = "https://github.com/serenity-rs/serenity.git", branch = "current", checkout = "a1f2441ad4e507bb6cedf2bce76fa5d6d5f205df" }

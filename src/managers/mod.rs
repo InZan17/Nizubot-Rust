@@ -2,6 +2,7 @@ pub mod cotd_manager;
 pub mod currency_manager;
 pub mod db;
 pub mod detector_manager;
+pub mod join_order_manager;
 pub mod log_manager;
 pub mod lua_manager;
 pub mod message_manager;

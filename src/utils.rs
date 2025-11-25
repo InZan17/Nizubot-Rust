@@ -70,6 +70,10 @@ where
         })
     }
 
+    pub fn get_silent(&self, k: &K) -> Option<&V> {
+        self.map.get(k).map(|(value, _)| value)
+    }
+
     pub fn get_mut(&mut self, k: &K) -> Option<&mut V> {
         self.map.get_mut(k).map(|(value, last_accessed)| {
             *last_accessed.lock().unwrap() = Instant::now();

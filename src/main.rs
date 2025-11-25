@@ -27,6 +27,7 @@ use utils::IdType;
 
 use crate::managers::{
     detector_manager::{detector_manager_loop, DetectorManager},
+    join_order_manager::{join_order_manager_loop, JoinOrderManager, LightweightMember},
     log_manager::log_manager_loop,
     lua_manager::lua_manager_loop,
     profile_manager::{profile_manager_loop, ProfileManager},
@@ -42,6 +43,7 @@ pub struct Data {
     reaction_manager: Arc<ReactionManager>,
     currency_manager: Arc<CurrencyManager>,
     profile_manager: Arc<ProfileManager>,
+    join_order_manager: Arc<JoinOrderManager>,
     lua_manager: Arc<LuaManager>,
     log_manager: Arc<LogManager>,
     db: Arc<SurrealClient>,
@@ -81,6 +83,7 @@ async fn event_handler<'thing>(
                 detector_manager_loop(data.detector_manager.clone());
                 reaction_manager_loop(data.reaction_manager.clone());
                 profile_manager_loop(data.profile_manager.clone());
+                join_order_manager_loop(data.join_order_manager.clone());
                 data.started_loops.swap(true, Ordering::Relaxed);
             }
             // TODO: Look through all relevant data and check if its still valid.
@@ -89,6 +92,59 @@ async fn event_handler<'thing>(
             // If a folder about a guild still exists even though the bot is no longer in the guild, remove them.
             //
             // Also do these kinds of checks whenever communication to db hasnt worked.
+        }
+        FullEvent::GuildMemberAddition { new_member } => {
+            if let Some(join_order) = data
+                .join_order_manager
+                .silent_get_join_order(new_member.guild_id)
+                .await
+            {
+                join_order
+                    .insert_member(LightweightMember {
+                        id: new_member.user.id,
+                        tag: new_member.user.tag(),
+                        joined_at: new_member.joined_at,
+                    })
+                    .await;
+            }
+        }
+        FullEvent::GuildMemberRemoval {
+            guild_id,
+            user,
+            member_data_if_available: _,
+        } => {
+            if let Some(join_order) = data
+                .join_order_manager
+                .silent_get_join_order(*guild_id)
+                .await
+            {
+                join_order.remove_member(user.id).await;
+            }
+        }
+        FullEvent::GuildMemberUpdate {
+            old_if_available,
+            new: _,
+            event,
+        } => {
+            if let Some(join_order) = data
+                .join_order_manager
+                .silent_get_join_order(event.guild_id)
+                .await
+            {
+                if let Some(old) = old_if_available {
+                    if old.user.tag() == event.user.tag() && old.joined_at == Some(event.joined_at)
+                    {
+                        return Ok(());
+                    }
+                }
+                join_order
+                    .update_member(LightweightMember {
+                        id: event.user.id,
+                        tag: event.user.tag(),
+                        joined_at: Some(event.joined_at),
+                    })
+                    .await;
+            }
         }
         FullEvent::Message { new_message } => {
             if let Err(err) = data.detector_manager.on_message(ctx, new_message).await {
@@ -229,19 +285,18 @@ async fn event_handler<'thing>(
                     .await;
             }
         }
-        FullEvent::InteractionCreate { interaction } => {
-            match interaction {
-                serenity::Interaction::Command(command_interaction) => {
-                    if let Some(guild_id) = command_interaction.data.guild_id {
-                        let result = data
-                            .lua_manager
-                            .execute_command(guild_id, command_interaction.clone())
-                            .await;
+        FullEvent::InteractionCreate { interaction } => match interaction {
+            serenity::Interaction::Command(command_interaction) => {
+                if let Some(guild_id) = command_interaction.data.guild_id {
+                    let result = data
+                        .lua_manager
+                        .execute_command(guild_id, command_interaction.clone())
+                        .await;
 
-                        match result {
-                            Ok(did_reply) => {
-                                if !did_reply {
-                                    command_interaction
+                    match result {
+                        Ok(did_reply) => {
+                            if !did_reply {
+                                command_interaction
                                         .create_response(
                                             ctx,
                                             CreateInteractionResponse::Message(
@@ -250,37 +305,25 @@ async fn event_handler<'thing>(
                                             ),
                                         )
                                         .await?;
-                                }
                             }
-                            Err(err) => {
-                                command_interaction
-                                    .create_response(
-                                        ctx,
-                                        CreateInteractionResponse::Message(
-                                            CreateInteractionResponseMessage::new().content(
-                                                format!(
+                        }
+                        Err(err) => {
+                            command_interaction
+                                .create_response(
+                                    ctx,
+                                    CreateInteractionResponse::Message(
+                                        CreateInteractionResponseMessage::new().content(format!(
                                             "An error occured while executing this command: {err}"
-                                        ),
-                                            ),
-                                        ),
-                                    )
-                                    .await?
-                            }
+                                        )),
+                                    ),
+                                )
+                                .await?
                         }
                     }
                 }
-                _ => {}
             }
-
-            /*
-            if cmd.data.name == "whatsup" {
-                cmd.create_interaction_response(ctx, |r| {
-                    r.interaction_response_data(|d| d.content("whassup"))
-                })
-                .await
-                .unwrap();
-            } */
-        }
+            _ => {}
+        },
         _ => {}
     }
     Ok(())
@@ -332,6 +375,7 @@ async fn main() {
                         CurrencyManager::new(bot_settings.open_exchange_rates_token).await,
                     ),
                     profile_manager: Arc::new(ProfileManager::new(db.clone())),
+                    join_order_manager: Arc::new(JoinOrderManager::new()),
                     log_manager: Arc::new(LogManager::new(
                         bot_settings.logs_directory,
                         bot_settings.owner_user_ids,
@@ -348,6 +392,7 @@ async fn main() {
 
     let intents = serenity::GatewayIntents::GUILDS
         | serenity::GatewayIntents::GUILD_MESSAGES
+        | serenity::GatewayIntents::GUILD_MEMBERS
         | serenity::GatewayIntents::GUILD_MESSAGE_REACTIONS
         | serenity::GatewayIntents::DIRECT_MESSAGES
         | serenity::GatewayIntents::MESSAGE_CONTENT;
