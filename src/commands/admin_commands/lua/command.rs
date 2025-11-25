@@ -4,6 +4,8 @@ use poise::{
     CreateReply,
 };
 
+use crate::{managers::lua_manager::CommandOption, Context, Error};
+
 async fn autocomplete_command_name(
     ctx: Context<'_>,
     partial: &str,
@@ -37,9 +39,6 @@ async fn autocomplete_command_name(
         .collect()
 }
 
-use crate::{managers::lua_manager::CommandOption, Context, Error};
-
-/// Create your own commands! (Requires something idk)
 #[poise::command(
     slash_command,
     install_context = "Guild",
@@ -48,7 +47,7 @@ use crate::{managers::lua_manager::CommandOption, Context, Error};
     subcommand_required,
     default_member_permissions = "ADMINISTRATOR"
 )]
-pub async fn lua_command(_ctx: Context<'_>) -> Result<(), Error> {
+pub async fn command(_ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
@@ -194,7 +193,7 @@ pub async fn update(
     Ok(())
 }
 
-/// Updates an existing custom command.
+/// Deletes a custom command.
 #[poise::command(slash_command)]
 pub async fn delete(
     ctx: Context<'_>,
@@ -216,7 +215,7 @@ pub async fn delete(
     Ok(())
 }
 
-/// Updates an existing custom command.
+/// Sends the file of a custom command.
 #[poise::command(slash_command)]
 pub async fn download(
     ctx: Context<'_>,
@@ -251,7 +250,7 @@ pub async fn download(
     Ok(())
 }
 
-/// Refreshes all custom commands.
+/// Resend the custom commands to the guild.
 #[poise::command(slash_command)]
 pub async fn refresh(ctx: Context<'_>) -> Result<(), Error> {
     let data = ctx.data();
