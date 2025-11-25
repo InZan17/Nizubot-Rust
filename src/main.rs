@@ -92,6 +92,10 @@ async fn event_handler<'thing>(
             // If a folder about a guild still exists even though the bot is no longer in the guild, remove them.
             //
             // Also do these kinds of checks whenever communication to db hasnt worked.
+            data.join_order_manager.join_orders.write().await.clear();
+        }
+        FullEvent::Resume { event: _ } => {
+            data.join_order_manager.join_orders.write().await.clear();
         }
         FullEvent::GuildMemberAddition { new_member } => {
             if let Some(join_order) = data

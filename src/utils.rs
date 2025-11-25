@@ -89,6 +89,10 @@ where
         self.map.contains_key(k)
     }
 
+    pub fn clear(&mut self) {
+        self.map.clear();
+    }
+
     pub fn clear_expired(&mut self) {
         if let Some(invalid_before) = Instant::now().checked_sub(self.max_lifetime) {
             self.map
