@@ -374,7 +374,7 @@ async fn main() {
                     currency_manager: Arc::new(
                         CurrencyManager::new(bot_settings.open_exchange_rates_token).await,
                     ),
-                    profile_manager: Arc::new(ProfileManager::new(db.clone())),
+                    profile_manager: Arc::new(ProfileManager::new()),
                     join_order_manager: Arc::new(JoinOrderManager::new()),
                     log_manager: Arc::new(LogManager::new(
                         bot_settings.logs_directory,

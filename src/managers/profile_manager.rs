@@ -1,4 +1,4 @@
-use std::{clone, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use chrono_tz::Tz;
 use poise::serenity_prelude::UserId;
@@ -84,14 +84,12 @@ impl ProfileDataHolder {
 }
 
 pub struct ProfileManager {
-    db: Arc<SurrealClient>,
     pub profiles: RwLock<TtlMap<UserId, Arc<Mutex<ProfileDataHolder>>>>,
 }
 
 impl ProfileManager {
-    pub fn new(db: Arc<SurrealClient>) -> Self {
+    pub fn new() -> Self {
         Self {
-            db,
             profiles: RwLock::new(TtlMap::new(Duration::from_secs(60 * 60))),
         }
     }

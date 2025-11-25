@@ -21,10 +21,7 @@ use tokio::{
 };
 
 use crate::{
-    managers::lua_manager::{
-        self,
-        serde_and_lua::{lua_to_serde, serde_to_lua},
-    },
+    managers::lua_manager::serde_and_lua::{lua_to_serde, serde_to_lua},
     utils::{TtlMap, TtlMapWithArcTokioMutex},
     Error,
 };
@@ -186,8 +183,6 @@ impl Deref for DataStoreWrapper {
 }
 
 impl UserData for DataStoreWrapper {
-    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {}
-
     fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
         methods.add_async_method("get", async |lua, this, key: String| {
             let mut lock = this.lock().await;
@@ -221,11 +216,6 @@ impl UserData for DataStoreWrapper {
             },
         );
     }
-}
-
-pub struct LuaAppData {
-    pub lua_manager: Weak<LuaManager>,
-    pub guild_id: GuildId,
 }
 
 pub struct GuildLuaData {
@@ -284,7 +274,7 @@ impl GuildLuaData {
         // For debug purposes only.
         lua.globals().set(
             "wait",
-            lua.create_async_function(async |lua, wait: f32| {
+            lua.create_async_function(async |_lua, wait: f32| {
                 sleep(Duration::from_secs_f32(wait)).await;
                 Ok(())
             })?,

@@ -1,7 +1,6 @@
 use std::{
     collections::HashMap,
     fmt::Display,
-    fs::{self},
     path::{Path, PathBuf},
     sync::Arc,
     time::Duration,

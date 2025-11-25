@@ -257,21 +257,6 @@ impl SurrealClient {
         Ok(lua_command_infos.unwrap_or_default())
     }
 
-    pub async fn get_guild_lua_command(
-        &self,
-        command_name: &str,
-        guild_id: GuildId,
-    ) -> Result<Option<LuaCommandInfo>, crate::Error> {
-        let lua_command_infos: Option<_> = self
-            .query(format!(
-                "SELECT VALUE lua_commands.{command_name} FROM guild:{guild_id} WHERE lua_commands.{command_name};"
-            ))
-            .await?
-            .take(0)?;
-
-        Ok(lua_command_infos.unwrap_or_default())
-    }
-
     pub async fn add_guild_lua_command(
         &self,
         command_name: &str,
@@ -502,32 +487,6 @@ impl SurrealClient {
             "UPDATE guild:{guild_id} SET messages.{message_id} = NONE"
         ))
         .await?;
-        Ok(())
-    }
-
-    pub async fn get_user_timezone(&self, user_id: &UserId) -> Result<Option<String>, Error> {
-        let timezone: Option<String> = self
-            .query(format!("SELECT VALUE timezone FROM user:{user_id};"))
-            .await?
-            .take(0)?;
-        Ok(timezone)
-    }
-
-    pub async fn set_user_timezone(
-        &self,
-        user_id: &UserId,
-        timezone: Option<String>,
-    ) -> Result<(), Error> {
-        let timezone_string = serde_json::to_string(&timezone).unwrap();
-        let err = self
-            .query(format!(
-                "UPDATE user:{user_id} SET timezone = {timezone_string};"
-            ))
-            .await?
-            .take_err(0);
-        if let Some(err) = err {
-            return Err(err);
-        }
         Ok(())
     }
 

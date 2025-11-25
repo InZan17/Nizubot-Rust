@@ -1,6 +1,6 @@
 use crate::Data;
 pub type Commands =
-    Vec<poise::Command<Data, Box<(dyn std::error::Error + std::marker::Send + Sync + 'static)>>>;
+    Vec<poise::Command<Data, Box<dyn std::error::Error + std::marker::Send + Sync + 'static>>>;
 
 mod admin_commands;
 mod fun_commands;
