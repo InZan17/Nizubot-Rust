@@ -74,6 +74,7 @@ pub enum LogSource {
     ReactionRole,
     CotdRole,
     Reminder,
+    Lua,
     LogManager,
     Custom(String),
 }
@@ -87,6 +88,7 @@ impl LogSource {
             LogSource::ReactionRole => "REACTION_ROLE",
             LogSource::CotdRole => "COTD_ROLE",
             LogSource::Reminder => "REMINDER",
+            LogSource::Lua => "LUA",
             LogSource::LogManager => "LOG_MANAGER",
             LogSource::Custom(string) => string,
         }

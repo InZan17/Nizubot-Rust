@@ -312,12 +312,22 @@ async fn event_handler<'thing>(
                             }
                         }
                         Err(err) => {
+                            let _ = data
+                                .log_manager
+                                .add_log(
+                                    IdType::GuildId(guild_id),
+                                    err.to_string(),
+                                    LogType::Error,
+                                    LogSource::Lua,
+                                )
+                                .await;
+
                             command_interaction
                                 .create_response(
                                     ctx,
                                     CreateInteractionResponse::Message(
                                         CreateInteractionResponseMessage::new().content(format!(
-                                            "An error occured while executing this command: {err}"
+                                            "An error occurred while executing this command: {err}"
                                         )),
                                     ),
                                 )
@@ -369,23 +379,30 @@ async fn main() {
                 } else {
                     None
                 };
+
+                let log_manager = Arc::new(LogManager::new(
+                    bot_settings.logs_directory,
+                    bot_settings.owner_user_ids,
+                    admin_log_webhook,
+                    arc_ctx.clone(),
+                ));
+
                 Ok(Data {
                     cotd_manager: Arc::new(CotdManager::new(db.clone())),
                     remind_manager: Arc::new(RemindManager::new(db.clone())),
                     detector_manager: Arc::new(DetectorManager::new(db.clone())),
                     reaction_manager: Arc::new(ReactionManager::new(db.clone())),
-                    lua_manager: Arc::new(LuaManager::new(db.clone(), arc_ctx.clone())),
+                    lua_manager: Arc::new(LuaManager::new(
+                        db.clone(),
+                        log_manager.clone(),
+                        arc_ctx,
+                    )),
                     currency_manager: Arc::new(
                         CurrencyManager::new(bot_settings.open_exchange_rates_token).await,
                     ),
                     profile_manager: Arc::new(ProfileManager::new()),
                     join_order_manager: Arc::new(JoinOrderManager::new()),
-                    log_manager: Arc::new(LogManager::new(
-                        bot_settings.logs_directory,
-                        bot_settings.owner_user_ids,
-                        admin_log_webhook,
-                        arc_ctx,
-                    )),
+                    log_manager,
                     storage_manager,
                     started_loops: AtomicBool::new(false),
                     db,

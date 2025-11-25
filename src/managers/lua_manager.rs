@@ -21,8 +21,11 @@ use tokio::{
 };
 
 use crate::{
-    managers::lua_manager::serde_and_lua::{lua_to_serde, serde_to_lua},
-    utils::{TtlMap, TtlMapWithArcTokioMutex},
+    managers::{
+        log_manager::{LogManager, LogSource, LogType},
+        lua_manager::serde_and_lua::{lua_to_serde, serde_to_lua},
+    },
+    utils::{IdType, TtlMap, TtlMapWithArcTokioMutex},
     Error,
 };
 
@@ -224,17 +227,23 @@ pub struct GuildLuaData {
     stop_notify: Arc<Notify>,
     stop_bool: Arc<AtomicBool>,
     lua_manager: Weak<LuaManager>,
+    log_manager: Arc<LogManager>,
     pub commands: Option<HashMap<String, (LuaCommandInfo, Option<Function>)>>,
 }
 
 impl GuildLuaData {
-    pub fn new(guild_id: GuildId, lua_manager: Arc<LuaManager>) -> Self {
+    pub fn new(
+        guild_id: GuildId,
+        lua_manager: Arc<LuaManager>,
+        log_manager: Arc<LogManager>,
+    ) -> Self {
         Self {
             lua: None,
             guild_id,
             stop_notify: Arc::new(Notify::new()),
             stop_bool: Arc::new(AtomicBool::new(false)),
             lua_manager: Arc::downgrade(&lua_manager),
+            log_manager,
             commands: None,
         }
     }
@@ -285,8 +294,48 @@ impl GuildLuaData {
             })?,
         )?;
 
-        let lua_manager = self.lua_manager.clone();
         let guild_id = self.guild_id;
+        let log_manager = self.log_manager.clone();
+
+        lua.globals().set(
+            "print",
+            lua.create_async_function(move |_lua, value| {
+                let log_manager = log_manager.clone();
+                async move {
+                    let _ = log_manager
+                        .add_log(
+                            IdType::GuildId(guild_id),
+                            value,
+                            LogType::Info,
+                            LogSource::Lua,
+                        )
+                        .await;
+                    Ok(())
+                }
+            })?,
+        )?;
+
+        let log_manager = self.log_manager.clone();
+
+        lua.globals().set(
+            "warn",
+            lua.create_async_function(move |_lua, value| {
+                let log_manager = log_manager.clone();
+                async move {
+                    let _ = log_manager
+                        .add_log(
+                            IdType::GuildId(guild_id),
+                            value,
+                            LogType::Warning,
+                            LogSource::Lua,
+                        )
+                        .await;
+                    Ok(())
+                }
+            })?,
+        )?;
+
+        let lua_manager = self.lua_manager.clone();
 
         lua.globals().set(
             "get_data_store",
@@ -435,6 +484,7 @@ impl GuildLuaData {
 
 pub struct LuaManager {
     db: Arc<SurrealClient>,
+    log_manager: Arc<LogManager>,
     /// Holds data such as the guild commands and the lua instance and functions.
     ///
     /// GuildLuaData is inside of an Arc so that the RwLock gets locked as little as possible.
@@ -482,9 +532,14 @@ impl UserData for ContextContainer {
 }
 
 impl LuaManager {
-    pub fn new(db: Arc<SurrealClient>, arc_ctx: Arc<serenity_prelude::Context>) -> Self {
+    pub fn new(
+        db: Arc<SurrealClient>,
+        log_manager: Arc<LogManager>,
+        arc_ctx: Arc<serenity_prelude::Context>,
+    ) -> Self {
         Self {
             db,
+            log_manager,
             arc_ctx,
             guild_data: RwLock::new(TtlMap::new(Duration::from_secs(60 * 60))),
             data_stores: RwLock::new(HashMap::new()),
@@ -505,7 +560,11 @@ impl LuaManager {
             return guild_lua_data;
         }
 
-        let guild_lua_data = Arc::new(Mutex::new(GuildLuaData::new(guild_id, self.clone())));
+        let guild_lua_data = Arc::new(Mutex::new(GuildLuaData::new(
+            guild_id,
+            self.clone(),
+            self.log_manager.clone(),
+        )));
 
         guild_data_mut.insert(guild_id, guild_lua_data.clone());
 
