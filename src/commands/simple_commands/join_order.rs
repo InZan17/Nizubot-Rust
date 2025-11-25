@@ -40,6 +40,8 @@ pub async fn join_order(
         return Ok(());
     }
 
+    ctx.defer().await?;
+
     let target_user_id = user.unwrap_or(ctx.author().id);
 
     let mut description = "".to_owned();
