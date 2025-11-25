@@ -239,14 +239,19 @@ impl GuildLuaData {
         }
     }
 
-    pub fn stop_execution(&mut self) {
-        self.stop_bool.store(true, Ordering::Relaxed);
-        self.stop_notify.notify_waiters();
+    pub fn restart(&mut self, force_quit: bool) {
         self.lua = None;
-    }
+        if let Some(commands) = self.commands.as_mut() {
+            for (_, (_, function)) in commands.iter_mut() {
+                *function = None
+            }
+        }
 
-    pub fn allow_execution(&mut self) {
-        self.stop_bool.store(false, Ordering::Relaxed);
+        if force_quit {
+            self.stop_bool.store(true, Ordering::Relaxed);
+            self.stop_notify.notify_waiters();
+            self.stop_bool = Arc::new(AtomicBool::new(false));
+        }
     }
 
     pub fn get_lua(&mut self) -> Result<Lua, mlua::Error> {
@@ -725,7 +730,7 @@ impl LuaManager {
 
         let _result = tokio::select! {
             _ = notify.notified() => {
-                Err(mlua::Error::runtime("Operation cancelled by a higher being."))
+                Err(mlua::Error::runtime("Operation cancelled by an admin."))
             }
             result = function
             .call_async::<mlua::Value>((&context_container_userdata, command_args_lua))

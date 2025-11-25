@@ -48,7 +48,7 @@ pub async fn clear_bot_data(
         if let Some(guild_lua_data) = lua_manager_read.get(&guild_id).cloned() {
             guild_lua_data_for_lock = Some(guild_lua_data);
             let mut lock = guild_lua_data_for_lock.as_ref().unwrap().lock().await;
-            lock.stop_execution();
+            lock.restart(true);
             lock.commands = None;
             lua_lock = Some(lock)
         } else {
@@ -98,7 +98,6 @@ pub async fn clear_bot_data(
         .take(0)?;
 
     if let Some(lock) = lua_lock.as_mut() {
-        lock.allow_execution();
         // Assign the commands to be Some so the function doesn't do a request to get the lua commands.
         // The reason we don't do this for the other managers is because there may be a race condition
         // when clearing the data and adding something at the same time.
