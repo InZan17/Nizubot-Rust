@@ -10,8 +10,6 @@ pub struct BotSettings {
     pub discord_token: String,
     pub open_exchange_rates_token: Option<String>,
     pub owner_user_ids: Vec<UserId>,
-    pub log_webhook: Option<String>,
-    pub logs_directory: PathBuf,
     pub temp_data_directory: PathBuf,
     pub surrealdb: SurrealDbSignInInfo,
 }

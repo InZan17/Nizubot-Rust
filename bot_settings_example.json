@@ -1,9 +1,7 @@
 {
     "discord_token": "TOKEN_HERE",
     "open_exchange_rates_token": null,
-    "log_webhook": null,
     "owner_user_ids": [],
-    "logs_directory": "./logs",
     "temp_data_directory": "./data",
     "surrealdb": {
         "address": "http://127.0.0.1:8000",
