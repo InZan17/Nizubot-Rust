@@ -164,7 +164,7 @@ impl ImageInfo {
                     .await?
                     .string()
                     .unwrap()
-                    .clone();
+                    .to_string();
 
                 let last_avatar_info =
                     serde_json::from_str::<Option<LastAvatarInfo>>(&saved_normal_pfp)?;

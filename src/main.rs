@@ -160,15 +160,14 @@ async fn event_handler<'thing>(
                     id = IdType::UserId(new_message.author.id)
                 }
 
-                let _ = data
-                    .log_manager
+                data.log_manager
                     .add_log(
                         id,
                         err.to_string(),
                         LogType::Warning,
                         LogSource::MessageDetector,
                     )
-                    .await?;
+                    .await;
             }
         }
         FullEvent::ReactionAdd { add_reaction } => {
@@ -370,20 +369,9 @@ async fn main() {
 
                 let arc_ctx = Arc::new(ctx.clone());
 
-                let admin_log_webhook = if let Some(webhook_url) = bot_settings.log_webhook {
-                    Some(
-                        Webhook::from_url(ctx, &webhook_url)
-                            .await
-                            .expect("Failed to get webhook from url."),
-                    )
-                } else {
-                    None
-                };
-
                 let log_manager = Arc::new(LogManager::new(
-                    bot_settings.logs_directory,
+                    storage_manager.clone(),
                     bot_settings.owner_user_ids,
-                    admin_log_webhook,
                     arc_ctx.clone(),
                 ));
 

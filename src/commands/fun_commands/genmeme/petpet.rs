@@ -37,7 +37,7 @@ pub async fn gen_petpet_gif(
             .await?
             .string()
             .unwrap()
-            .clone();
+            .to_string();
 
         generate = saved_petpet_pfp != image_info.download_link
             || !storage_manager.path_exists(&petpet_gif_file);

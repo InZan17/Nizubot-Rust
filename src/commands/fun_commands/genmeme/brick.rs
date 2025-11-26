@@ -37,7 +37,7 @@ pub async fn gen_brick_gif(
             .await?
             .string()
             .unwrap()
-            .clone();
+            .to_string();
 
         generate = saved_brick_file != image_info.download_link
             || !storage_manager.path_exists(&brick_gif_file);

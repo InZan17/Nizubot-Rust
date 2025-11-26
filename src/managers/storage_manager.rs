@@ -58,7 +58,7 @@ impl DataType {
         }
     }
 
-    pub fn string(&self) -> Option<&String> {
+    pub fn string(&self) -> Option<&str> {
         match self {
             DataType::String(string) => Some(string),
             DataType::Bytes(_) => None,

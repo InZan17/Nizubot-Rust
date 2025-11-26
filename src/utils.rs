@@ -74,6 +74,15 @@ where
         self.map.get(k).map(|(value, _)| value)
     }
 
+    pub fn silent_iter<'a>(
+        &'a self,
+    ) -> std::iter::Map<
+        std::collections::hash_map::Iter<'a, K, (V, Mutex<Instant>)>,
+        impl for<'b> FnMut((&'a K, &'a (V, Mutex<Instant>))) -> (&'a K, &'a V),
+    > {
+        self.map.iter().map(|(key, (value, _))| (key, value))
+    }
+
     pub fn get_mut(&mut self, k: &K) -> Option<&mut V> {
         self.map.get_mut(k).map(|(value, last_accessed)| {
             *last_accessed.lock().unwrap() = Instant::now();
