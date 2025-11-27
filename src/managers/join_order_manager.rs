@@ -64,76 +64,19 @@ impl GuildJoinOrder {
         drop(pending_members);
     }
 
-    pub async fn get_members_around_user_or_index(
+    pub async fn get_sorted_members(
         &self,
         member_count: u64,
-        target_user_id: UserId,
-        index: Option<usize>,
         http: &Http,
-    ) -> Result<(Vec<(usize, LightweightMember)>, usize, String), Error> {
-        fn sort_and_find_closest_members(
-            members: &mut Vec<LightweightMember>,
-            target_user_id: UserId,
-            index: Option<usize>,
-            fetch_ms: Option<u128>,
-        ) -> (Vec<(usize, LightweightMember)>, usize, String) {
-            let mut comparisons = 0_u32;
-            let now = get_current_ms_time();
-
-            members.sort_by(|a, b| {
-                comparisons += 1;
-                cmp_joined_at_opt(a.joined_at, b.joined_at)
-            });
-
-            let sort_ms = get_current_ms_time() - now;
-
-            let mut target_index = 0;
-
-            if let Some(index) = index {
-                target_index = index;
-            } else {
-                for (index, member) in members.iter().enumerate() {
-                    if member.id == target_user_id {
-                        target_index = index;
-                        break;
-                    }
-                }
-            }
-
-            let members_len = members.len();
-            if members_len == 0 {
-                return (vec![], 0, "Empty server".to_string());
-            };
-            let max_possible_index = members_len - 1;
-
-            let mut max_index = max_possible_index.min(target_index + 4);
-            let mut min_index = target_index.saturating_sub(4);
-
-            if min_index == 0 {
-                max_index = 8.min(max_possible_index);
-            } else if max_index == max_possible_index {
-                min_index = max_possible_index.saturating_sub(8);
-            };
-
-            let mut members_around = Vec::with_capacity((max_index - min_index + 1) as usize);
-
-            for i in min_index..max_index + 1 {
-                members_around.push((i, members[i].clone()));
-            }
-
-            (
-                members_around,
-                target_index,
-                if let Some(fetch_ms) = fetch_ms {
-                    format!(
-                    "sorting took {comparisons} comparisons and {sort_ms}ms. Fetching members took {fetch_ms}ms."
-                )
-                } else {
-                    format!("sorting took {comparisons} comparisons and {sort_ms}ms.")
-                },
-            )
-        }
-
+    ) -> Result<
+        (
+            tokio::sync::MutexGuard<'_, Vec<LightweightMember>>,
+            u32,
+            u128,
+            Option<u128>,
+        ),
+        Error,
+    > {
         let mut sorted_members = self.sorted_members.lock().await;
         let mut pending_members = self.pending_members.lock().await;
         let remove_ids = pending_members
@@ -146,12 +89,17 @@ impl GuildJoinOrder {
         sorted_members.append(&mut pending_members);
 
         if sorted_members.len() as u64 == member_count {
-            return Ok(sort_and_find_closest_members(
-                &mut sorted_members,
-                target_user_id,
-                index,
-                None,
-            ));
+            let mut comparisons = 0_u32;
+            let now = get_current_ms_time();
+
+            sorted_members.sort_by(|a, b| {
+                comparisons += 1;
+                cmp_joined_at_opt(a.joined_at, b.joined_at)
+            });
+
+            let sort_ms = get_current_ms_time() - now;
+
+            return Ok((sorted_members, comparisons, sort_ms, None));
         }
 
         // Re-fetch all members.
@@ -202,12 +150,73 @@ impl GuildJoinOrder {
 
         let fetch_ms = get_current_ms_time() - now;
 
-        Ok(sort_and_find_closest_members(
-            &mut sorted_members,
-            target_user_id,
-            index,
-            Some(fetch_ms),
-        ))
+        let mut comparisons = 0_u32;
+        let now = get_current_ms_time();
+
+        sorted_members.sort_by(|a, b| {
+            comparisons += 1;
+            cmp_joined_at_opt(a.joined_at, b.joined_at)
+        });
+
+        let sort_ms = get_current_ms_time() - now;
+
+        return Ok((sorted_members, comparisons, sort_ms, Some(fetch_ms)));
+    }
+
+    pub async fn get_members_around_user_or_index(
+        &self,
+        member_count: u64,
+        target_user_id: UserId,
+        index: Option<usize>,
+        http: &Http,
+    ) -> Result<
+        (
+            Vec<(usize, LightweightMember)>,
+            usize,
+            u32,
+            u128,
+            Option<u128>,
+        ),
+        Error,
+    > {
+        let (members, comparisons, sort_ms, fetch_ms) =
+            self.get_sorted_members(member_count, http).await?;
+
+        let mut target_index = 0;
+
+        if let Some(index) = index {
+            target_index = index;
+        } else {
+            for (index, member) in members.iter().enumerate() {
+                if member.id == target_user_id {
+                    target_index = index;
+                    break;
+                }
+            }
+        }
+
+        let members_len = members.len();
+        if members_len == 0 {
+            return Ok((vec![], 0, comparisons, sort_ms, fetch_ms));
+        };
+        let max_possible_index = members_len - 1;
+
+        let mut max_index = max_possible_index.min(target_index + 4);
+        let mut min_index = target_index.saturating_sub(4);
+
+        if min_index == 0 {
+            max_index = 8.min(max_possible_index);
+        } else if max_index == max_possible_index {
+            min_index = max_possible_index.saturating_sub(8);
+        };
+
+        let mut members_around = Vec::with_capacity((max_index - min_index + 1) as usize);
+
+        for i in min_index..max_index + 1 {
+            members_around.push((i, members[i].clone()));
+        }
+
+        return Ok((members_around, target_index, comparisons, sort_ms, fetch_ms));
     }
 }
 

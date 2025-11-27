@@ -22,7 +22,7 @@ percent-encoding = "2.3.1"
 openssl = { version = "0.10.68", features = ["vendored"] }
 chrono = "0.4.37"
 chrono-tz = { version = "0.10.0", features = ["case-insensitive"] }
-webp = "0.3.0"
+webp = "*"
 mlua = { version = "0.11.5", default-features = false, features = [
     "luau",
     "vendored",
@@ -31,6 +31,8 @@ mlua = { version = "0.11.5", default-features = false, features = [
 ] }
 fuzzy-matcher = "0.3.7"
 either = "1.15.0"
+plotters = "0.3.7"
+image = "0.25.9"
 
 [patch.crates-io]
 poise = { git = "https://github.com/serenity-rs/poise.git", branch = "current", checkout = "518ff0564865bca2abf01ae8995b77340f439ef9" }
