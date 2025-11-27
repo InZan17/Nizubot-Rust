@@ -55,10 +55,10 @@ pub async fn command(_ctx: Context<'_>) -> Result<(), Error> {
 #[poise::command(slash_command)]
 pub async fn create(
     ctx: Context<'_>,
-    command_name: String,
-    description: String,
-    params: Option<String>,
-    lua_file: Attachment,
+    #[description = "What do you want the command name to be?"] command_name: String,
+    #[description = "What do you want the description of the command to be?"] description: String,
+    #[description = "What params should the command have? (Default: None)"] params: Option<String>,
+    #[description = "What's the code for the command?"] lua_file: Attachment,
 ) -> Result<(), Error> {
     let params = params
         .map(|string| CommandOption::parse_string(&string))
@@ -126,14 +126,20 @@ pub async fn create(
 #[poise::command(slash_command)]
 pub async fn update(
     ctx: Context<'_>,
-    #[autocomplete = "autocomplete_command_name"] command_name: String,
-    description: String,
+    #[autocomplete = "autocomplete_command_name"]
+    #[description = "Which command do you wanna update?"]
+    command_name: String,
+    #[description = "What do you want the description of the command to be? (Default: Previous value)"]
+    description: Option<String>,
+    #[description = "What params should the command have? (Default: Previous value)"]
     params: Option<String>,
-    lua_file: Attachment,
+    #[description = "What's the new code for the command?"] lua_file: Attachment,
 ) -> Result<(), Error> {
-    let params = params
-        .map(|string| CommandOption::parse_string(&string))
-        .unwrap_or(Ok(vec![]))?;
+    let params = match params.map(|string| CommandOption::parse_string(&string)) {
+        Some(Ok(params)) => Some(params),
+        Some(Err(err)) => return Err(err),
+        None => None,
+    };
 
     const FIFTY_KB_IN_BYTES: u32 = 50000;
 
@@ -197,7 +203,9 @@ pub async fn update(
 #[poise::command(slash_command)]
 pub async fn delete(
     ctx: Context<'_>,
-    #[autocomplete = "autocomplete_command_name"] command_name: String,
+    #[autocomplete = "autocomplete_command_name"]
+    #[description = "Which command would you like to delete?"]
+    command_name: String,
 ) -> Result<(), Error> {
     let data = ctx.data();
 
@@ -219,7 +227,9 @@ pub async fn delete(
 #[poise::command(slash_command)]
 pub async fn download(
     ctx: Context<'_>,
-    #[autocomplete = "autocomplete_command_name"] command_name: String,
+    #[autocomplete = "autocomplete_command_name"]
+    #[description = "Which command would you like to download?"]
+    command_name: String,
 ) -> Result<(), Error> {
     let data = ctx.data();
 

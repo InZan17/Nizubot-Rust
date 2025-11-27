@@ -671,8 +671,8 @@ impl LuaManager {
         self: &Arc<Self>,
         guild_id: GuildId,
         command_name: String,
-        description: String,
-        options: Vec<CommandOption>,
+        description: Option<String>,
+        options: Option<Vec<CommandOption>>,
         lua_code: String,
         filename: String,
     ) -> Result<(), Error> {
@@ -681,9 +681,12 @@ impl LuaManager {
 
         let commands = locked_guild_info.get_commands(&self.db).await?;
 
-        if !commands.contains_key(&command_name) {
+        let Some((command, _)) = commands.get(&command_name) else {
             return Err(format!("A command with the name {command_name} doesn't exists. Try creating a new command instead.").into());
-        }
+        };
+
+        let description = description.unwrap_or(command.description.clone());
+        let options = options.unwrap_or(command.options.clone());
 
         // Make sure the provided code is valid lua code.
         self.try_parse_code(&lua_code)?;
