@@ -6,7 +6,7 @@ use plotters::{
     chart::ChartBuilder,
     prelude::{BitMapBackend, IntoDrawingArea},
     series::{Histogram, LineSeries},
-    style::{Color, RED, WHITE},
+    style::{AsRelative, Color, IntoFont, BLACK, RED, WHITE},
 };
 use poise::{
     serenity_prelude::{CreateAttachment, CreateEmbed, CreateEmbedFooter, UserId},
@@ -241,6 +241,8 @@ pub async fn graph(
         }
     }
 
+    let members_in_graph: usize = amount_during.iter().sum();
+
     if graph_data.is_total_members() {
         let mut seen = 0;
         for amount in amount_during.iter_mut() {
@@ -251,9 +253,9 @@ pub async fn graph(
 
     let max_value = amount_during.iter().max().copied().unwrap_or(1);
 
-    let width = 850;
+    let width = 1280;
 
-    let height = 480;
+    let height = 720;
 
     let now = get_current_ms_time();
 
@@ -296,27 +298,32 @@ pub async fn graph(
             }
         };
 
-        drawing_area.titled(&title, ("arial", 40))?;
+        drawing_area.titled(&title, ("arial", 0.08 * height as f32))?;
 
         let mut chart = ChartBuilder::on(&drawing_area)
-            .x_label_area_size(35)
-            .y_label_area_size(35)
-            .margin_left(10)
-            .margin_right(35)
-            .margin_top(45)
-            .margin_bottom(10)
+            .x_label_area_size(7.percent_height())
+            .y_label_area_size(7.percent_height())
+            .margin_left(2.percent_height())
+            .margin_right(7.percent_height())
+            .margin_top(9.percent_height())
+            .margin_bottom(2.percent_height())
             .caption(
                 format!(
-                    "{start_date_string}   =>   {end_date_string}   ({})",
+                    "{start_date_string}  =>  {end_date_string}  ({})",
                     timezone.name()
                 ),
-                ("arial", 25.0),
+                ("arial", 5.percent_height()),
             )
             .build_cartesian_2d(0..intervals, 0..max_value)?;
 
         chart
             .configure_mesh()
-            .label_style(("arial", 12.0))
+            .x_label_style(("arial", 2.6.percent_height()))
+            .y_label_style(("arial", 3.percent_height()))
+            .y_desc(match graph_data {
+                GraphData::NewMembers => "New members",
+                GraphData::TotalMembers => "Total members",
+            })
             .x_labels(14)
             .y_labels(10)
             .x_label_formatter(&|i| {
@@ -346,7 +353,7 @@ pub async fn graph(
             GraphType::LineGraph => {
                 chart.draw_series(LineSeries::new(
                     amount_during.iter().enumerate().map(|(x, y)| (x, *y)),
-                    RED.mix(0.5).filled().stroke_width(2),
+                    RED.mix(0.5).filled().stroke_width((height / 240).max(2)),
                 ))?;
             }
             GraphType::BarGraph => {
@@ -362,6 +369,16 @@ pub async fn graph(
                 )?;
             }
         }
+
+        let (_, lower) = drawing_area.split_vertically(height - height / 22);
+
+        lower.titled(
+            &format!("Total guild members: {member_count}. Members in graph: {members_in_graph}. Total intervals: {}.", match graph_type {
+                GraphType::LineGraph => intervals + 1,
+                GraphType::BarGraph => intervals,
+            }),
+            ("arial", 0.026 * height as f32).into_font().color(&BLACK.mix(0.75)),
+        )?;
     }
 
     let image = RgbImage::from_vec(width, height, buffer).ok_or("Failed to create RgbImage")?;
