@@ -1,4 +1,5 @@
-use chrono::Utc;
+use chrono::{Datelike, TimeZone, Utc};
+use chrono_tz::Tz;
 use image::{codecs::png::PngEncoder, RgbImage};
 use plotters::{
     backend::{PixelFormat, RGBPixel},
@@ -12,7 +13,14 @@ use poise::{
     CreateReply,
 };
 
-use crate::{commands::simple_commands::ping::get_current_ms_time, Context, Error};
+use crate::{
+    commands::{
+        simple_commands::ping::get_current_ms_time,
+        utility_commands::check_timezone::get_time_string,
+    },
+    managers::profile_manager::locale_time_format,
+    Context, Error,
+};
 
 #[poise::command(
     slash_command,
@@ -153,11 +161,35 @@ pub async fn graph(
         guild_name = guild.name.clone();
     }
 
+    ctx.defer().await?;
+
     let join_order = ctx.data().join_order_manager.get_join_order(guild_id).await;
 
     let (sorted_members, comparisons, sort_ms, fetch_ms) = join_order
         .get_sorted_members(member_count, ctx.http())
         .await?;
+
+    let (timezone, time_format) = {
+        let profile_data = ctx
+            .data()
+            .profile_manager
+            .get_profile_data(ctx.author().id)
+            .await;
+
+        let mut profile_lock = profile_data.lock().await;
+
+        match profile_lock.get_profile(&ctx.data().db).await {
+            Ok(profile) => {
+                let timezone = profile
+                    .get_timezone()
+                    .and_then(|(_, tz)| tz)
+                    .unwrap_or(Tz::UTC);
+                let time_format = profile.get_time_format_with_fallback(ctx.locale().unwrap());
+                (timezone, time_format)
+            }
+            Err(_) => (Tz::UTC, locale_time_format(ctx.locale().unwrap())),
+        }
+    };
 
     let start_date = sorted_members
         .iter()
@@ -166,8 +198,9 @@ pub async fn graph(
     let Some(start_date) = start_date else {
         return Err("Couldn't find start date.".into());
     };
+    let start_date = timezone.from_utc_datetime(&start_date.naive_utc());
 
-    let end_date = Utc::now();
+    let end_date = timezone.from_utc_datetime(&Utc::now().naive_utc());
 
     let duration = end_date.signed_duration_since(start_date);
     let duration_secs = duration.as_seconds_f64();
@@ -224,8 +257,29 @@ pub async fn graph(
 
     let now = get_current_ms_time();
 
-    let start_date_string = start_date.format("%Y-%b-%d %R");
-    let end_date_string = end_date.format("%Y-%b-%d %R");
+    let start_date_string = {
+        let time = get_time_string(start_date, time_format);
+        format!(
+            "{}-{}-{} {}",
+            start_date.year(),
+            start_date.month(),
+            start_date.day(),
+            time
+        )
+    };
+
+    let end_date_timezone = timezone.from_utc_datetime(&end_date.naive_utc());
+
+    let end_date_string = {
+        let time = get_time_string(end_date_timezone, time_format);
+        format!(
+            "{}-{}-{} {}",
+            end_date_timezone.year(),
+            end_date_timezone.month(),
+            end_date_timezone.day(),
+            time
+        )
+    };
 
     let mut buffer = vec![0; RGBPixel::PIXEL_SIZE * (width * height) as usize];
     {
@@ -252,7 +306,10 @@ pub async fn graph(
             .margin_top(45)
             .margin_bottom(10)
             .caption(
-                format!("{start_date_string}   =>   {end_date_string}",),
+                format!(
+                    "{start_date_string}   =>   {end_date_string}   ({})",
+                    timezone.name()
+                ),
                 ("arial", 25.0),
             )
             .build_cartesian_2d(0..intervals, 0..max_value)?;
@@ -265,6 +322,7 @@ pub async fn graph(
             .x_label_formatter(&|i| {
                 let time_mult = (intervals as f64 / 14.0).min(1.0);
                 let current_date = start_date + duration_between * (*i as i32);
+
                 if duration_secs > 60000000. * time_mult {
                     // More than almost 2 years.
                     // Show year and month.
@@ -276,7 +334,10 @@ pub async fn graph(
                 } else {
                     // Less than 14 days.
                     // Show day name and time.
-                    current_date.format("%a %R").to_string()
+                    let time_string = get_time_string(current_date, time_format);
+                    current_date
+                        .format(&format!("%a {time_string}"))
+                        .to_string()
                 }
             })
             .draw()?;
@@ -319,10 +380,10 @@ pub async fn graph(
             CreateEmbed::new()
                 .title(format!("Join graph for {guild_name}"))
                 .description(format!("
-                    From **{start_date_string}** to **{end_date_string}**
+                    From **{start_date_string}** to **{end_date_string}** ({})
 
                     *(NOTE: This only includes users that are currently in the server.)*
-                "))
+                ", timezone.name()))
                 .attachment("join_graph.png")
                 .footer(CreateEmbedFooter::new(
                     if let Some(fetch_ms) = fetch_ms {
