@@ -75,7 +75,7 @@ pub async fn add(
     Ok(())
 }
 
-/// Adds to the guild/user log.
+/// Makes the bot use a webhook to send logs.
 #[poise::command(slash_command)]
 pub async fn add_webhook(
     ctx: Context<'_>,
@@ -140,7 +140,7 @@ pub async fn add_webhook(
     Ok(())
 }
 
-/// Adds to the guild/user log.
+/// Makes the bot no longer use a webhook to send logs.
 #[poise::command(slash_command)]
 pub async fn remove_webhook(ctx: Context<'_>) -> Result<(), Error> {
     let id;
