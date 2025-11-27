@@ -4,7 +4,7 @@ use plotters::{
     backend::{PixelFormat, RGBPixel},
     chart::ChartBuilder,
     prelude::{BitMapBackend, IntoDrawingArea},
-    series::Histogram,
+    series::{Histogram, LineSeries},
     style::{Color, RED, WHITE},
 };
 use poise::{
@@ -106,9 +106,42 @@ pub async fn get(
     return Ok(());
 }
 
+#[derive(poise::ChoiceParameter, PartialEq)]
+pub enum GraphData {
+    #[name = "New members"]
+    NewMembers,
+    #[name = "Total members"]
+    TotalMembers,
+}
+
+impl GraphData {
+    pub fn is_total_members(&self) -> bool {
+        match self {
+            GraphData::NewMembers => false,
+            GraphData::TotalMembers => true,
+        }
+    }
+}
+
+#[derive(poise::ChoiceParameter, PartialEq)]
+pub enum GraphType {
+    #[name = "Line graph"]
+    LineGraph,
+    #[name = "Bar graph"]
+    BarGraph,
+}
+
 /// See a graph of when people joined.
 #[poise::command(slash_command)]
-pub async fn graph(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn graph(
+    ctx: Context<'_>,
+    #[description = "Do you wanna graph join frequency or total members?"] graph_data: GraphData,
+    #[description = "Do you want a line graph or a bar graph?"] graph_type: Option<GraphType>,
+    #[min = 1]
+    #[max = 255]
+    #[description = "How many bars do you want on the graph? (Default: auto)"]
+    intervals: Option<usize>,
+) -> Result<(), Error> {
     let member_count;
     let guild_id;
     let guild_name;
@@ -136,30 +169,54 @@ pub async fn graph(ctx: Context<'_>) -> Result<(), Error> {
 
     let end_date = Utc::now();
 
-    let bars = 14_usize;
-
     let duration = end_date.signed_duration_since(start_date);
     let duration_secs = duration.as_seconds_f64();
 
-    let duration_between = duration / bars as i32;
+    let intervals = intervals.unwrap_or(
+        // Slowly increases the intervals the more members there are.
+        match graph_data {
+            GraphData::NewMembers => {
+                ((1.0 - 1.002_f32.powi(-(sorted_members.len() as i32))) * 255.0).ceil() as usize
+            }
+            GraphData::TotalMembers => {
+                ((1.0 - 1.0035_f32.powi(-(sorted_members.len() as i32))) * 255.0).ceil() as usize
+            }
+        }
+        .clamp(14, 255),
+    );
 
-    let mut amount_joined_during = vec![0_usize; bars];
+    let graph_type = graph_type.unwrap_or_else(|| match graph_data {
+        GraphData::NewMembers => GraphType::BarGraph,
+        GraphData::TotalMembers => GraphType::LineGraph,
+    });
+
+    let duration_between = duration / intervals as i32;
+
+    let mut amount_during = vec![0_usize; intervals + 1];
 
     for member in sorted_members.iter() {
         let Some(joined_at) = member.joined_at else {
             continue;
         };
 
-        for i in 0..bars {
-            let before_date = start_date + duration_between * (i as i32 + 1);
-            if *joined_at <= before_date {
-                amount_joined_during[i] += 1;
+        for i in 0..(intervals + 1) {
+            let before_date = start_date + duration_between * (i as i32);
+            if *joined_at < before_date {
+                amount_during[i] += 1;
                 break;
             }
         }
     }
 
-    let max_value = amount_joined_during.iter().max().copied().unwrap_or(1);
+    if graph_data.is_total_members() {
+        let mut seen = 0;
+        for amount in amount_during.iter_mut() {
+            seen += *amount;
+            *amount = seen;
+        }
+    }
+
+    let max_value = amount_during.iter().max().copied().unwrap_or(1);
 
     let width = 850;
 
@@ -176,7 +233,16 @@ pub async fn graph(ctx: Context<'_>) -> Result<(), Error> {
             BitMapBackend::with_buffer(&mut buffer, (width, height)).into_drawing_area();
 
         drawing_area.fill(&WHITE)?;
-        drawing_area.titled("Join graph", ("arial", 50))?;
+        let title = match graph_data {
+            GraphData::NewMembers => {
+                format!("New members over time for {guild_name}")
+            }
+            GraphData::TotalMembers => {
+                format!("Total members over time for {guild_name}")
+            }
+        };
+
+        drawing_area.titled(&title, ("arial", 40))?;
 
         let mut chart = ChartBuilder::on(&drawing_area)
             .x_label_area_size(35)
@@ -186,10 +252,10 @@ pub async fn graph(ctx: Context<'_>) -> Result<(), Error> {
             .margin_top(45)
             .margin_bottom(10)
             .caption(
-                format!("{start_date_string} => {end_date_string}",),
+                format!("{start_date_string}   =>   {end_date_string}",),
                 ("arial", 25.0),
             )
-            .build_cartesian_2d(0..bars, 0..max_value)?;
+            .build_cartesian_2d(0..intervals, 0..max_value)?;
 
         chart
             .configure_mesh()
@@ -197,33 +263,44 @@ pub async fn graph(ctx: Context<'_>) -> Result<(), Error> {
             .x_labels(14)
             .y_labels(10)
             .x_label_formatter(&|i| {
+                let time_mult = (intervals as f64 / 14.0).min(1.0);
                 let current_date = start_date + duration_between * (*i as i32);
-                if duration_secs > 60000000. {
+                if duration_secs > 60000000. * time_mult {
                     // More than almost 2 years.
                     // Show year and month.
                     current_date.format("%Y-%b").to_string()
-                } else if duration_secs > 86400. * bars as f64 {
-                    //More than (bars) days.
+                } else if duration_secs > 86400. * 14. * time_mult {
+                    //More than 14 days.
                     // Show month and day.
                     current_date.format("%b-%d").to_string()
                 } else {
-                    // Less than (bars) days.
+                    // Less than 14 days.
                     // Show day name and time.
                     current_date.format("%a %R").to_string()
                 }
             })
             .draw()?;
 
-        chart.draw_series(
-            Histogram::vertical(&chart)
-                .style(RED.mix(0.5).filled())
-                .data(
-                    amount_joined_during
-                        .iter()
-                        .enumerate()
-                        .map(|(x, y)| (x, *y)),
-                ),
-        )?;
+        match graph_type {
+            GraphType::LineGraph => {
+                chart.draw_series(LineSeries::new(
+                    amount_during.iter().enumerate().map(|(x, y)| (x, *y)),
+                    RED.mix(0.5).filled().stroke_width(2),
+                ))?;
+            }
+            GraphType::BarGraph => {
+                chart.draw_series(
+                    Histogram::vertical(&chart)
+                        .style(RED.mix(0.5).filled())
+                        .data(
+                            amount_during
+                                .iter()
+                                .enumerate()
+                                .map(|(x, y)| (x.saturating_sub(1), if x == 0 { 0 } else { *y })),
+                        ),
+                )?;
+            }
+        }
     }
 
     let image = RgbImage::from_vec(width, height, buffer).ok_or("Failed to create RgbImage")?;
@@ -241,7 +318,11 @@ pub async fn graph(ctx: Context<'_>) -> Result<(), Error> {
             .attachment(CreateAttachment::bytes(png_bytes, "join_graph.png")).embed(
             CreateEmbed::new()
                 .title(format!("Join graph for {guild_name}"))
-                .description(format!("From **{start_date_string}** to **{end_date_string}**"))
+                .description(format!("
+                    From **{start_date_string}** to **{end_date_string}**
+
+                    *(NOTE: This only includes users that are currently in the server.)*
+                "))
                 .attachment("join_graph.png")
                 .footer(CreateEmbedFooter::new(
                     if let Some(fetch_ms) = fetch_ms {
