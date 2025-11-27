@@ -89,7 +89,7 @@ pub async fn send(
     if let Err(err) = message_result {
         ctx.send(
             CreateReply::default()
-                .content(format!("An error has occured:\n{}", err))
+                .content(format!("An error has occurred:\n{}", err))
                 .ephemeral(true),
         )
         .await?;

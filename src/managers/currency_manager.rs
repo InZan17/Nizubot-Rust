@@ -48,7 +48,7 @@ impl CurrencyManager {
         self_manager
     }
 
-    /// Updates the premade embed used for listing available currencies.
+    /// Updates the pre-made embed used for listing available currencies.
     pub async fn update_embed(&self) {
         let currency_info = self.currency_info.read().await;
         let mut current_embed = self.list_currency_embed.write().await;
@@ -80,7 +80,7 @@ impl CurrencyManager {
         *current_embed = new_embed;
     }
 
-    /// Gets the premade embed used for listing available currencies.
+    /// Gets the pre-made embed used for listing available currencies.
     pub async fn get_embed(&self) -> CreateEmbed {
         self.list_currency_embed.read().await.clone()
     }

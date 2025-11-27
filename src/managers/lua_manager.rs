@@ -623,7 +623,7 @@ impl LuaManager {
         return data_store;
     }
 
-    /// Registers a command and updates the guild command, but only if the guild hasnt reached the limit or if a command with a similar name doesn't exist.
+    /// Registers a command and updates the guild command, but only if the guild hasn't reached the limit or if a command with a similar name doesn't exist.
     pub async fn register_command(
         self: &Arc<Self>,
         guild_id: GuildId,

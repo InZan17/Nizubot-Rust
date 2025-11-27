@@ -91,7 +91,7 @@ async fn event_handler<'thing>(
             // If a reaction role has an emoji, message or role that no longer exists, remove them.
             // If a folder about a guild still exists even though the bot is no longer in the guild, remove them.
             //
-            // Also do these kinds of checks whenever communication to db hasnt worked.
+            // Also do these kinds of checks whenever communication to db hasn't worked.
             data.join_order_manager.join_orders.write().await.clear();
         }
         FullEvent::Resume { event: _ } => {

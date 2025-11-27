@@ -218,7 +218,7 @@ impl StorageManager {
         let result = self.save_disk(path, &read).await;
 
         let duration = if result.is_err() {
-            // we do this to make sure we arent loosing data.
+            // we do this to make sure we aren't loosing data.
             Duration::MAX
         } else {
             duration

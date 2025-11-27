@@ -225,7 +225,7 @@ pub fn cotd_manager_loop(
             let cotd_roles_data_result = db.get_all_guild_cotd_role().await;
 
             let Ok(cotd_roles_data) = cotd_roles_data_result else {
-                //We dont got any guilds ids. Cannot do anything right now.
+                //We don't got any guilds ids. Cannot do anything right now.
                 //Once we got access to it again, apologize to all guilds in their logs.
                 cotd_is_late = true;
                 continue;

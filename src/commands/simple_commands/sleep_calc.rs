@@ -288,7 +288,7 @@ fn time_after_cycle(
     hour = (hour + minute / 60).rem_euclid(24);
     minute = minute.rem_euclid(60);
 
-    //if user isnt using 24h format, convert back
+    //if user isn't using 24h format, convert back
     if format != TimeFormat::MT {
         if hour >= 12 {
             format = TimeFormat::PM

@@ -492,7 +492,7 @@ impl ReactionManager {
         Ok(())
     }
 
-    /// Runs whenever a user unreacts to a message.
+    /// Runs whenever a user un-reacts to a message.
     /// Will check for if the reaction has a registered role to it and then remove that role from user.
     ///
     /// Errors if communication to db doesn't work or if removing role from user doesn't work.
@@ -547,7 +547,7 @@ impl ReactionManager {
             {
                 return Err(ReactionError::Database(
                     err,
-                    "Bot unreacted to reaction but couldn't remove reaction role from the message in the database."
+                    "Bot un-reacted to reaction but couldn't remove reaction role from the message in the database."
                         .to_string(),
                 ));
             };
@@ -653,7 +653,7 @@ impl ReactionManager {
         {
             return Err(ReactionError::Database(
                     err,
-                    "Bot unreacted to reaction but couldn't remove reaction role from the message in the database."
+                    "Bot un-reacted to reaction but couldn't remove reaction role from the message in the database."
                         .to_string(),
                 ));
         };

@@ -194,7 +194,7 @@ impl RemindManager {
                 }
             }
         }
-        // in dms we dont really care how many reminders they have since it doesnt affect others.
+        // in dms we don't really care how many reminders they have since it doesn't affect others.
 
         if counter >= 10 {
             return Err(Error::from("You already have 10 reminders in this guild."));
@@ -319,24 +319,24 @@ pub fn remind_manager_loop(
 
                 let time_difference = current_time - reminder_info.finish_time;
 
-                let message_refrence_opt;
+                let message_reference_opt;
 
                 if let Some(message_id) = reminder_info.message_id {
-                    let mut message_refrence = MessageReference::from((channel_id, message_id));
+                    let mut message_reference = MessageReference::from((channel_id, message_id));
                     if let Some(guild_id) = reminder_info.guild_id {
-                        message_refrence.guild_id = Some(guild_id);
+                        message_reference.guild_id = Some(guild_id);
                     }
-                    message_refrence_opt = Some(message_refrence);
+                    message_reference_opt = Some(message_reference);
                 } else {
-                    message_refrence_opt = None;
+                    message_reference_opt = None;
                 }
 
                 let mut create_message = CreateMessage::new().allowed_mentions(
                     CreateAllowedMentions::new().users(vec![reminder_info.user_id]),
                 );
 
-                if let Some(message_refrence) = message_refrence_opt {
-                    create_message = create_message.reference_message(message_refrence);
+                if let Some(message_reference) = message_reference_opt {
+                    create_message = create_message.reference_message(message_reference);
                 }
 
                 if reminder_info.looping {
@@ -392,7 +392,7 @@ pub fn remind_manager_loop(
                             let Some(err) = ok.take_err(0) else {
                                 break;
                             };
-                            // this isnt a connection issue and shouldn't happen.
+                            // this isn't a connection issue and shouldn't happen.
                             let _ = log_manager
                                 .add_owner_log(
                                     format!("Failed to update looped reminder. {err}"),

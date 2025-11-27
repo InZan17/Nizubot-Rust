@@ -293,7 +293,7 @@ impl SurrealClient {
         &self,
         guild_id: GuildId,
     ) -> Result<Option<CotdRoleDataQuery>, crate::Error> {
-        //id is needed in the query because another function uses it and I dont wanna make another struct.
+        //id is needed in the query because another function uses it and I don't wanna make another struct.
         let cotd_role_data: Option<CotdRoleDataQuery> = self
             .query(format!(
                 "SELECT id, cotd_role FROM guild:{guild_id} WHERE cotd_role;"
