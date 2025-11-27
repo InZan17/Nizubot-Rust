@@ -1,6 +1,6 @@
-# Clear Data Command.
+# Clear Bot Data Command.
 
-## `/clear_data`
+## `/clear_bot_data`
 **Parameters**
 
 - `confirmation?` — Needs to be set to True to confirm clear. (Default: False)
