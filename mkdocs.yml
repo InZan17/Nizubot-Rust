@@ -27,9 +27,9 @@ nav:
   - Reading the docs: reading_docs.md
   - Utility Commands:
       - /currency: commands/utility/currency.md
+      - /profile: commands/utility/profile.md
       - /remind: commands/utility/remind.md
-      - /time_format: commands/utility/time_format.md
-      - /timezone: commands/utility/timezone.md
+      - /check_timezone: commands/utility/check_timezone.md
   - Fun Commands:
       - /genmeme: commands/fun/genmeme.md
   - Admin Commands:
