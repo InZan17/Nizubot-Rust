@@ -13,7 +13,7 @@ pub async fn echo(
     #[max_length = 2000]
     #[description = "What should I say?"]
     content: String,
-    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
+    #[description = "Should the message be hidden from others? (Default: False)"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
     let ephemeral = ephemeral.unwrap_or(false);
     ctx.send(

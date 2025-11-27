@@ -40,7 +40,7 @@ pub async fn check_timezone(
     #[autocomplete = "autocomplete_timezone"]
     #[description = "Which timezone do you wanna check?"]
     timezone: String,
-    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
+    #[description = "Should the message be hidden from others? (Default: False)"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
     let ephemeral = ephemeral.unwrap_or(false);
     let timezone = Tz::from_str_insensitive(&timezone)?;

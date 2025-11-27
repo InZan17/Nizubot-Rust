@@ -14,7 +14,7 @@ pub async fn eval(
     #[max_length = 200]
     #[description = "What's the math expression you want me to solve?"]
     expression: String,
-    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
+    #[description = "Should the message be hidden from others? (Default: False)"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
     let ephemeral = ephemeral.unwrap_or(false);
 

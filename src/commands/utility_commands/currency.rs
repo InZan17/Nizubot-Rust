@@ -60,7 +60,7 @@ pub async fn convert(
     #[description = "Which currency do you wanna convert to?"]
     #[autocomplete = "autocomplete_currencies"]
     mut to: String,
-    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
+    #[description = "Should the message be hidden from others? (Default: False)"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
     let ephemeral = ephemeral.unwrap_or(false);
     let currency_manager = &ctx.data().currency_manager;
@@ -113,7 +113,7 @@ pub async fn convert(
 #[poise::command(slash_command)]
 pub async fn list(
     ctx: Context<'_>,
-    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
+    #[description = "Should the message be hidden from others? (Default: False)"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
     let ephemeral = ephemeral.unwrap_or(false);
     let the_embed = ctx.data().currency_manager.get_embed().await;

@@ -21,7 +21,7 @@ pub async fn icon(_ctx: Context<'_>) -> Result<(), Error> {
 pub async fn user(
     ctx: Context<'_>,
     #[description = "Which user do you want the pfp from?"] user: Option<User>,
-    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
+    #[description = "Should the message be hidden from others? (Default: False)"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
     let ephemeral = ephemeral.unwrap_or(false);
     let target_user;
@@ -53,7 +53,7 @@ pub async fn user(
 #[poise::command(slash_command)]
 pub async fn guild(
     ctx: Context<'_>,
-    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
+    #[description = "Should the message be hidden from others? (Default: False)"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
     let ephemeral = ephemeral.unwrap_or(false);
     let name;
@@ -101,7 +101,7 @@ pub async fn guild(
 pub async fn emoji(
     ctx: Context<'_>,
     #[description = "Which custom emoji do you want the icon from?"] emoji: Emoji,
-    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
+    #[description = "Should the message be hidden from others? (Default: False)"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
     let ephemeral = ephemeral.unwrap_or(false);
     ctx.send(

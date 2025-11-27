@@ -251,7 +251,9 @@ pub async fn brick(
     ctx: Context<'_>,
     #[description = "Which user should throw the brick?"] user: Option<User>,
     #[description = "Which image should throw the brick?"] image: Option<Attachment>,
-    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
+    #[description = "Should the message be hidden from others? (Default: False)"] ephemeral: Option<
+        bool,
+    >,
 ) -> Result<(), Error> {
     let ephemeral = ephemeral.unwrap_or(false);
 
@@ -309,7 +311,9 @@ pub async fn petpet(
     ctx: Context<'_>,
     #[description = "Which user should be petted?"] user: Option<User>,
     #[description = "Which image should be petted?"] image: Option<Attachment>,
-    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
+    #[description = "Should the message be hidden from others? (Default: False)"] ephemeral: Option<
+        bool,
+    >,
 ) -> Result<(), Error> {
     let ephemeral = ephemeral.unwrap_or(false);
 
@@ -404,7 +408,9 @@ pub async fn caption(
     break_height: Option<String>,
     #[description = "How much empty space should be around the text? (WHAT: width/9, Boxes: width/20, Overlay: height/30)"]
     padding: Option<String>,
-    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
+    #[description = "Should the message be hidden from others? (Default: False)"] ephemeral: Option<
+        bool,
+    >,
 ) -> Result<(), Error> {
     let ephemeral = ephemeral.unwrap_or(false);
     let image_info = match ImageInfo::from_user_or_attachment(&user, &image) {

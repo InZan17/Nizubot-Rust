@@ -55,7 +55,7 @@ pub async fn sleep(
     #[max = 720]
     #[min = 0]
     cycle_length: Option<i16>,
-    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
+    #[description = "Should the message be hidden from others? (Default: False)"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
     let sleep_duration = sleep_duration.unwrap_or(15);
     let cycle_length = cycle_length.unwrap_or(90);
@@ -149,7 +149,7 @@ pub async fn wake(
     #[max = 720]
     #[min = 0]
     cycle_length: Option<i16>,
-    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
+    #[description = "Should the message be hidden from others? (Default: False)"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
     let sleep_duration = sleep_duration.unwrap_or(15);
     let cycle_length = cycle_length.unwrap_or(90);
@@ -226,7 +226,7 @@ pub async fn wake(
 #[poise::command(slash_command)]
 pub async fn info(
     ctx: Context<'_>,
-    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
+    #[description = "Should the message be hidden from others? (Default: False)"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
     let ephemeral = ephemeral.unwrap_or(false);
     ctx.send(CreateReply::default().content("The average human takes around 15 minutes to fall asleep. Once you are asleep you will go through sleep cycles. One sleep cycle is about 90 minutes and a good night's sleep consists of 5-6 sleep cycles. It's best to wake up at the end of a cycle to help you feel more rested and ready to start the day.\nI will calculate the best time for you to sleep/wake up by using this information.")

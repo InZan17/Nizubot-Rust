@@ -10,7 +10,7 @@ use crate::{Context, Error};
 )]
 pub async fn ping(
     ctx: Context<'_>,
-    #[description = "Should the message be hidden from others?"] ephemeral: Option<bool>,
+    #[description = "Should the message be hidden from others? (Default: False)"] ephemeral: Option<bool>,
 ) -> Result<(), Error> {
     let ephemeral = ephemeral.unwrap_or(false);
     let current = get_current_ms_time();
