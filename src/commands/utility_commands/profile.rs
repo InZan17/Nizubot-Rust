@@ -31,8 +31,14 @@ pub async fn profile(_: Context<'_>) -> Result<(), Error> {
 )]
 pub async fn check(
     ctx: Context<'_>,
-    #[description = "Which user do you wanna check the profile for?"] user: Option<User>,
+    #[description = "Which user do you wanna check the profile for? (Default: You)"] user: Option<
+        User,
+    >,
+    #[description = "Should the message be hidden from others? (Default: False)"] ephemeral: Option<
+        bool,
+    >,
 ) -> Result<(), Error> {
+    let ephemeral = ephemeral.unwrap_or(false);
     let user = user.as_ref().unwrap_or(ctx.author());
 
     let db = &ctx.data().db;
@@ -88,7 +94,8 @@ pub async fn check(
         .field("Preferred time format", preferred_time_format, false)
         .field("Timezone", timezone, false);
 
-    ctx.send(CreateReply::default().embed(embed)).await?;
+    ctx.send(CreateReply::default().embed(embed).ephemeral(ephemeral))
+        .await?;
     Ok(())
 }
 
@@ -121,6 +128,11 @@ pub async fn clear(
 
     profile_lock.delete_profile(db).await?;
 
-    ctx.reply("Successfully cleared your profile.").await?;
+    ctx.send(
+        CreateReply::default()
+            .content("Successfully cleared your profile.")
+            .ephemeral(true),
+    )
+    .await?;
     Ok(())
 }
