@@ -1,7 +1,8 @@
 # Timezone Command
 This command is used to check the time on different timezones.
 
-Command is available on the user app.
+!!! note annotate
+    Command is also available on the user app.
 
 
 ## `/timezone set`

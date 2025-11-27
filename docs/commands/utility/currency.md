@@ -1,7 +1,8 @@
 # Currency Command
 This command is used to convert to/from currencies.
 
-Command is available on the user app.
+!!! note annotate
+    Command is also available on the user app.
 
 ## `/currency list`
 Lists a few popular currencies. For a full list of supported currencies, click [here](https://docs.openexchangerates.org/reference/supported-currencies){:target="_blank"}.

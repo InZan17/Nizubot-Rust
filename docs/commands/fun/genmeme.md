@@ -1,7 +1,8 @@
 # Genmeme Command
 This command is used to generate memes.
 
-Command is available on the user app.
+!!! note annotate
+    Command is also available on the user app.
 
 ## `/genmeme brick`
 **Parameters**

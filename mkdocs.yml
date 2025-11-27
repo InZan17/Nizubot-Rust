@@ -37,6 +37,7 @@ nav:
       - /cotd_role: commands/admin/cotd_role.md
       - /detect_message: commands/admin/detect_message.md
       - /log: commands/admin/log.md
+      - /lua: commands/admin/lua.md
       - /manage_reminders: commands/admin/manage_reminders.md
       - /message: commands/admin/message.md
       - /reaction_role: commands/admin/reaction_role.md

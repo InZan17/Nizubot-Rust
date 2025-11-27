@@ -1,7 +1,8 @@
 # Time Format Command
 This command is used to set your preferred time format. This information will be used by other commands.
 
-Command is available on the user app.
+!!! note annotate
+    Command is also available on the user app.
 
 
 ## `/time_format set`
