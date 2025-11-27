@@ -1,11 +1,11 @@
-use chrono::{DateTime, Datelike, Utc};
-use image::{codecs::png::PngEncoder, ImageBuffer, ImageEncoder, Rgb, RgbImage};
+use chrono::Utc;
+use image::{codecs::png::PngEncoder, RgbImage};
 use plotters::{
     backend::{PixelFormat, RGBPixel},
     chart::ChartBuilder,
-    prelude::{BitMapBackend, DrawingBackend, IntoDrawingArea, IntoSegmentedCoord, PathElement},
-    series::{Histogram, LineSeries},
-    style::{Color, FontStyle, IntoFont, TextStyle, BLACK, RED, WHITE},
+    prelude::{BitMapBackend, IntoDrawingArea},
+    series::Histogram,
+    style::{Color, RED, WHITE},
 };
 use poise::{
     serenity_prelude::{CreateAttachment, CreateEmbed, CreateEmbedFooter, UserId},
@@ -20,7 +20,7 @@ use crate::{commands::simple_commands::ping::get_current_ms_time, Context, Error
     subcommands("get", "graph"),
     subcommand_required
 )]
-pub async fn join_order(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn join_order(_: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
