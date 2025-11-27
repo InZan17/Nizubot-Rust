@@ -345,7 +345,8 @@ pub fn remind_manager_loop(
                         (current_time - reminder_info.request_time) / wait_time - 1;
 
                     let res = if time_difference > 60 {
-                        channel_id.send_message(arc_ctx.clone(), create_message.content(format!("Sorry <@!{}>, I was supposed to remind you <t:{}:R>! <t:{}:R> you told me to keep reminding you{message_ending}", reminder_info.user_id, reminder_info.finish_time, reminder_info.original_time))).await
+                        let duration = format_duration(time_difference);
+                        channel_id.send_message(arc_ctx.clone(), create_message.content(format!("Sorry <@!{}>, I'm {duration} late! <t:{}:R> you told me to keep reminding you{message_ending}", reminder_info.user_id, reminder_info.original_time))).await
                     } else {
                         channel_id.send_message(arc_ctx.clone(), create_message.content(format!("<@!{}>! <t:{}:R> you told me to keep reminding you{message_ending}", reminder_info.user_id, reminder_info.original_time))).await
                     };
@@ -404,7 +405,8 @@ pub fn remind_manager_loop(
                     }
                 } else {
                     let res = if time_difference > 60 {
-                        channel_id.send_message(arc_ctx.clone(), create_message.content(format!("Sorry <@!{}>, I was supposed to remind you <t:{}:R>! <t:{}:R> you told me to remind you{message_ending}", reminder_info.user_id, reminder_info.finish_time, reminder_info.original_time))).await
+                        let duration = format_duration(time_difference);
+                        channel_id.send_message(arc_ctx.clone(), create_message.content(format!("Sorry <@!{}>, I'm {duration} late! <t:{}:R> you told me to remind you{message_ending}", reminder_info.user_id, reminder_info.original_time))).await
                     } else {
                         channel_id
                             .send_message(
@@ -486,6 +488,58 @@ pub fn remind_manager_loop(
             *remind_manager.wait_until.lock().await = next_wait_until.unwrap_or(u64::MAX);
         }
     });
+}
+
+pub fn format_duration(seconds: u64) -> String {
+    const MINUTE: u64 = 60;
+    const HOUR: u64 = 60 * MINUTE;
+    const DAY: u64 = 24 * HOUR;
+
+    fn add_s_if_more_than_one(value: u64, unit_name: &str) -> String {
+        format!("{value} {unit_name}{}", if value == 1 { "" } else { "s" })
+    }
+
+    if seconds >= DAY {
+        let days = seconds / DAY;
+        let hours = (seconds % DAY) / HOUR;
+
+        if hours > 0 {
+            format!(
+                "{} and {}",
+                add_s_if_more_than_one(days, "day"),
+                add_s_if_more_than_one(hours, "hour")
+            )
+        } else {
+            add_s_if_more_than_one(days, "day")
+        }
+    } else if seconds >= HOUR {
+        let hours = seconds / HOUR;
+        let minutes = (seconds % HOUR) / MINUTE;
+
+        if minutes > 0 {
+            format!(
+                "{} and {}",
+                add_s_if_more_than_one(hours, "hour"),
+                add_s_if_more_than_one(minutes, "minute")
+            )
+        } else {
+            add_s_if_more_than_one(hours, "hour")
+        }
+    } else if seconds >= MINUTE {
+        let minutes = seconds / MINUTE;
+        let seconds = seconds % MINUTE;
+        if seconds > 0 {
+            format!(
+                "{} and {}",
+                add_s_if_more_than_one(minutes, "minute"),
+                add_s_if_more_than_one(seconds, "second")
+            )
+        } else {
+            add_s_if_more_than_one(minutes, "minute")
+        }
+    } else {
+        add_s_if_more_than_one(seconds, "second")
+    }
 }
 
 /// Checks if a serenity error is due to a user issue for example bot role perms, missing guild or channel.
