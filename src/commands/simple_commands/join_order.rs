@@ -143,12 +143,13 @@ pub enum GraphType {
 #[poise::command(slash_command)]
 pub async fn graph(
     ctx: Context<'_>,
-    #[description = "Do you wanna graph join frequency or total members?"] graph_data: GraphData,
-    #[description = "Do you want a line graph or a bar graph?"] graph_type: Option<GraphType>,
+    #[description = "Do you wanna graph members joining or total members?"] graph_data: GraphData,
+    #[description = "Do you want a line graph or a bar graph? (New members: Line graph, Total members: Bar graph)"]
+    graph_type: Option<GraphType>,
     #[min = 1]
     #[max = 255]
-    #[description = "How many bars do you want on the graph? (Default: auto)"]
-    intervals: Option<usize>,
+    #[description = "How many entries do you want on the graph? (Default: auto)"]
+    entries: Option<usize>,
 ) -> Result<(), Error> {
     let member_count;
     let guild_id;
@@ -205,8 +206,8 @@ pub async fn graph(
     let duration = end_date.signed_duration_since(start_date);
     let duration_secs = duration.as_seconds_f64();
 
-    let intervals = intervals.unwrap_or(
-        // Slowly increases the intervals the more members there are.
+    let entries = entries.unwrap_or(
+        // Slowly increases the entries the more members there are.
         match graph_data {
             GraphData::NewMembers => {
                 ((1.0 - 1.002_f32.powi(-(sorted_members.len() as i32))) * 255.0).ceil() as usize
@@ -223,16 +224,16 @@ pub async fn graph(
         GraphData::TotalMembers => GraphType::LineGraph,
     });
 
-    let duration_between = duration / intervals as i32;
+    let duration_between = duration / entries as i32;
 
-    let mut amount_during = vec![0_usize; intervals + 1];
+    let mut amount_during = vec![0_usize; entries + 1];
 
     for member in sorted_members.iter() {
         let Some(joined_at) = member.joined_at else {
             continue;
         };
 
-        for i in 0..(intervals + 1) {
+        for i in 0..(entries + 1) {
             let before_date = start_date + duration_between * (i as i32);
             if *joined_at < before_date {
                 amount_during[i] += 1;
@@ -314,7 +315,7 @@ pub async fn graph(
                 ),
                 ("arial", 5.percent_height()),
             )
-            .build_cartesian_2d(0..intervals, 0..max_value)?;
+            .build_cartesian_2d(0..entries, 0..max_value)?;
 
         chart
             .configure_mesh()
@@ -327,7 +328,7 @@ pub async fn graph(
             .x_labels(14)
             .y_labels(10)
             .x_label_formatter(&|i| {
-                let time_mult = (intervals as f64 / 14.0).min(1.0);
+                let time_mult = (entries as f64 / 14.0).min(1.0);
                 let current_date = start_date + duration_between * (*i as i32);
 
                 if duration_secs > 60000000. * time_mult {
@@ -373,9 +374,9 @@ pub async fn graph(
         let (_, lower) = drawing_area.split_vertically(height - height / 22);
 
         lower.titled(
-            &format!("Total guild members: {member_count}. Members in graph: {members_in_graph}. Total intervals: {}.", match graph_type {
-                GraphType::LineGraph => intervals + 1,
-                GraphType::BarGraph => intervals,
+            &format!("Total guild members: {member_count}. Members in graph: {members_in_graph}. Total entries: {}.", match graph_type {
+                GraphType::LineGraph => entries + 1,
+                GraphType::BarGraph => entries,
             }),
             ("arial", 0.026 * height as f32).into_font().color(&BLACK.mix(0.75)),
         )?;
@@ -399,7 +400,7 @@ pub async fn graph(
                 .description(format!("
                     From **{start_date_string}** to **{end_date_string}** ({})
 
-                    *(NOTE: This only includes users that are currently in the server.)*
+                    *(NOTE: This graph only includes users that are currently in the server.)*
                 ", timezone.name()))
                 .attachment("join_graph.png")
                 .footer(CreateEmbedFooter::new(
