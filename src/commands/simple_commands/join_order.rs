@@ -10,7 +10,7 @@ use plotters::{
 };
 use poise::{
     serenity_prelude::{CreateAttachment, CreateEmbed, CreateEmbedFooter, UserId},
-    CreateReply,
+    ChoiceParameter, CreateReply,
 };
 
 use crate::{
@@ -116,10 +116,10 @@ pub async fn get(
 
 #[derive(poise::ChoiceParameter, PartialEq)]
 pub enum GraphData {
-    #[name = "New members"]
-    NewMembers,
     #[name = "Total members"]
     TotalMembers,
+    #[name = "New members"]
+    NewMembers,
 }
 
 impl GraphData {
@@ -290,14 +290,7 @@ pub async fn graph(
             BitMapBackend::with_buffer(&mut buffer, (width, height)).into_drawing_area();
 
         drawing_area.fill(&WHITE)?;
-        let title = match graph_data {
-            GraphData::NewMembers => {
-                format!("New members over time for {guild_name}")
-            }
-            GraphData::TotalMembers => {
-                format!("Total members over time for {guild_name}")
-            }
-        };
+        let title = format!("{} graph for {guild_name}", graph_data.name());
 
         drawing_area.titled(&title, ("arial", 0.08 * height as f32))?;
 
@@ -321,10 +314,7 @@ pub async fn graph(
             .configure_mesh()
             .x_label_style(("arial", 2.6.percent_height()))
             .y_label_style(("arial", 3.percent_height()))
-            .y_desc(match graph_data {
-                GraphData::NewMembers => "New members",
-                GraphData::TotalMembers => "Total members",
-            })
+            .y_desc(graph_data.name())
             .x_labels(14)
             .y_labels(10)
             .x_label_formatter(&|i| {
@@ -396,12 +386,7 @@ pub async fn graph(
         CreateReply::default()
             .attachment(CreateAttachment::bytes(png_bytes, "graph.png")).embed(
             CreateEmbed::new()
-                .title(format!("{} graph for {guild_name}", 
-                    match graph_data {
-                        GraphData::NewMembers => "New members",
-                        GraphData::TotalMembers => "Total members",
-                    }
-                ))
+                .title(format!("{} graph for {guild_name}", graph_data.name()))
                 .description(format!("
                     From **{start_date_string}** to **{end_date_string}** ({})
 
