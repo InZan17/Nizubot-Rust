@@ -45,9 +45,14 @@ async fn autocomplete_reminder_index(
         }
     };
 
+    let filtered_reminders = reminders
+        .iter()
+        .filter(|remind_info| remind_info.guild_id == ctx.guild_id())
+        .collect::<Vec<_>>();
+
     let matcher = SkimMatcherV2::default().ignore_case();
 
-    let mut reminder_names = reminders
+    let mut reminder_names = filtered_reminders
         .iter()
         .enumerate()
         .rev()
