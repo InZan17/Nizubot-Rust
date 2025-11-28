@@ -374,7 +374,7 @@ pub async fn graph(
         let (_, lower) = drawing_area.split_vertically(height - height / 22);
 
         lower.titled(
-            &format!("Total guild members: {member_count}. Members in graph: {members_in_graph}. Total entries: {}.", match graph_type {
+            &format!("Total guild members: {member_count} | Members in graph: {members_in_graph} | Total entries: {}", match graph_type {
                 GraphType::LineGraph => entries + 1,
                 GraphType::BarGraph => entries,
             }),
@@ -394,15 +394,20 @@ pub async fn graph(
 
     ctx.send(
         CreateReply::default()
-            .attachment(CreateAttachment::bytes(png_bytes, "join_graph.png")).embed(
+            .attachment(CreateAttachment::bytes(png_bytes, "graph.png")).embed(
             CreateEmbed::new()
-                .title(format!("Join graph for {guild_name}"))
+                .title(format!("{} graph for {guild_name}", 
+                    match graph_data {
+                        GraphData::NewMembers => "New members",
+                        GraphData::TotalMembers => "Total members",
+                    }
+                ))
                 .description(format!("
                     From **{start_date_string}** to **{end_date_string}** ({})
 
                     *(NOTE: This graph only includes users that are currently in the server.)*
                 ", timezone.name()))
-                .attachment("join_graph.png")
+                .attachment("graph.png")
                 .footer(CreateEmbedFooter::new(
                     if let Some(fetch_ms) = fetch_ms {
                         format!("Drawing took {draw_ms}ms. Sorting took {comparisons} comparisons and {sort_ms}ms. Fetching members took {fetch_ms}ms.")
