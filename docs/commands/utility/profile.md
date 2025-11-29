@@ -6,23 +6,23 @@ Command for checking/changing your profile. The things you set on your profile w
 
 
 ## `/profile check`
-**Parameters**
-
-- `user?` — The user you wanna check the profile for. (Default: You)
+| Parameter | Description |
+| :-------: | :---------- |
+| `user`?   | The user you wanna check the profile for. (Default: You)
 
 Checks yours/someone elses profile.
 
 ## `/profile clear`
-**Parameters**
-
-- `confirmation?` — Needs to be set to True to confirm clear. (Default: False)
+| Parameter       | Description |
+| :-------------: | :---------- |
+| `confirmation`? | Needs to be set to True to confirm clear. (Default: False)
 
 Clears your profile data.
 
 ## `/profile timezone set`
-**Parameters**
-
-- `timezone` — The timezone you want to set on your profile. 
+| Parameter  | Description |
+| :--------: | :---------- |
+| `timezone` | The timezone you want to set on your profile. 
 
 Sets your timezone to your profile.
 
@@ -31,9 +31,9 @@ Sets your timezone to your profile.
 Removes your timezone from your profile.
 
 ## `/profile time_format set`
-**Parameters**
-
-- `time_format` — Your preferred time format. (`12-hour clock` | `24-hour clock`) 
+| Parameter     | Description |
+| :-----------: | :---------- |
+| `time_format` | Your preferred time format. (`12-hour clock` \| `24-hour clock`) 
 
 Sets your preferred time_format to your profile.
 

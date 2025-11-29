@@ -9,10 +9,10 @@ Lists a few popular currencies. For a full list of supported currencies, click [
 
 
 ## `/currency convert`
-**Parameters**
-
-- `amount` — Amount of currency you wanna convert.
-- `from` — Currency to convert from.
-- `to` — Currency to convert to.
+| Parameter | Description |
+| :-------: | :---------- |
+| `amount`  | Amount of currency you wanna convert.
+| `from`    | Currency to convert from.
+| `to`      | Currency to convert to.
 
 Converts currencies from one currency to another.

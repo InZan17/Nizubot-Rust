@@ -5,8 +5,8 @@ Command for checking the time in different timezones.
     Command is also available on the user app.
 
 ## `/check_timezone`
-**Parameters**
-
-- `timezone` — The timezone you wanna check the time for.
+| Parameter  | Description |
+| :--------: | :---------- |
+| `timezone` | The timezone you wanna check the time for.
 
 Checks the time in that timezone.
