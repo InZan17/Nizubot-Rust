@@ -673,8 +673,7 @@ impl LuaManager {
         command_name: String,
         description: Option<String>,
         options: Option<Vec<CommandOption>>,
-        lua_code: String,
-        filename: String,
+        lua_code_and_filename: Option<(String, String)>,
     ) -> Result<(), Error> {
         let guild_info = self.get_guild_lua_data(guild_id).await;
         let mut locked_guild_info = guild_info.lock().await;
@@ -687,6 +686,8 @@ impl LuaManager {
 
         let description = description.unwrap_or(command.description.clone());
         let options = options.unwrap_or(command.options.clone());
+        let (lua_code, filename) =
+            lua_code_and_filename.unwrap_or((command.lua_code.clone(), command.filename.clone()));
 
         // Make sure the provided code is valid lua code.
         self.try_parse_code(&lua_code)?;

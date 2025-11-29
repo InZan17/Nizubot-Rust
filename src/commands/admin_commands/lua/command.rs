@@ -133,7 +133,7 @@ pub async fn update(
     description: Option<String>,
     #[description = "What params should the command have? (Default: Previous value)"]
     params: Option<String>,
-    #[description = "What's the new code for the command?"] lua_file: Attachment,
+    #[description = "What's the new code for the command?"] lua_file: Option<Attachment>,
 ) -> Result<(), Error> {
     let params = match params.map(|string| CommandOption::parse_string(&string)) {
         Some(Ok(params)) => Some(params),
@@ -143,36 +143,42 @@ pub async fn update(
 
     const FIFTY_KB_IN_BYTES: u32 = 50000;
 
-    if lua_file.size > FIFTY_KB_IN_BYTES {
-        ctx.send(
-            CreateReply::default()
-                .content("Please make sure your file is 50 KB or less in size.")
-                .ephemeral(true),
-        )
-        .await?;
-        return Ok(());
-    }
+    let lua_code_and_filename;
 
-    if !lua_file.filename.ends_with(".lua") && !lua_file.filename.ends_with(".luau") {
-        ctx.send(
-            CreateReply::default()
-                .content("Please make sure your file is a lua or luau file.")
-                .ephemeral(true),
-        )
-        .await?;
-        return Ok(());
-    }
+    if let Some(lua_file) = lua_file {
+        if lua_file.size > FIFTY_KB_IN_BYTES {
+            ctx.send(
+                CreateReply::default()
+                    .content("Please make sure your file is 50 KB or less in size.")
+                    .ephemeral(true),
+            )
+            .await?;
+            return Ok(());
+        }
 
-    let response = reqwest::get(&lua_file.url).await?;
-    if !response.status().is_success() {
-        return Err(Error::from(format!(
-            "{} {}",
-            response.status(),
-            response.text().await.unwrap_or("".to_string())
-        )));
-    }
+        if !lua_file.filename.ends_with(".lua") && !lua_file.filename.ends_with(".luau") {
+            ctx.send(
+                CreateReply::default()
+                    .content("Please make sure your file is a lua or luau file.")
+                    .ephemeral(true),
+            )
+            .await?;
+            return Ok(());
+        }
 
-    let lua_code = response.text().await?;
+        let response = reqwest::get(&lua_file.url).await?;
+        if !response.status().is_success() {
+            return Err(Error::from(format!(
+                "{} {}",
+                response.status(),
+                response.text().await.unwrap_or("".to_string())
+            )));
+        }
+
+        lua_code_and_filename = Some((response.text().await?, lua_file.filename.clone()));
+    } else {
+        lua_code_and_filename = None;
+    }
 
     let data = ctx.data();
 
@@ -182,8 +188,7 @@ pub async fn update(
             command_name.clone(),
             description,
             params,
-            lua_code,
-            lua_file.filename,
+            lua_code_and_filename,
         )
         .await?;
 
