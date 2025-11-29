@@ -25,32 +25,36 @@ theme:
 nav:
   - About Nizubot: index.md
   - Reading the docs: reading_docs.md
-  - Utility Commands:
-      - /currency: commands/utility/currency.md
-      - /profile: commands/utility/profile.md
-      - /remind: commands/utility/remind.md
-      - /check_timezone: commands/utility/check_timezone.md
-  - Fun Commands:
-      - /genmeme: commands/fun/genmeme.md
-  - Admin Commands:
-      - /clear_bot_data: commands/admin/clear_bot_data.md
-      - /cotd_role: commands/admin/cotd_role.md
-      - /detect_message: commands/admin/detect_message.md
-      - /log: commands/admin/log.md
-      - /lua: commands/admin/lua.md
-      - /manage_reminders: commands/admin/manage_reminders.md
-      - /message: commands/admin/message.md
-      - /reaction_role: commands/admin/reaction_role.md
-  - Simple Commands:
-      - /cotd: commands/simple/cotd.md
-      - /echo: commands/simple/echo.md
-      - /eval: commands/simple/eval.md
-      - /icon: commands/simple/icon.md
-      - /join_order: commands/simple/join_order.md
-      - /ping: commands/simple/ping.md
-      - /rng: commands/simple/rng.md
-      - /sleep_calc: commands/simple/sleep_calc.md
-
+  - Commands:
+      - Utility Commands:
+          - /currency: commands/utility/currency.md
+          - /profile: commands/utility/profile.md
+          - /remind: commands/utility/remind.md
+          - /check_timezone: commands/utility/check_timezone.md
+      - Fun Commands:
+          - /genmeme: commands/fun/genmeme.md
+      - Admin Commands:
+          - /clear_bot_data: commands/admin/clear_bot_data.md
+          - /cotd_role: commands/admin/cotd_role.md
+          - /detect_message: commands/admin/detect_message.md
+          - /log: commands/admin/log.md
+          - /lua: commands/admin/lua.md
+          - /manage_reminders: commands/admin/manage_reminders.md
+          - /message: commands/admin/message.md
+          - /reaction_role: commands/admin/reaction_role.md
+      - Simple Commands:
+          - /cotd: commands/simple/cotd.md
+          - /echo: commands/simple/echo.md
+          - /eval: commands/simple/eval.md
+          - /icon: commands/simple/icon.md
+          - /join_order: commands/simple/join_order.md
+          - /ping: commands/simple/ping.md
+          - /rng: commands/simple/rng.md
+          - /sleep_calc: commands/simple/sleep_calc.md
+  - Tutorials:
+      - Lua API:
+          - Introduction: tutorials/lua_api.md
+          - Guild commands: tutorials/lua_api/guild_commands.md
 markdown_extensions:
   - attr_list
   - admonition

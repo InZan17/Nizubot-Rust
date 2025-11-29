@@ -11,16 +11,17 @@ Allows you to create/manage custom guild commands with Lua.
 | `lua_file`     | The Lua file which has the code. |
 
 Creates a guild command which runs the provided Lua file. The Lua file needs to return a function, and this function will get run every time the command gets called. The function will get 2 parameters: ctx and args. To reply, use `ctx:reply("content")`, and to read the arguments, do `args.argument_name`.
+For more info about creating commands, click [here](/tutorials/lua_api/guild_commands/#creating-commands).
 
 ## `/lua command update`
 | Parameter      | Description |
 | :------------: | :---------- |
 | `command_name` | The name of the command you want to update. |
-| `description`? | The updated description of the command. (Default: Previous description) |
-| `params`?      | The updated parameters of the command. (Default: Previous params) |
-| `lua_file`     | The updated Lua file which has the code. |
+| `description`? | The updated description of the command. (Default: Current description) |
+| `params`?      | The updated parameters of the command. (Default: Current params) |
+| `lua_file`?    | The updated Lua file which has the code. (Default: Current file) |
 
-Updates a guild command.
+There's only one required parameter, which is the name of the command you want to update. Every other parameter is optional. If you don't use a parameter, the current value will be used instead.
 
 ## `/lua command delete`
 | Parameter      | Description |
