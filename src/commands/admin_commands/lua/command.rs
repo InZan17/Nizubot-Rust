@@ -129,11 +129,13 @@ pub async fn update(
     #[autocomplete = "autocomplete_command_name"]
     #[description = "Which command do you wanna update?"]
     command_name: String,
-    #[description = "What do you want the description of the command to be? (Default: Previous value)"]
+    #[description = "What do you want the description of the command to be? (Default: Current value)"]
     description: Option<String>,
-    #[description = "What params should the command have? (Default: Previous value)"]
-    params: Option<String>,
-    #[description = "What's the new code for the command?"] lua_file: Option<Attachment>,
+    #[description = "What params should the command have? (Default: Current value)"] params: Option<
+        String,
+    >,
+    #[description = "What's the new code for the command? (Default: Current value)"]
+    lua_file: Option<Attachment>,
 ) -> Result<(), Error> {
     let params = match params.map(|string| CommandOption::parse_string(&string)) {
         Some(Ok(params)) => Some(params),
