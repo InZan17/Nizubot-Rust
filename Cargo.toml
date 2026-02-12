@@ -35,8 +35,7 @@ plotters = "0.3.7"
 image = "0.25.9"
 
 [patch.crates-io]
-poise = { git = "https://github.com/serenity-rs/poise.git", branch = "current", checkout = "518ff0564865bca2abf01ae8995b77340f439ef9" }
-serenity = { git = "https://github.com/serenity-rs/serenity.git", branch = "current", checkout = "a1f2441ad4e507bb6cedf2bce76fa5d6d5f205df" }
+poise = { git = "https://github.com/serenity-rs/poise.git", branch = "current", checkout = "32ba94539e7834bbed4186c07f7ef9287129c7b7" }
 
 [profile.release]
 debug = true

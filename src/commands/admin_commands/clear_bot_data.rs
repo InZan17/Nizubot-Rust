@@ -6,7 +6,12 @@ use tokio::time::sleep;
 use crate::{utils::IdType, Context, Error};
 
 /// Clears all bot data for this guild/user. (Things such as reminders and other data will be reset.)
-#[poise::command(slash_command, default_member_permissions = "ADMINISTRATOR")]
+#[poise::command(
+    slash_command,
+    install_context = "Guild",
+    interaction_context = "Guild|BotDm",
+    default_member_permissions = "ADMINISTRATOR"
+)]
 pub async fn clear_bot_data(
     ctx: Context<'_>,
     #[description = "Are you sure you want to clear the bot data?"] confirmation: Option<bool>,

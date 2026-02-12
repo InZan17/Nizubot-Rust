@@ -164,6 +164,8 @@ use crate::{managers::reaction_manager::ReactionTypeOrRoleId, Context, Error};
     subcommands("add", "remove", "list"),
     subcommand_required,
     guild_only,
+    install_context = "Guild",
+    interaction_context = "Guild",
     default_member_permissions = "ADMINISTRATOR"
 )]
 pub async fn reaction_role(_ctx: Context<'_>) -> Result<(), Error> {

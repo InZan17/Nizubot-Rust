@@ -68,6 +68,8 @@ async fn autocomplete_detector_index(
     slash_command,
     subcommands("add", "remove", "list"),
     subcommand_required,
+    install_context = "Guild",
+    interaction_context = "Guild",
     default_member_permissions = "ADMINISTRATOR"
 )]
 pub async fn detect_message(_ctx: Context<'_>) -> Result<(), Error> {

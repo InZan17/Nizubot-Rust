@@ -123,6 +123,8 @@ async fn autocomplete_reminder_index(
     slash_command,
     subcommands("peek", "remove"),
     subcommand_required,
+    install_context = "Guild",
+    interaction_context = "Guild",
     default_member_permissions = "ADMINISTRATOR"
 )]
 pub async fn manage_reminders(_ctx: Context<'_>) -> Result<(), Error> {

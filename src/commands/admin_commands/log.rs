@@ -13,6 +13,8 @@ use poise::{
     slash_command,
     subcommands("get", "add", "add_webhook", "remove_webhook"),
     subcommand_required,
+    install_context = "Guild",
+    interaction_context = "Guild|BotDm",
     default_member_permissions = "ADMINISTRATOR"
 )]
 pub async fn log(_: Context<'_>) -> Result<(), Error> {

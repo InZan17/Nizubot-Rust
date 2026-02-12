@@ -12,6 +12,8 @@ use poise::{
     subcommands("create", "remove"),
     subcommand_required,
     guild_only,
+    install_context = "Guild",
+    interaction_context = "Guild",
     default_member_permissions = "ADMINISTRATOR"
 )]
 pub async fn cotd_role(_ctx: Context<'_>) -> Result<(), Error> {

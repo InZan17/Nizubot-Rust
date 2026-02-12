@@ -12,6 +12,8 @@ use crate::{Context, Error};
     slash_command,
     subcommands("edit", "send", "analyze"),
     subcommand_required,
+    install_context = "Guild",
+    interaction_context = "Guild",
     default_member_permissions = "ADMINISTRATOR"
 )]
 pub async fn message(_ctx: Context<'_>) -> Result<(), Error> {
