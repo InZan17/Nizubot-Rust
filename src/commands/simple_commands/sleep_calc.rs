@@ -276,16 +276,12 @@ fn time_after_cycle(
         }
     }
 
-    let minute_offset = if cycles > 0 {
-        sleep_duration
-    } else if cycles < 0 {
-        -sleep_duration
-    } else {
-        0
-    };
+    let minute_offset = sleep_duration * cycles.signum() + cycle_length * cycles;
 
-    minute = minute + minute_offset + cycle_length * cycles;
-    hour = (hour + minute / 60).rem_euclid(24);
+    minute = minute + minute_offset;
+
+    let hour_offset = (minute as f32 / 60.0).floor() as i16;
+    hour = (hour + hour_offset).rem_euclid(24);
     minute = minute.rem_euclid(60);
 
     //if user isn't using 24h format, convert back
