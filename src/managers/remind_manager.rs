@@ -1,8 +1,8 @@
 use std::{future::Future, sync::Arc, time::Duration};
 
 use poise::serenity_prelude::{
-    ChannelId, Context, CreateAllowedMentions, CreateMessage, GuildId, MessageId, MessageReference,
-    UserId,
+    CacheHttp, ChannelId, Context, CreateAllowedMentions, CreateMessage, GuildId, MessageId,
+    MessageReference, UserId,
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, RwLock};
@@ -307,6 +307,57 @@ pub fn remind_manager_loop(
                     continue;
                 };
 
+                if let Some(guild_id) = reminder_info.guild_id {
+                    let member = guild_id.member(arc_ctx.http(), reminder_info.user_id).await;
+                    if let Err(err) = member {
+                        if !is_user_fault(&err) {
+                            println!("{}", err);
+                        } else {
+                            let add_log = format!(
+                                "Failed to fetch member. Deleting reminder in guild {guild_id}. Error: {}",
+                                err.to_string()
+                            );
+                            if let Some(guild_id) = reminder_info.guild_id {
+                                let id = IdType::GuildId(guild_id);
+                                let _ = log_manager
+                                    .add_log(
+                                        id,
+                                        add_log.clone(),
+                                        LogType::Error,
+                                        LogSource::Reminder,
+                                    )
+                                    .await;
+                            }
+
+                            let id = IdType::UserId(reminder_info.user_id);
+                            let _ = log_manager
+                                .add_log(id, add_log, LogType::Error, LogSource::Reminder)
+                                .await;
+                            let _ = db.delete_table_id(&reminder_id).await;
+                        }
+                        continue;
+                    }
+                } else {
+                    let user = reminder_info.user_id.to_user(arc_ctx.http()).await;
+                    if let Err(err) = user {
+                        if !is_user_fault(&err) {
+                            println!("{}", err);
+                        } else {
+                            let add_log = format!(
+                                "Failed to fetch user. Deleting reminder. Error: {}",
+                                err.to_string()
+                            );
+
+                            let id = IdType::UserId(reminder_info.user_id);
+                            let _ = log_manager
+                                .add_log(id, add_log, LogType::Error, LogSource::Reminder)
+                                .await;
+                            let _ = db.delete_table_id(&reminder_id).await;
+                        }
+                        continue;
+                    }
+                }
+
                 let channel_id = reminder_info.channel_id;
 
                 let message_ending;
@@ -444,6 +495,7 @@ pub fn remind_manager_loop(
                             let _ = log_manager
                                 .add_log(id, add_log, LogType::Error, LogSource::Reminder)
                                 .await;
+                            let _ = db.delete_table_id(&reminder_id).await;
                         }
                     }
 
