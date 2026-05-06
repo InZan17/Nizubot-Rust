@@ -109,7 +109,11 @@ async fn autocomplete_reminder_index(
 #[poise::command(
     slash_command,
     subcommands("add", "remove", "list"),
-    subcommand_required
+    subcommand_required,
+    install_context = "Guild",
+    interaction_context = "Guild | BotDm",
+    required_bot_permissions = "VIEW_CHANNEL | SEND_MESSAGES | READ_MESSAGE_HISTORY",
+    default_member_permissions = "VIEW_CHANNEL | SEND_MESSAGES | READ_MESSAGE_HISTORY"
 )]
 pub async fn remind(_: Context<'_>) -> Result<(), Error> {
     Ok(())
