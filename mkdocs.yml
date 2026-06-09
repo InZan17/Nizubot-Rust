@@ -1,5 +1,5 @@
 site_name: Nizubot Documentation
-site_url: https://nizubot.zanspace.lol
+site_url: https://nizubot.moono.dev
 theme:
   name: material
   logo: assets/logo.png
@@ -82,4 +82,4 @@ extra:
     - icon: simple/discord
       link: https://discord.com/invite/aF3sqRN5Ja
     - icon: simple/github
-      link: https://github.com/InZan17/Nizubot-Rust
+      link: https://github.com/KeMoonoDev/Nizubot-Rust
