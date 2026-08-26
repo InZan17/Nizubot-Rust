@@ -59,20 +59,20 @@ impl RemindersData {
 
     pub async fn delete_reminder(
         &mut self,
-        removal_index: usize,
+        relative_removal_index: usize,
         guild_id: Option<GuildId>,
         db: &SurrealClient,
     ) -> Result<RemindInfo, Error> {
         let reminders = self.get_reminders(db).await?;
 
-        let mut reminders_index = 0;
+        let mut full_removal_index = 0;
         let mut reminders_guild_index = 0;
         let mut found = false;
 
         for (current_index, reminder) in reminders.iter().enumerate() {
-            reminders_index = current_index;
+            full_removal_index = current_index;
             if reminder.guild_id == guild_id {
-                if reminders_guild_index == removal_index {
+                if reminders_guild_index == relative_removal_index {
                     found = true;
                     break;
                 }
@@ -84,7 +84,7 @@ impl RemindersData {
             return Err("Failed to remove reminder. Are you using a valid index?".into());
         }
 
-        let removing_reminder = &reminders[reminders_index];
+        let removing_reminder = &reminders[full_removal_index];
 
         let Some(reminder_id) = &removing_reminder.id else {
             return Err("Reminder is missing a database id.".into());
@@ -92,7 +92,7 @@ impl RemindersData {
 
         db.delete_table_id(reminder_id).await?;
 
-        Ok(reminders.remove(removal_index))
+        Ok(reminders.remove(full_removal_index))
     }
 }
 
