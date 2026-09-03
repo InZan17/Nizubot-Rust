@@ -433,7 +433,9 @@ pub fn log_manager_loop(arc_ctx: Arc<Context>, log_manager: Arc<LogManager>) {
                 {
                     let mut pending_logs = Vec::new();
 
-                    for (first_timestamp, last_timestamp, message, count) in log_lock.logs.iter() {
+                    for (first_timestamp, last_timestamp, message, count) in
+                        log_lock.logs.iter().rev()
+                    {
                         let new_missed_logs = updated_missed_logs.saturating_sub(*count);
                         let new_count = updated_missed_logs.min(*count);
                         let new_first_timestamp = if new_missed_logs == 0 && *count != new_count {
