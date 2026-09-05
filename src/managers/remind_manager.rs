@@ -311,7 +311,7 @@ pub fn remind_manager_loop(
                     let member = guild_id.member(arc_ctx.http(), reminder_info.user_id).await;
                     if let Err(err) = member {
                         if !is_user_fault(&err) {
-                            println!("{}", err);
+                            log_manager.add_owner_log(format!("Failed to fetch member. Error is not user fault. Will keep retrying. Error: {}", err), LogType::Error, LogSource::Reminder).await;
                         } else {
                             let add_log = format!(
                                 "Failed to fetch member. Deleting reminder in guild {guild_id}. Error: {}",
@@ -341,7 +341,7 @@ pub fn remind_manager_loop(
                     let user = reminder_info.user_id.to_user(arc_ctx.http()).await;
                     if let Err(err) = user {
                         if !is_user_fault(&err) {
-                            println!("{}", err);
+                            log_manager.add_owner_log(format!("Failed to fetch user. Error is not user fault. Will keep retrying. Error: {}", err), LogType::Error, LogSource::Reminder).await;
                         } else {
                             let add_log = format!(
                                 "Failed to fetch user. Deleting reminder. Error: {}",
@@ -472,7 +472,7 @@ pub fn remind_manager_loop(
 
                     if let Err(err) = res {
                         if !is_user_fault(&err) {
-                            println!("{:?}", err);
+                            log_manager.add_owner_log(format!("Failed to send reminder. Error is not user fault. Will keep retrying. Reason: {}", err), LogType::Error, LogSource::Reminder).await;
                             continue;
                         } else {
                             let add_log = format!(
@@ -597,6 +597,7 @@ pub fn format_duration(seconds: u64) -> String {
 /// Checks if a serenity error is due to a user issue for example bot role perms, missing guild or channel.
 pub fn is_user_fault(error: &poise::serenity_prelude::Error) -> bool {
     match error {
+        poise::serenity_prelude::Error::Model(_) => true,
         poise::serenity_prelude::Error::Http(err) => match err {
             poise::serenity_prelude::HttpError::UnsuccessfulRequest(err) => {
                 //https://discord.com/developers/docs/topics/opcodes-and-status-codes#http
